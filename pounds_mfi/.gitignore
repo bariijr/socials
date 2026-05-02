@@ -1,0 +1,14 @@
+.env
+.env.local
+node_modules/
+dist/
+build/
+.next/
+*.log
+uploads/
+backups/
+*.pem
+*.key
+.DS_Store
+coverage/
+.nyc_output/

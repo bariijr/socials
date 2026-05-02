@@ -1,0 +1,143 @@
+{
+  "common": {
+    "save": "Hifadhi",
+    "cancel": "Ghairi",
+    "delete": "Futa",
+    "edit": "Hariri",
+    "view": "Angalia",
+    "submit": "Tuma",
+    "approve": "Idhinisha",
+    "reject": "Kataa",
+    "search": "Tafuta",
+    "filter": "Chuja",
+    "loading": "Inapakia...",
+    "noData": "Hakuna data",
+    "back": "Rudi",
+    "next": "Endelea",
+    "previous": "Iliyotangulia",
+    "download": "Pakua",
+    "upload": "Pakia",
+    "confirm": "Thibitisha",
+    "success": "Imefanikiwa",
+    "error": "Hitilafu",
+    "warning": "Onyo",
+    "info": "Taarifa"
+  },
+  "auth": {
+    "login": "Ingia",
+    "logout": "Toka",
+    "register": "Jisajili",
+    "email": "Barua Pepe",
+    "password": "Nywila",
+    "forgotPassword": "Umesahau Nywila?",
+    "rememberMe": "Nikukumbuke",
+    "noAccount": "Huna akaunti?",
+    "haveAccount": "Una akaunti tayari?",
+    "welcome": "Karibu tena",
+    "sessionExpired": "Kipindi chako kimeisha. Tafadhali ingia tena."
+  },
+  "nav": {
+    "dashboard": "Dashibodi",
+    "loans": "Mikopo",
+    "receipts": "Risiti",
+    "kyc": "KYC",
+    "users": "Watumiaji",
+    "settings": "Mipangilio",
+    "notifications": "Arifa",
+    "profile": "Wasifu Wangu"
+  },
+  "dashboard": {
+    "title": "Dashibodi",
+    "totalIssued": "Jumla Iliyotolewa",
+    "totalRepaid": "Jumla Iliyolipwa",
+    "outstanding": "Baki",
+    "penalties": "Faini",
+    "activeLoans": "Mikopo Inayoendelea",
+    "overdueLoans": "Iliyochelewa",
+    "totalUsers": "Watumiaji Wote",
+    "pendingKyc": "KYC Zinazosubiri",
+    "collectionRate": "Kiwango cha Ukusanyaji",
+    "loanTrend": "Mwelekeo wa Mikopo",
+    "loanStatus": "Hali ya Mikopo",
+    "recentActivity": "Shughuli za Hivi Karibuni"
+  },
+  "loans": {
+    "title": "Mikopo",
+    "newLoan": "Mkopo Mpya",
+    "loanNumber": "Nambari ya Mkopo",
+    "borrower": "Mkopaji",
+    "amount": "Kiasi",
+    "principal": "Msingi",
+    "interest": "Riba",
+    "processingFee": "Ada ya Usindikaji",
+    "disbursed": "Kiasi Kilichotolewa",
+    "totalRepayable": "Jumla ya Kulipa",
+    "totalRepaid": "Jumla Iliyolipwa",
+    "outstanding": "Baki",
+    "dueDate": "Tarehe ya Kulipa",
+    "status": "Hali",
+    "package": "Kifurushi cha Mkopo",
+    "purpose": "Kusudi",
+    "duration": "Muda (Siku)",
+    "approve": "Idhinisha Mkopo",
+    "reject": "Kataa Mkopo",
+    "disburse": "Toa Mkopo",
+    "recordPayment": "Rekodi Malipo",
+    "submit": "Wasilisha kwa Idhini",
+    "statuses": {
+      "draft": "Rasimu",
+      "submitted": "Imewasilishwa",
+      "approved": "Imeidhinishwa",
+      "disbursed": "Inayoendelea",
+      "overdue": "Imechelewa",
+      "closed": "Imefungwa",
+      "rejected": "Imekataliwa"
+    }
+  },
+  "kyc": {
+    "title": "Maombi ya KYC",
+    "apply": "Omba Sasa",
+    "steps": {
+      "personal": "Taarifa za Kibinafsi",
+      "identification": "Kitambulisho",
+      "address": "Anwani",
+      "employment": "Ajira"
+    },
+    "fields": {
+      "fullName": "Jina Kamili",
+      "phone": "Nambari ya Simu",
+      "email": "Barua Pepe",
+      "dateOfBirth": "Tarehe ya Kuzaliwa",
+      "gender": "Jinsia",
+      "idType": "Aina ya Kitambulisho",
+      "idNumber": "Nambari ya Kitambulisho",
+      "address": "Anwani ya Makazi",
+      "city": "Mji / Mji Mdogo",
+      "county": "Kaunti",
+      "postalCode": "Sanduku la Posta",
+      "occupation": "Kazi",
+      "employer": "Mwajiri / Biashara",
+      "monthlyIncome": "Mapato ya Kila Mwezi (KES)"
+    }
+  },
+  "receipts": {
+    "title": "Risiti",
+    "upload": "Pakia Risiti",
+    "manualEntry": "Ingiza Kwa Mkono",
+    "receiptNumber": "Nambari ya Risiti",
+    "amount": "Kiasi",
+    "paymentDate": "Tarehe ya Malipo",
+    "payerName": "Jina la Mlipaji",
+    "paymentMethod": "Njia ya Malipo"
+  },
+  "notifications": {
+    "title": "Arifa",
+    "markRead": "Weka Kama Imesomwa",
+    "markAllRead": "Weka Zote Kama Zimesomwa",
+    "noNotifications": "Hakuna arifa"
+  },
+  "settings": {
+    "title": "Mipangilio",
+    "language": "Lugha"
+  }
+}

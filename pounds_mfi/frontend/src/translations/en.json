@@ -1,0 +1,179 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "submit": "Submit",
+    "approve": "Approve",
+    "reject": "Reject",
+    "search": "Search",
+    "filter": "Filter",
+    "loading": "Loading...",
+    "noData": "No data found",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "download": "Download",
+    "upload": "Upload",
+    "confirm": "Confirm",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information"
+  },
+  "auth": {
+    "login": "Sign In",
+    "logout": "Sign Out",
+    "register": "Register",
+    "email": "Email Address",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?",
+    "rememberMe": "Remember me",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "welcome": "Welcome back",
+    "sessionExpired": "Your session has expired. Please login again."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "loans": "Loans",
+    "receipts": "Receipts",
+    "kyc": "KYC",
+    "users": "Users",
+    "settings": "Settings",
+    "notifications": "Notifications",
+    "profile": "My Profile"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "totalIssued": "Total Issued",
+    "totalRepaid": "Total Repaid",
+    "outstanding": "Outstanding",
+    "penalties": "Penalties",
+    "activeLoans": "Active Loans",
+    "overdueLoans": "Overdue",
+    "totalUsers": "Total Users",
+    "pendingKyc": "Pending KYC",
+    "collectionRate": "Collection Rate",
+    "loanTrend": "Loan Trend",
+    "loanStatus": "Loan Status",
+    "recentActivity": "Recent Activity"
+  },
+  "loans": {
+    "title": "Loans",
+    "newLoan": "New Loan",
+    "loanNumber": "Loan Number",
+    "borrower": "Borrower",
+    "amount": "Amount",
+    "principal": "Principal",
+    "interest": "Interest",
+    "processingFee": "Processing Fee",
+    "disbursed": "Amount Disbursed",
+    "totalRepayable": "Total Repayable",
+    "totalRepaid": "Total Repaid",
+    "outstanding": "Outstanding Balance",
+    "dueDate": "Due Date",
+    "status": "Status",
+    "package": "Loan Package",
+    "purpose": "Purpose",
+    "duration": "Duration (Days)",
+    "approve": "Approve Loan",
+    "reject": "Reject Loan",
+    "disburse": "Disburse Loan",
+    "recordPayment": "Record Payment",
+    "submit": "Submit for Approval",
+    "statuses": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "disbursed": "Active",
+      "overdue": "Overdue",
+      "closed": "Closed",
+      "rejected": "Rejected"
+    },
+    "errors": {
+      "approverCreator": "The approver cannot be the same person who created the loan.",
+      "lockedByOther": "This record is currently being edited by another user."
+    }
+  },
+  "kyc": {
+    "title": "KYC Applications",
+    "apply": "Apply Now",
+    "steps": {
+      "personal": "Personal Information",
+      "identification": "Identification",
+      "address": "Address",
+      "employment": "Employment"
+    },
+    "fields": {
+      "fullName": "Full Name",
+      "phone": "Phone Number",
+      "email": "Email Address",
+      "dateOfBirth": "Date of Birth",
+      "gender": "Gender",
+      "idType": "ID Type",
+      "idNumber": "ID Number",
+      "address": "Physical Address",
+      "city": "City / Town",
+      "county": "County",
+      "postalCode": "Postal Code",
+      "occupation": "Occupation",
+      "employer": "Employer / Business",
+      "monthlyIncome": "Monthly Income (KES)"
+    },
+    "statuses": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "under_review": "Under Review",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    }
+  },
+  "receipts": {
+    "title": "Receipts",
+    "upload": "Upload Receipt",
+    "manualEntry": "Manual Entry",
+    "receiptNumber": "Receipt Number",
+    "amount": "Amount",
+    "paymentDate": "Payment Date",
+    "payerName": "Payer Name",
+    "bankName": "Bank Name",
+    "paymentMethod": "Payment Method",
+    "ocrConfirm": "Confirm OCR Data",
+    "statuses": {
+      "pending": "Pending",
+      "verified": "Verified",
+      "rejected": "Rejected",
+      "duplicate": "Duplicate"
+    },
+    "errors": {
+      "duplicate": "This receipt has already been submitted.",
+      "similar": "A similar payment was detected. Please verify."
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markRead": "Mark as Read",
+    "markAllRead": "Mark All as Read",
+    "noNotifications": "No notifications",
+    "types": {
+      "loan_submitted": "Loan Submitted",
+      "loan_approved": "Loan Approved",
+      "loan_rejected": "Loan Rejected",
+      "loan_disbursed": "Loan Disbursed",
+      "loan_overdue": "Loan Overdue",
+      "payment_received": "Payment Received",
+      "payment_due": "Payment Due"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "branding": "Branding",
+    "notifications": "Notification Preferences",
+    "language": "Language",
+    "security": "Security",
+    "backup": "Backup"
+  }
+}
