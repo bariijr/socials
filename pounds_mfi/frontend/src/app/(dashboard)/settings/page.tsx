@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { settingsApi, backupsApi } from '@/lib/api';
+import { settingsApi, backupsApi, loansApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
-import { formatDateTime } from '@/lib/utils';
-import { Database, Shield, Bell, Palette, Globe } from 'lucide-react';
+import { formatDateTime, formatCurrency } from '@/lib/utils';
+import { Database, Shield, Bell, Palette, Globe, Package, Plus, Pencil, Check, X } from 'lucide-react';
+import { LoanPackage } from '@/types';
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
@@ -23,6 +24,50 @@ export default function SettingsPage() {
     enabled: user?.role === 'super_admin',
   });
 
+  const { data: packages } = useQuery({
+    queryKey: ['loan-packages'],
+    queryFn: () => loansApi.packages(),
+    enabled: activeTab === 'packages',
+  });
+
+  const [showPkgForm, setShowPkgForm] = useState(false);
+  const [editingPkg, setEditingPkg] = useState<LoanPackage | null>(null);
+  const [pkgForm, setPkgForm] = useState({
+    name: '', description: '', interestRate: '', interestFrequency: 'monthly',
+    minAmount: '', maxAmount: '', minDuration: '', maxDuration: '',
+    processingFeePercent: '', penaltyPercent: '',
+  });
+
+  const createPkgMutation = useMutation({
+    mutationFn: () => loansApi.createPackage({
+      ...pkgForm,
+      interestRate: parseFloat(pkgForm.interestRate),
+      minAmount: parseFloat(pkgForm.minAmount),
+      maxAmount: parseFloat(pkgForm.maxAmount),
+      minDuration: parseInt(pkgForm.minDuration),
+      maxDuration: parseInt(pkgForm.maxDuration),
+      processingFeePercent: parseFloat(pkgForm.processingFeePercent),
+      penaltyPercent: parseFloat(pkgForm.penaltyPercent),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loan-packages'] });
+      toast.success('Package created');
+      setShowPkgForm(false);
+      setPkgForm({ name: '', description: '', interestRate: '', interestFrequency: 'monthly', minAmount: '', maxAmount: '', minDuration: '', maxDuration: '', processingFeePercent: '', penaltyPercent: '' });
+    },
+    onError: (e: any) => toast.error(e.response?.data?.message || 'Failed'),
+  });
+
+  const updatePkgMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => loansApi.updatePackage(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loan-packages'] });
+      toast.success('Package updated');
+      setEditingPkg(null);
+    },
+    onError: (e: any) => toast.error(e.response?.data?.message || 'Failed'),
+  });
+
   const backupMutation = useMutation({
     mutationFn: () => backupsApi.run(),
     onSuccess: () => {
@@ -34,6 +79,7 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'branding', label: 'Branding', icon: Palette },
+    { id: 'packages', label: 'Packages', icon: Package },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'language', label: 'Language', icon: Globe },
@@ -81,6 +127,133 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Loan Packages */}
+      {activeTab === 'packages' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="section-title">Loan Packages</h2>
+            {!showPkgForm && (
+              <button
+                onClick={() => setShowPkgForm(true)}
+                className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" /> New Package
+              </button>
+            )}
+          </div>
+
+          {/* Create Form */}
+          {showPkgForm && (
+            <div className="card space-y-3">
+              <h3 className="font-medium text-sm text-gray-900">Create Loan Package</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="label">Name *</label>
+                  <input value={pkgForm.name} onChange={(e) => setPkgForm({ ...pkgForm, name: e.target.value })} className="input" placeholder="e.g. Standard Monthly" />
+                </div>
+                <div>
+                  <label className="label">Interest Rate (%)</label>
+                  <input type="number" value={pkgForm.interestRate} onChange={(e) => setPkgForm({ ...pkgForm, interestRate: e.target.value })} className="input" placeholder="5" />
+                </div>
+                <div>
+                  <label className="label">Frequency</label>
+                  <select value={pkgForm.interestFrequency} onChange={(e) => setPkgForm({ ...pkgForm, interestFrequency: e.target.value })} className="input">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Min Amount (KES)</label>
+                  <input type="number" value={pkgForm.minAmount} onChange={(e) => setPkgForm({ ...pkgForm, minAmount: e.target.value })} className="input" placeholder="1000" />
+                </div>
+                <div>
+                  <label className="label">Max Amount (KES)</label>
+                  <input type="number" value={pkgForm.maxAmount} onChange={(e) => setPkgForm({ ...pkgForm, maxAmount: e.target.value })} className="input" placeholder="100000" />
+                </div>
+                <div>
+                  <label className="label">Min Duration (days)</label>
+                  <input type="number" value={pkgForm.minDuration} onChange={(e) => setPkgForm({ ...pkgForm, minDuration: e.target.value })} className="input" placeholder="7" />
+                </div>
+                <div>
+                  <label className="label">Max Duration (days)</label>
+                  <input type="number" value={pkgForm.maxDuration} onChange={(e) => setPkgForm({ ...pkgForm, maxDuration: e.target.value })} className="input" placeholder="365" />
+                </div>
+                <div>
+                  <label className="label">Processing Fee (%)</label>
+                  <input type="number" value={pkgForm.processingFeePercent} onChange={(e) => setPkgForm({ ...pkgForm, processingFeePercent: e.target.value })} className="input" placeholder="2" />
+                </div>
+                <div>
+                  <label className="label">Penalty (%)</label>
+                  <input type="number" value={pkgForm.penaltyPercent} onChange={(e) => setPkgForm({ ...pkgForm, penaltyPercent: e.target.value })} className="input" placeholder="1" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => createPkgMutation.mutate()} disabled={!pkgForm.name || createPkgMutation.isPending} className="btn-primary flex-1 text-sm">
+                  {createPkgMutation.isPending ? 'Creating...' : 'Create'}
+                </button>
+                <button onClick={() => setShowPkgForm(false)} className="btn-secondary text-sm">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Packages List */}
+          <div className="space-y-3">
+            {packages?.map((pkg: LoanPackage) => (
+              <div key={pkg.id} className="card">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{pkg.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {pkg.interestRate}% {pkg.interestFrequency} · {pkg.processingFeePercent}% fee
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`badge ${pkg.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {pkg.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <button
+                      onClick={() => setEditingPkg(editingPkg?.id === pkg.id ? null : pkg)}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                  <span>Min: {formatCurrency(pkg.minAmount)}</span>
+                  <span>Max: {formatCurrency(pkg.maxAmount)}</span>
+                  <span>Min: {pkg.minDuration}d</span>
+                  <span>Max: {pkg.maxDuration}d</span>
+                </div>
+
+                {editingPkg?.id === pkg.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+                    <button
+                      onClick={() => updatePkgMutation.mutate({ id: pkg.id, data: { isActive: !pkg.isActive } })}
+                      disabled={updatePkgMutation.isPending}
+                      className={`flex-1 text-xs py-2 rounded-xl font-medium flex items-center justify-center gap-1 ${
+                        pkg.isActive
+                          ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                          : 'bg-green-50 text-green-600 hover:bg-green-100'
+                      }`}
+                    >
+                      {pkg.isActive ? <><X className="w-3.5 h-3.5" /> Deactivate</> : <><Check className="w-3.5 h-3.5" /> Activate</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {packages?.length === 0 && (
+              <div className="card text-center py-10">
+                <p className="text-gray-400 text-sm">No loan packages yet. Create one above.</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

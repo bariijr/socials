@@ -1,8 +1,9 @@
 import {
-  Injectable, NotFoundException, ForbiddenException, ConflictException,
+  Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { User, UserRole, UserStatus } from './entities/user.entity';
 
 @Injectable()
@@ -77,6 +78,21 @@ export class UsersService {
     for (const key of allowed) {
       if (dto[key] !== undefined) update[key] = dto[key];
     }
+
+    if (dto.newPassword) {
+      const user = await this.userRepo
+        .createQueryBuilder('u')
+        .addSelect('u.password')
+        .where('u.id = :id', { id })
+        .getOne();
+      if (!user) throw new NotFoundException('User not found');
+      if (!dto.currentPassword) throw new BadRequestException('Current password required');
+      const valid = await bcrypt.compare(dto.currentPassword, user.password);
+      if (!valid) throw new BadRequestException('Current password is incorrect');
+      update.password = await bcrypt.hash(dto.newPassword, 12);
+      update.passwordChangedAt = new Date();
+    }
+
     await this.userRepo.update(id, update);
     return this.findOne(id);
   }

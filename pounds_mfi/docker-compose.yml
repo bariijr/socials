@@ -126,29 +126,3 @@ services:
         max-size: "20m"
         max-file: "5"
 
-  # ─── Backup Worker ─────────────────────────────
-  backup:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
-    container_name: pounds_mfi_backup
-    restart: unless-stopped
-    command: node dist/modules/backups/backup-worker.js
-    env_file: .env
-    environment:
-      DB_HOST: postgres
-      REDIS_HOST: redis
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - backups_data:/app/backups
-      - ./scripts:/app/scripts:ro
-    networks:
-      - internal
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"

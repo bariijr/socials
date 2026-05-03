@@ -5,12 +5,12 @@ RUN apk add --no-cache curl
 # ─── Dependencies ──────────────────────────────
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci
+RUN npm install --prefer-offline && npm cache clean --force
 
 # ─── Builder ───────────────────────────────────
 FROM base AS builder
 COPY package*.json ./
-RUN npm ci
+RUN npm install --prefer-offline
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build

@@ -41,6 +41,24 @@ export interface LoanPackage {
   isActive: boolean;
 }
 
+export type RepaymentStatus = 'pending' | 'verified' | 'rejected';
+
+export interface Repayment {
+  id: string;
+  loanId: string;
+  amount: number;
+  principalPortion: number;
+  interestPortion: number;
+  penaltyPortion: number;
+  balanceAfter: number;
+  status: RepaymentStatus;
+  paymentDate?: string;
+  paymentMethod?: string;
+  notes?: string;
+  recordedBy?: User;
+  createdAt: string;
+}
+
 export interface Loan {
   id: string;
   loanNumber: string;
@@ -62,6 +80,7 @@ export interface Loan {
   purpose?: string;
   notes?: string;
   isLocked: boolean;
+  repayments?: Repayment[];
   createdAt: string;
 }
 

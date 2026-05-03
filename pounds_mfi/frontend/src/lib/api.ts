@@ -125,6 +125,7 @@ export const loansApi = {
   unlock: (id: string) => api.post(`/loans/${id}/unlock`),
   packages: () => api.get<any>('/loans/packages'),
   createPackage: (data: any) => api.post('/loans/packages', data),
+  updatePackage: (id: string, data: any) => api.patch(`/loans/packages/${id}`, data),
 };
 
 // ─── KYC ──────────────────────────────────────

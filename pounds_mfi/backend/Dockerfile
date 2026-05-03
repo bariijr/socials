@@ -13,12 +13,12 @@ RUN apk add --no-cache \
 # ─── Dependencies ──────────────────────────────
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production --prefer-offline && npm cache clean --force
 
 # ─── Builder ───────────────────────────────────
 FROM base AS builder
 COPY package*.json ./
-RUN npm ci
+RUN npm install --prefer-offline
 COPY . .
 RUN npm run build
 
