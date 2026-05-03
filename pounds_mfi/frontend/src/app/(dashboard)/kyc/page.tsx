@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Search, ChevronRight, Check, X } from 'lucide-react';
+import { Search, ChevronRight, Check, X, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { kycApi } from '@/lib/api';
 import { formatDate, getKycStatusColor } from '@/lib/utils';
@@ -128,15 +128,22 @@ export default function KycPage() {
               </div>
             )}
 
-            <div className="flex gap-2 mt-2">
+            <div className="flex items-center justify-between mt-2">
               <a
                 href={kycApi.pdfUrl(kyc.id)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-primary-700 hover:underline"
+                onClick={(e) => e.stopPropagation()}
               >
                 Download PDF
               </a>
+              <button
+                onClick={() => router.push(`/kyc/${kyc.id}`)}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-primary-700"
+              >
+                <Eye className="w-3.5 h-3.5" /> View Details
+              </button>
             </div>
           </div>
         ))}

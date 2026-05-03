@@ -32,6 +32,7 @@ export default function SettingsPage() {
 
   const [showPkgForm, setShowPkgForm] = useState(false);
   const [editingPkg, setEditingPkg] = useState<LoanPackage | null>(null);
+  const [editPkgForm, setEditPkgForm] = useState<Record<string, any>>({});
   const [pkgForm, setPkgForm] = useState({
     name: '', description: '', interestRate: '', interestFrequency: 'monthly',
     minAmount: '', maxAmount: '', minDuration: '', maxDuration: '',
@@ -217,7 +218,25 @@ export default function SettingsPage() {
                       {pkg.isActive ? 'Active' : 'Inactive'}
                     </span>
                     <button
-                      onClick={() => setEditingPkg(editingPkg?.id === pkg.id ? null : pkg)}
+                      onClick={() => {
+                        if (editingPkg?.id === pkg.id) {
+                          setEditingPkg(null);
+                        } else {
+                          setEditingPkg(pkg);
+                          setEditPkgForm({
+                            name: pkg.name,
+                            interestRate: String(pkg.interestRate),
+                            interestFrequency: pkg.interestFrequency,
+                            minAmount: String(pkg.minAmount),
+                            maxAmount: String(pkg.maxAmount),
+                            minDuration: String(pkg.minDuration),
+                            maxDuration: String(pkg.maxDuration),
+                            processingFeePercent: String(pkg.processingFeePercent),
+                            penaltyPercent: String(pkg.penaltyPercent),
+                            isActive: pkg.isActive,
+                          });
+                        }
+                      }}
                       className="p-1.5 hover:bg-gray-100 rounded-lg"
                     >
                       <Pencil className="w-3.5 h-3.5 text-gray-500" />
@@ -232,18 +251,80 @@ export default function SettingsPage() {
                 </div>
 
                 {editingPkg?.id === pkg.id && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                    <button
-                      onClick={() => updatePkgMutation.mutate({ id: pkg.id, data: { isActive: !pkg.isActive } })}
-                      disabled={updatePkgMutation.isPending}
-                      className={`flex-1 text-xs py-2 rounded-xl font-medium flex items-center justify-center gap-1 ${
-                        pkg.isActive
-                          ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                          : 'bg-green-50 text-green-600 hover:bg-green-100'
-                      }`}
-                    >
-                      {pkg.isActive ? <><X className="w-3.5 h-3.5" /> Deactivate</> : <><Check className="w-3.5 h-3.5" /> Activate</>}
-                    </button>
+                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="col-span-2">
+                        <label className="label">Name</label>
+                        <input value={editPkgForm.name || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, name: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Rate (%)</label>
+                        <input type="number" value={editPkgForm.interestRate || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, interestRate: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Frequency</label>
+                        <select value={editPkgForm.interestFrequency || 'monthly'} onChange={(e) => setEditPkgForm({ ...editPkgForm, interestFrequency: e.target.value })} className="input text-sm">
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Min (KES)</label>
+                        <input type="number" value={editPkgForm.minAmount || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, minAmount: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Max (KES)</label>
+                        <input type="number" value={editPkgForm.maxAmount || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, maxAmount: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Min days</label>
+                        <input type="number" value={editPkgForm.minDuration || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, minDuration: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Max days</label>
+                        <input type="number" value={editPkgForm.maxDuration || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, maxDuration: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Fee (%)</label>
+                        <input type="number" value={editPkgForm.processingFeePercent || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, processingFeePercent: e.target.value })} className="input text-sm" />
+                      </div>
+                      <div>
+                        <label className="label">Penalty (%)</label>
+                        <input type="number" value={editPkgForm.penaltyPercent || ''} onChange={(e) => setEditPkgForm({ ...editPkgForm, penaltyPercent: e.target.value })} className="input text-sm" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updatePkgMutation.mutate({
+                          id: pkg.id,
+                          data: {
+                            ...editPkgForm,
+                            interestRate: parseFloat(editPkgForm.interestRate),
+                            minAmount: parseFloat(editPkgForm.minAmount),
+                            maxAmount: parseFloat(editPkgForm.maxAmount),
+                            minDuration: parseInt(editPkgForm.minDuration),
+                            maxDuration: parseInt(editPkgForm.maxDuration),
+                            processingFeePercent: parseFloat(editPkgForm.processingFeePercent),
+                            penaltyPercent: parseFloat(editPkgForm.penaltyPercent),
+                          },
+                        })}
+                        disabled={updatePkgMutation.isPending}
+                        className="btn-primary flex-1 text-xs py-2"
+                      >
+                        {updatePkgMutation.isPending ? 'Saving...' : 'Save Changes'}
+                      </button>
+                      <button
+                        onClick={() => updatePkgMutation.mutate({ id: pkg.id, data: { isActive: !pkg.isActive } })}
+                        disabled={updatePkgMutation.isPending}
+                        className={`text-xs py-2 px-3 rounded-xl font-medium flex items-center gap-1 ${
+                          pkg.isActive ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
+                        }`}
+                      >
+                        {pkg.isActive ? <><X className="w-3 h-3" /> Off</> : <><Check className="w-3 h-3" /> On</>}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

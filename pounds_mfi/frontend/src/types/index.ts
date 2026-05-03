@@ -59,6 +59,18 @@ export interface Repayment {
   createdAt: string;
 }
 
+export interface Penalty {
+  id: string;
+  loanId: string;
+  amount: number;
+  ratePercent: number;
+  balanceAtTime: number;
+  weekNumber?: number;
+  notes?: string;
+  waived: boolean;
+  createdAt: string;
+}
+
 export interface Loan {
   id: string;
   loanNumber: string;
@@ -81,6 +93,22 @@ export interface Loan {
   notes?: string;
   isLocked: boolean;
   repayments?: Repayment[];
+  penalties?: Penalty[];
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  action: string;
+  entity: string;
+  entityId?: string;
+  ipAddress?: string;
+  requestPath?: string;
+  requestMethod?: string;
+  responseStatus?: number;
   createdAt: string;
 }
 

@@ -12,7 +12,7 @@ import { formatCurrency, formatDate, formatDateTime, getLoanStatusColor } from '
 import { useAuthStore } from '@/store';
 import { hasRole } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { Repayment } from '@/types';
+import { Repayment, Penalty } from '@/types';
 
 function InfoRow({ label, value, className }: { label: string; value: React.ReactNode; className?: string }) {
   return (
@@ -464,6 +464,35 @@ export default function LoanDetailPage() {
                       Bal: {formatCurrency(r.balanceAfter)}
                     </p>
                   </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Penalties */}
+      {loan.penalties && loan.penalties.length > 0 && (
+        <div className="card border-red-100">
+          <h2 className="section-title mb-3 flex items-center gap-2 text-red-700">
+            <AlertCircle className="w-4 h-4" /> Penalties
+          </h2>
+          <div className="space-y-2">
+            {[...loan.penalties]
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .map((p: Penalty) => (
+                <div key={p.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className={cn('text-sm font-semibold', p.waived ? 'line-through text-gray-400' : 'text-red-700')}>
+                      {formatCurrency(p.amount)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {p.ratePercent}% · {formatDate(p.createdAt)}
+                      {p.weekNumber ? ` · Week ${p.weekNumber}` : ''}
+                    </p>
+                  </div>
+                  {p.waived && (
+                    <span className="badge bg-gray-100 text-gray-500 text-[10px]">Waived</span>
+                  )}
                 </div>
               ))}
           </div>

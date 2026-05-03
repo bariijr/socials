@@ -200,6 +200,11 @@ export const disbursementsApi = {
   findByLoan: (loanId: string) => api.get<any>(`/disbursements/loans/${loanId}`),
 };
 
+// ─── Audit Logs ───────────────────────────────
+export const auditApi = {
+  list: (params?: any) => api.get<any>('/audit-logs', { params }),
+};
+
 // ─── Backups ──────────────────────────────────
 export const backupsApi = {
   list: () => api.get<any>('/backups'),

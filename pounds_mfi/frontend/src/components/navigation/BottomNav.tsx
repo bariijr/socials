@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, FileText, Receipt, Users, Settings, ClipboardCheck,
+  LayoutDashboard, FileText, Receipt, Users, Settings, ClipboardCheck, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store';
@@ -14,6 +14,7 @@ const navItems = [
   { href: '/receipts', label: 'Receipts', icon: Receipt, roles: ['user', 'loan_officer', 'admin', 'super_admin'] },
   { href: '/kyc', label: 'KYC', icon: ClipboardCheck, roles: ['loan_officer', 'admin', 'super_admin'] },
   { href: '/users', label: 'Users', icon: Users, roles: ['admin', 'super_admin'] },
+  { href: '/audit', label: 'Audit', icon: ShieldCheck, roles: ['admin', 'super_admin'] },
   { href: '/settings', label: 'Settings', icon: Settings, roles: ['admin', 'super_admin'] },
 ];
 
@@ -29,15 +30,15 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 bottom-nav">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
-        {visible.slice(0, 5).map((item) => {
-          const active = pathname.startsWith(item.href);
+      <div className="flex items-center h-16 max-w-lg mx-auto px-1 overflow-x-auto scrollbar-none">
+        {visible.map((item) => {
+          const active = pathname === item.href || (item.href !== '/loans' && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors min-w-[60px]',
+                'flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors flex-shrink-0 min-w-[52px]',
                 active ? 'text-primary-700' : 'text-gray-400 hover:text-gray-600',
               )}
             >
@@ -45,7 +46,7 @@ export function BottomNav() {
                 className={cn('w-5 h-5 transition-all', active && 'scale-110')}
                 strokeWidth={active ? 2.5 : 1.8}
               />
-              <span className={cn('text-[10px] font-medium', active && 'font-semibold')}>
+              <span className={cn('text-[9px] font-medium', active && 'font-semibold')}>
                 {item.label}
               </span>
               {active && (
