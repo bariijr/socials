@@ -83,5 +83,57 @@ $router->post('/settings',       'Settings\SettingsController@update');
 $router->get('/settings/profile','Settings\SettingsController@profile');
 $router->post('/settings/profile','Settings\SettingsController@updateProfile');
 
+// ── PAYROLL ────────────────────────────────────────────────
+$router->get('/payroll/runs',                   'Payroll\PayrollController@runs');
+$router->get('/payroll/runs/create',            'Payroll\PayrollController@createRun');
+$router->post('/payroll/runs',                  'Payroll\PayrollController@storeRun');
+$router->get('/payroll/runs/{id}',              'Payroll\PayrollController@showRun');
+$router->post('/payroll/runs/{id}/approve',     'Payroll\PayrollController@approveRun');
+$router->get('/payroll/payslip/{id}',           'Payroll\PayrollController@payslip');
+$router->get('/payroll/employees',              'Payroll\PayrollController@employees');
+$router->get('/payroll/employees/create',       'Payroll\PayrollController@createEmployee');
+$router->post('/payroll/employees',             'Payroll\PayrollController@storeEmployee');
+$router->get('/payroll/employees/{id}',         'Payroll\PayrollController@showEmployee');
+$router->get('/payroll/employees/{id}/edit',    'Payroll\PayrollController@editEmployee');
+$router->post('/payroll/employees/{id}',        'Payroll\PayrollController@updateEmployee');
+
+// ── INVENTORY ──────────────────────────────────────────────
+$router->get('/inventory',                      'Inventory\InventoryController@index');
+$router->get('/inventory/create',               'Inventory\InventoryController@create');
+$router->post('/inventory',                     'Inventory\InventoryController@store');
+$router->get('/inventory/{id}',                 'Inventory\InventoryController@show');
+$router->get('/inventory/{id}/edit',            'Inventory\InventoryController@edit');
+$router->post('/inventory/{id}',                'Inventory\InventoryController@update');
+$router->post('/inventory/{id}/maintenance',    'Inventory\InventoryController@storeMaintenance');
+$router->get('/inventory/{id}/qr',              'Inventory\InventoryController@qrLabel');
+
+// ── DOCUMENTS ──────────────────────────────────────────────
+$router->get('/documents',                      'Documents\DocumentController@index');
+$router->get('/documents/create',               'Documents\DocumentController@create');
+$router->post('/documents',                     'Documents\DocumentController@store');
+$router->get('/documents/{id}',                 'Documents\DocumentController@show');
+$router->get('/documents/{id}/download',        'Documents\DocumentController@download');
+$router->post('/documents/{id}/delete',         'Documents\DocumentController@destroy');
+
+// ── EVENTS ─────────────────────────────────────────────────
+$router->get('/events',                         'Events\EventController@index');
+$router->get('/events/verify',                  'Events\EventController@verifyTicket');
+$router->post('/events/ticket/mark-used',       'Events\EventController@markUsed');
+$router->get('/events/create',                  'Events\EventController@create');
+$router->post('/events',                        'Events\EventController@store');
+$router->get('/events/{id}',                    'Events\EventController@show');
+$router->get('/events/{id}/edit',               'Events\EventController@edit');
+$router->post('/events/{id}',                   'Events\EventController@update');
+$router->post('/events/{id}/tickets',           'Events\EventController@issueTicket');
+
+// ── BOOKINGS ───────────────────────────────────────────────
+$router->get('/bookings',                       'Bookings\BookingController@index');
+$router->get('/bookings/create',                'Bookings\BookingController@create');
+$router->post('/bookings',                      'Bookings\BookingController@store');
+$router->get('/bookings/{id}',                  'Bookings\BookingController@show');
+$router->post('/bookings/{id}/approve',         'Bookings\BookingController@approve');
+$router->post('/bookings/{id}/reject',          'Bookings\BookingController@reject');
+$router->post('/bookings/{id}/payment',         'Bookings\BookingController@updatePayment');
+
 // ── QR VERIFICATION (public) ───────────────────────────────
 $router->get('/verify/{code}', 'Auth\AuthController@verify');

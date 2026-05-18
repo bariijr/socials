@@ -2,7 +2,7 @@
 
 namespace App\Modules\Reports;
 
-use App\Core\{Audit, Auth, Controller, Database, Request, Session};
+use App\Core\{Audit, Auth, Controller, Database, Excel, PDF, Request, Session};
 
 class ReportController extends Controller
 {
@@ -125,11 +125,41 @@ class ReportController extends Controller
         $this->requirePermission('reports.export');
         $this->verifyCsrf();
 
-        $format = Request::post('format', 'pdf');
-        $type   = Request::post('type', 'income');
+        $format   = Request::post('format', 'excel');
+        $type     = Request::post('type', 'income');
+        $dateFrom = Request::post('date_from', date('Y-m-01'));
+        $dateTo   = Request::post('date_to', date('Y-m-t'));
+        $pid      = Auth::parishId();
 
+        $rows = Database::select(
+            "SELECT t.transaction_date, t.reference_no, t.description, tc.name as category, pm.name as payment_method, t.amount, t.status
+             FROM transactions t
+             LEFT JOIN transaction_categories tc ON tc.id = t.category_id
+             LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id
+             WHERE t.parish_id = ? AND t.type = ? AND t.status = 'approved' AND t.deleted_at IS NULL
+             AND t.transaction_date BETWEEN ? AND ?
+             ORDER BY t.transaction_date DESC",
+            [$pid, $type, $dateFrom, $dateTo]
+        );
+
+        $typeName = $type === 'income' ? 'Mapato' : 'Matumizi';
         Audit::log('report.export', 'Reports', '', 0, [], ['format' => $format, 'type' => $type]);
-        Session::flash('info', 'Kipengele cha usafirishaji kitakamilishwa hivi karibuni (Phase 2).');
-        $this->redirect('/reports');
+
+        $excelRows = array_map(fn($r) => [
+            $r['transaction_date'],
+            $r['reference_no'],
+            $r['description'],
+            $r['category'] ?? '',
+            $r['payment_method'] ?? '',
+            number_format($r['amount'], 2),
+            $r['status'],
+        ], $rows);
+
+        Excel::make("Ripoti ya {$typeName}")
+            ->title("{$typeName} {$dateFrom} - {$dateTo}")
+            ->headers(['Tarehe', 'Nambari', 'Maelezo', 'Kategoria', 'Njia ya Malipo', 'Kiasi (TZS)', 'Hali'])
+            ->rows($excelRows)
+            ->autoSize()
+            ->download("ripoti_{$type}_{$dateFrom}_{$dateTo}");
     }
 }

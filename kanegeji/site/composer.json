@@ -24,7 +24,12 @@
             "App\\Modules\\Reports\\": "modules/Reports/",
             "App\\Modules\\Audit\\": "modules/Audit/",
             "App\\Modules\\Settings\\": "modules/Settings/",
-            "App\\Modules\\Users\\": "modules/Users/"
+            "App\\Modules\\Users\\": "modules/Users/",
+            "App\\Modules\\Payroll\\": "modules/Payroll/",
+            "App\\Modules\\Inventory\\": "modules/Inventory/",
+            "App\\Modules\\Documents\\": "modules/Documents/",
+            "App\\Modules\\Events\\": "modules/Events/",
+            "App\\Modules\\Bookings\\": "modules/Bookings/"
         },
         "files": [
             "app/Helpers/helpers.php"
