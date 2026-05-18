@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm \"C:/Backups/Projects/.git/index.lock\")",
+      "Bash(git add *)"
+    ]
+  }
+}

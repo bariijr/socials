@@ -1,0 +1,9 @@
+# Block all direct access to the root directory (app code must be unreachable from web)
+# Only public_html is the webroot on Hostinger.
+# This file protects the parent directory if accessed.
+Options -Indexes
+
+<FilesMatch ".*">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
