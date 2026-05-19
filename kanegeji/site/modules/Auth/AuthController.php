@@ -120,6 +120,44 @@ class AuthController extends Controller
         $this->redirect('/login');
     }
 
+    public function showRegister(): void
+    {
+        $parishes = \App\Core\Database::select(
+            "SELECT id, name FROM parishes WHERE active=1 ORDER BY name"
+        );
+        $this->view('Auth/views/register', compact('parishes'), 'auth');
+    }
+
+    public function storeApplication(): void
+    {
+        $this->verifyCsrf();
+
+        $parishId = (int) ($_POST['parish_id'] ?? 0);
+        if (!$parishId) {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Chagua parokia.'];
+            redirect('/register');
+        }
+
+        \App\Core\Database::insert(
+            "INSERT INTO member_applications
+                (parish_id, first_name, last_name, phone, email, date_of_birth, gender, community_name, status, created_at)
+             VALUES (?,?,?,?,?,?,?,?,'pending',NOW())",
+            [
+                $parishId,
+                trim($_POST['first_name'] ?? ''),
+                trim($_POST['last_name'] ?? ''),
+                trim($_POST['phone'] ?? '') ?: null,
+                trim($_POST['email'] ?? '') ?: null,
+                $_POST['date_of_birth'] ?: null,
+                $_POST['gender'] ?: null,
+                trim($_POST['community_name'] ?? '') ?: null,
+            ]
+        );
+
+        $_SESSION['flash'] = ['type' => 'success', 'message' => 'Ombi lako limetumwa. Utaarifiwa baada ya kukaguliwa.'];
+        redirect('/login');
+    }
+
     public function verify(string $code): void
     {
         // QR verification handler for receipts, certificates, tickets

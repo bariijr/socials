@@ -116,6 +116,15 @@
     </div>
     <?php endif; ?>
 
+    <!-- Income/Expense chart -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900 dark:text-white text-sm">Mapato vs Matumizi (Miezi 6)</h3>
+            <a href="/reports" class="text-xs text-brand-600 dark:text-brand-400 hover:underline">Ripoti kamili</a>
+        </div>
+        <canvas id="financeChart" height="80"></canvas>
+    </div>
+
     <!-- Recent transactions + community ranking -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Recent transactions -->
@@ -193,3 +202,54 @@
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const labels   = <?= json_encode($chartData['labels']) ?>;
+    const income   = <?= json_encode($chartData['income']) ?>;
+    const expenses = <?= json_encode($chartData['expenses']) ?>;
+    const isDark   = document.documentElement.classList.contains('dark') || localStorage.getItem('darkMode') === '1';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const textColor = isDark ? '#9ca3af' : '#6b7280';
+
+    new Chart(document.getElementById('financeChart'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Mapato',
+                    data: income,
+                    backgroundColor: 'rgba(34,197,94,0.7)',
+                    borderRadius: 6,
+                    borderSkipped: false,
+                },
+                {
+                    label: 'Matumizi',
+                    data: expenses,
+                    backgroundColor: 'rgba(239,68,68,0.7)',
+                    borderRadius: 6,
+                    borderSkipped: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { position: 'top', labels: { color: textColor, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ' TZS ' + ctx.raw.toLocaleString(),
+                    },
+                },
+            },
+            scales: {
+                x: { grid: { color: gridColor }, ticks: { color: textColor } },
+                y: { grid: { color: gridColor }, ticks: { color: textColor, callback: v => 'TZS ' + (v/1000).toFixed(0) + 'k' } },
+            },
+        },
+    });
+})();
+</script>

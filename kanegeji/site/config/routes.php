@@ -135,5 +135,58 @@ $router->post('/bookings/{id}/approve',         'Bookings\BookingController@appr
 $router->post('/bookings/{id}/reject',          'Bookings\BookingController@reject');
 $router->post('/bookings/{id}/payment',         'Bookings\BookingController@updatePayment');
 
+// ── FAMILIES ───────────────────────────────────────────────
+$router->get('/families',              'Families\FamilyController@index');
+$router->get('/families/create',       'Families\FamilyController@create');
+$router->post('/families',             'Families\FamilyController@store');
+$router->get('/families/{id}',         'Families\FamilyController@show');
+$router->get('/families/{id}/edit',    'Families\FamilyController@edit');
+$router->post('/families/{id}',        'Families\FamilyController@update');
+
+// ── SACRAMENTS ─────────────────────────────────────────────
+$router->get('/sacraments',              'Sacraments\SacramentController@index');
+$router->get('/sacraments/create',       'Sacraments\SacramentController@create');
+$router->post('/sacraments',             'Sacraments\SacramentController@store');
+$router->post('/sacraments/{id}/delete', 'Sacraments\SacramentController@destroy');
+
+// ── PLEDGES ────────────────────────────────────────────────
+$router->get('/pledges',                 'Pledges\PledgeController@index');
+$router->get('/pledges/create',          'Pledges\PledgeController@create');
+$router->post('/pledges',                'Pledges\PledgeController@store');
+$router->get('/pledges/{id}',            'Pledges\PledgeController@show');
+$router->post('/pledges/{id}/payment',   'Pledges\PledgeController@recordPayment');
+
+// ── RECONCILIATION ─────────────────────────────────────────
+$router->get('/reconciliation',            'Reconciliation\ReconciliationController@index');
+$router->post('/reconciliation/import',    'Reconciliation\ReconciliationController@import');
+$router->post('/reconciliation/match',     'Reconciliation\ReconciliationController@match');
+$router->post('/reconciliation/reconcile', 'Reconciliation\ReconciliationController@reconcile');
+$router->post('/reconciliation/delete',    'Reconciliation\ReconciliationController@deleteItem');
+
+// ── NOTIFICATIONS (bulk broadcast) ─────────────────────────
+$router->get('/notifications',         'Notifications\NotificationController@index');
+$router->get('/notifications/create',  'Notifications\NotificationController@create');
+$router->post('/notifications',        'Notifications\NotificationController@store');
+
+// ── ADMIN (super_admin only) ────────────────────────────────
+$router->get('/admin',                               'Admin\AdminController@index');
+$router->get('/admin/parishes',                      'Admin\AdminController@parishes');
+$router->get('/admin/parishes/create',               'Admin\AdminController@createParish');
+$router->post('/admin/parishes',                     'Admin\AdminController@storeParish');
+$router->get('/admin/parishes/{id}',                 'Admin\AdminController@showParish');
+$router->post('/admin/parishes/{id}/toggle',         'Admin\AdminController@toggleParish');
+$router->get('/admin/applications',                  'Admin\AdminController@applications');
+$router->post('/admin/applications/{id}/approve',    'Admin\AdminController@approveApplication');
+$router->post('/admin/applications/{id}/reject',     'Admin\AdminController@rejectApplication');
+
+// ── AI CHAT ────────────────────────────────────────────────
+$router->get('/ai',                              'AI\AIController@index');
+$router->post('/ai/ask',                         'AI\AIController@ask');
+$router->post('/ai/conversations/{id}/delete',   'AI\AIController@deleteConversation');
+
+// ── SELF-REGISTRATION (public) ─────────────────────────────
+$router->get('/register',  'Auth\AuthController@showRegister');
+$router->post('/register', 'Auth\AuthController@storeApplication');
+
 // ── QR VERIFICATION (public) ───────────────────────────────
 $router->get('/verify/{code}', 'Auth\AuthController@verify');

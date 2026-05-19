@@ -29,7 +29,14 @@
             "App\\Modules\\Inventory\\": "modules/Inventory/",
             "App\\Modules\\Documents\\": "modules/Documents/",
             "App\\Modules\\Events\\": "modules/Events/",
-            "App\\Modules\\Bookings\\": "modules/Bookings/"
+            "App\\Modules\\Bookings\\": "modules/Bookings/",
+            "App\\Modules\\Families\\": "modules/Families/",
+            "App\\Modules\\Sacraments\\": "modules/Sacraments/",
+            "App\\Modules\\Pledges\\": "modules/Pledges/",
+            "App\\Modules\\Reconciliation\\": "modules/Reconciliation/",
+            "App\\Modules\\Notifications\\": "modules/Notifications/",
+            "App\\Modules\\Admin\\": "modules/Admin/",
+            "App\\Modules\\AI\\": "modules/AI/"
         },
         "files": [
             "app/Helpers/helpers.php"
