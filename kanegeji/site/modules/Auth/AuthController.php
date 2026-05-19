@@ -2,7 +2,7 @@
 
 namespace App\Modules\Auth;
 
-use App\Core\{Auth, Audit, Controller, CSRF, Request, RateLimit, Session};
+use App\Core\{Auth, Audit, Controller, Database, CSRF, Request, RateLimit, Session, TOTP};
 use App\Core\Channels\Email;
 
 class AuthController extends Controller
@@ -56,6 +56,18 @@ class AuthController extends Controller
         }
 
         RateLimit::clear($rlKey);
+
+        // Check if user has TOTP 2FA enabled
+        $totp2fa = Database::selectOne(
+            "SELECT 1 FROM totp_secrets WHERE user_id=? AND enabled=1 LIMIT 1",
+            [$result['user']['id']]
+        );
+        if ($totp2fa) {
+            $_SESSION['pending_2fa_user_id'] = $result['user']['id'];
+            Audit::log('login.2fa_required', 'Auth', 'user', $result['user']['id']);
+            $this->redirect('/login/totp');
+        }
+
         Auth::login($result['user']);
         Audit::logLogin($email, 'success');
         Audit::log('login', 'Auth', 'user', $result['user']['id']);
@@ -174,6 +186,74 @@ class AuthController extends Controller
 
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Ombi lako limetumwa. Utaarifiwa baada ya kukaguliwa.'];
         redirect('/login');
+    }
+
+    // ── TOTP 2FA step ────────────────────────────────────────────
+
+    public function showTotp(): void
+    {
+        if (Auth::check()) {
+            $this->redirect('/dashboard');
+        }
+        if (empty($_SESSION['pending_2fa_user_id'])) {
+            $this->redirect('/login');
+        }
+        $this->view('Auth/views/totp', ['pageTitle' => 'Thibitisha Utambulisho'], 'auth');
+    }
+
+    public function verifyTotp(): void
+    {
+        $this->verifyCsrf();
+
+        $pendingId = $_SESSION['pending_2fa_user_id'] ?? null;
+        if (!$pendingId) {
+            $this->redirect('/login');
+        }
+
+        $code      = trim(Request::post('code', ''));
+        $useBackup = (bool) Request::post('use_backup', 0);
+
+        $record = Database::selectOne(
+            "SELECT * FROM totp_secrets WHERE user_id=? AND enabled=1",
+            [$pendingId]
+        );
+
+        if (!$record) {
+            unset($_SESSION['pending_2fa_user_id']);
+            $this->redirect('/login');
+        }
+
+        $valid = false;
+        if ($useBackup) {
+            $hashes = json_decode($record['backup_codes'], true) ?? [];
+            $valid  = TOTP::verifyBackupCode($code, $hashes);
+            if ($valid) {
+                Database::execute(
+                    "UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",
+                    [json_encode($hashes), $pendingId]
+                );
+            }
+        } else {
+            $valid = TOTP::verify($record['secret'], $code);
+        }
+
+        if (!$valid) {
+            Session::flash('error', 'Msimbo si sahihi. Jaribu tena.');
+            $this->redirect('/login/totp');
+        }
+
+        $user = Database::selectOne(
+            "SELECT u.*, r.slug as role_slug FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=?",
+            [$pendingId]
+        );
+
+        unset($_SESSION['pending_2fa_user_id']);
+        Auth::login($user);
+        Audit::logLogin($user['email'], 'success');
+        Audit::log('login.totp', 'Auth', 'user', $user['id']);
+
+        Session::flash('success', __('auth.login_success', 'Umeingia mafanikio.'));
+        $this->redirect('/dashboard');
     }
 
     public function verify(string $code): void

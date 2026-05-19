@@ -33,7 +33,9 @@
         "audit":         "Ukaguzi",
         "settings":      "Mipangilio",
         "logout":        "Toka",
-        "search":        "Tafuta"
+        "search":        "Tafuta",
+        "committees":    "Kamati",
+        "payments":      "Malipo Mtandaoni"
     },
     "auth": {
         "login": "Ingia",
@@ -276,5 +278,50 @@
         "donor": "Mchangiaji",
         "proof": "Thibitisho",
         "verified_msg": "Mchango umethibitishwa na muamala umeundwa."
+    },
+    "committees": {
+        "title": "Kamati",
+        "add": "Ongeza Kamati",
+        "type_pastoral": "Baraza la Pastoral",
+        "type_liturgical": "Liturujia",
+        "type_finance": "Fedha",
+        "type_outreach": "Huduma",
+        "type_youth": "Vijana",
+        "type_women": "Wanawake",
+        "type_other": "Nyingine",
+        "members": "Wanachama wa Kamati",
+        "add_member": "Ongeza Mwanachama",
+        "chairperson": "Mwenyekiti",
+        "saved": "Kamati imehifadhiwa.",
+        "deleted": "Kamati imefutwa.",
+        "member_added": "Mwanachama ameongezwa.",
+        "member_removed": "Mwanachama ameondolewa."
+    },
+    "payments": {
+        "title": "Malipo ya Mtandaoni",
+        "checkout": "Lipa Sasa",
+        "provider": "Mtoa Huduma",
+        "phone": "Namba ya Simu",
+        "amount": "Kiasi (TZS)",
+        "pending": "Inasubiri",
+        "completed": "Imekamilika",
+        "failed": "Imeshindwa",
+        "cancelled": "Imeghairiwa",
+        "history": "Historia ya Malipo",
+        "initiate_msg": "Ombi la malipo limetumwa. Thibitisha kwa PIN yako.",
+        "success": "Malipo yamekamilika mafanikio.",
+        "failed_msg": "Malipo hayakufanikiwa."
+    },
+    "security": {
+        "title": "Usalama wa Akaunti",
+        "totp_enabled": "Uthibitishaji wa Hatua Mbili Umewashwa",
+        "totp_disabled": "Uthibitishaji wa Hatua Mbili Umezimwa",
+        "totp_enable": "Washa Uthibitishaji wa Hatua Mbili (2FA)",
+        "totp_disable": "Zima Uthibitishaji wa Hatua Mbili",
+        "totp_scan": "Skani msimbo huu kwa app yako ya authenticator",
+        "backup_codes": "Misimbo ya Dharura",
+        "push_enabled": "Arifa za Kivinjari Zimewashwa",
+        "push_enable": "Wezesha Arifa za Kivinjari",
+        "push_disable": "Zima Arifa za Kivinjari"
     }
 }

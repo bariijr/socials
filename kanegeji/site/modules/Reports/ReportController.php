@@ -120,6 +120,46 @@ class ReportController extends Controller
         $this->view('Reports/views/jumuiya', ['pageTitle' => 'Ripoti ya Jumuiya']);
     }
 
+    public function comparison(): void
+    {
+        $this->requirePermission('reports.view');
+
+        $pid  = Auth::parishId();
+        $year = (int) Request::get('year', date('Y'));
+        $year = max(2020, min((int) date('Y'), $year));
+
+        $thisYear = Database::select(
+            "SELECT DATE_FORMAT(transaction_date, '%Y-%m') as month,
+                    SUM(CASE WHEN type='income'  THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as expense
+             FROM transactions
+             WHERE parish_id=? AND status='approved' AND deleted_at IS NULL
+               AND YEAR(transaction_date)=?
+             GROUP BY month ORDER BY month",
+            [$pid, $year]
+        );
+
+        $prevYear = Database::select(
+            "SELECT DATE_FORMAT(transaction_date, '%Y-%m') as month,
+                    SUM(CASE WHEN type='income'  THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as expense
+             FROM transactions
+             WHERE parish_id=? AND status='approved' AND deleted_at IS NULL
+               AND YEAR(transaction_date)=?
+             GROUP BY month ORDER BY month",
+            [$pid, $year - 1]
+        );
+
+        Audit::log('report.comparison', 'Reports', '', 0, [], ['year' => $year]);
+
+        $this->view('Reports/views/comparison', [
+            'pageTitle' => 'Ulinganisho wa Fedha',
+            'year'      => $year,
+            'thisYear'  => $thisYear,
+            'prevYear'  => $prevYear,
+        ]);
+    }
+
     public function export(): void
     {
         $this->requirePermission('reports.export');

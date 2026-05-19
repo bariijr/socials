@@ -184,6 +184,38 @@ $router->get('/ai',                              'AI\AIController@index');
 $router->post('/ai/ask',                         'AI\AIController@ask');
 $router->post('/ai/conversations/{id}/delete',   'AI\AIController@deleteConversation');
 
+// ── ONLINE PAYMENTS ────────────────────────────────────────
+$router->get('/pay',                        'Payments\PaymentController@checkout');
+$router->post('/pay/initiate',              'Payments\PaymentController@initiate');
+$router->get('/pay/status/{externalId}',    'Payments\PaymentController@status');
+$router->post('/pay/callback',              'Payments\PaymentController@callback');
+$router->get('/payments',                   'Payments\PaymentController@history');
+
+// ── COMMITTEES ─────────────────────────────────────────────
+$router->get('/committees',                         'Committees\CommitteeController@index');
+$router->get('/committees/create',                  'Committees\CommitteeController@create');
+$router->post('/committees',                        'Committees\CommitteeController@store');
+$router->get('/committees/{id}',                    'Committees\CommitteeController@show');
+$router->post('/committees/{id}/members',           'Committees\CommitteeController@addMember');
+$router->post('/committees/members/{cmId}/remove',  'Committees\CommitteeController@removeMember');
+$router->post('/committees/{id}/toggle',            'Committees\CommitteeController@toggle');
+$router->post('/committees/{id}/delete',            'Committees\CommitteeController@destroy');
+
+// ── 2FA (TOTP) LOGIN STEP ──────────────────────────────────
+$router->get('/login/totp',   'Auth\AuthController@showTotp');
+$router->post('/login/totp',  'Auth\AuthController@verifyTotp');
+
+// ── SECURITY SETTINGS (2FA + Push) ────────────────────────
+$router->get('/settings/security',                    'Settings\SettingsController@security');
+$router->post('/settings/security/totp/setup',        'Settings\SettingsController@totpSetup');
+$router->post('/settings/security/totp/confirm',      'Settings\SettingsController@totpConfirm');
+$router->post('/settings/security/totp/disable',      'Settings\SettingsController@totpDisable');
+$router->post('/settings/security/push/subscribe',    'Settings\SettingsController@pushSubscribe');
+$router->post('/settings/security/push/unsubscribe',  'Settings\SettingsController@pushUnsubscribe');
+
+// ── COMPARISON REPORT ──────────────────────────────────────
+$router->get('/reports/comparison', 'Reports\ReportController@comparison');
+
 // ── GLOBAL SEARCH ──────────────────────────────────────────
 $router->get('/search', 'Search\SearchController@index');
 

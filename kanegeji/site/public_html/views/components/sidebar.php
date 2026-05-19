@@ -52,6 +52,8 @@ $role = Auth::role();
             ['href' => '/ai',                         'icon' => 'ai',        'label' => __('nav.ai', 'Msaidizi wa AI'),        'perm' => 'ai_view'],
             ['href' => '/ai-knowledge',               'icon' => 'knowledge', 'label' => __('nav.knowledge', 'Maktaba ya AI'), 'perm' => 'ai_knowledge_view'],
             ['href' => '/donations',                  'icon' => 'give',      'label' => __('nav.donations', 'Michango Mtandaoni'), 'perm' => 'donations_view'],
+            ['href' => '/committees',                 'icon' => 'committee', 'label' => __('nav.committees', 'Kamati'),         'perm' => 'committees_view'],
+            ['href' => '/payments',                   'icon' => 'mobile_pay','label' => __('nav.payments', 'Malipo Mtandaoni'),'perm' => 'payments_view'],
             ['href' => '/reports',                    'icon' => 'chart',     'label' => __('nav.reports', 'Ripoti'),           'perm' => 'reports.view'],
             ['href' => '/users',                      'icon' => 'shield',    'label' => __('nav.users', 'Watumiaji'),          'perm' => 'users.view'],
             ['href' => '/audit',                      'icon' => 'log',       'label' => __('nav.audit', 'Ukaguzi'),            'perm' => 'audit.view'],
@@ -86,6 +88,8 @@ $role = Auth::role();
             'pray'      => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v4M10 6h4"/>',
             'knowledge' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>',
             'give'      => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>',
+            'committee' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 2a3 3 0 11-6 0 3 3 0 016 0zM9 9a3 3 0 11-6 0 3 3 0 016 0z"/>',
+            'mobile_pay'=> '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l2 2 4-4"/>',
         ];
         foreach ($links as $link):
             if ($link['perm'] === '__super_admin__' && Auth::role() !== 'super_admin') continue;

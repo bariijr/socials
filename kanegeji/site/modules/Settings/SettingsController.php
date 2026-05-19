@@ -2,7 +2,8 @@
 
 namespace App\Modules\Settings;
 
-use App\Core\{Audit, Auth, Controller, Database, Request, Session};
+use App\Core\{Audit, Auth, Controller, Database, Request, Session, TOTP};
+use chillerlan\QRCode\{QRCode, QROptions};
 
 class SettingsController extends Controller
 {
@@ -95,5 +96,160 @@ class SettingsController extends Controller
         Audit::log('profile.update', 'Settings', 'user', $userId);
         Session::flash('success', 'Wasifu umesasishwa.');
         $this->redirect('/settings/profile');
+    }
+
+    // ── Security / 2FA / Web Push ─────────────────────────────
+
+    public function security(): void
+    {
+        $this->requireAuth();
+        $userId = Auth::id();
+
+        $totpRecord    = Database::selectOne("SELECT enabled FROM totp_secrets WHERE user_id=?", [$userId]);
+        $totpEnabled   = $totpRecord && $totpRecord['enabled'];
+        $pendingSecret = $_SESSION['totp_pending_secret'] ?? null;
+        $qrCodeUrl     = null;
+
+        if ($pendingSecret && !$totpEnabled) {
+            $u   = Database::selectOne("SELECT email FROM users WHERE id=?", [$userId]);
+            $uri = TOTP::getUri($pendingSecret, $u['email'], env('APP_NAME', 'Parish ERP'));
+            $opts = new QROptions;
+            $opts->outputType = 'svg';
+            $opts->returnType = 'string';
+            $svg       = (new QRCode($opts))->render($uri);
+            $qrCodeUrl = 'data:image/svg+xml;base64,' . base64_encode($svg);
+        }
+
+        $backupCodes = $_SESSION['totp_backup_codes'] ?? null;
+        unset($_SESSION['totp_backup_codes']);
+
+        $pushEnabled = (bool) Database::selectOne(
+            "SELECT id FROM push_subscriptions WHERE user_id=? LIMIT 1",
+            [$userId]
+        );
+
+        $this->view('Settings/views/security', [
+            'pageTitle'     => 'Usalama wa Akaunti',
+            'totpEnabled'   => $totpEnabled,
+            'pendingSecret' => $pendingSecret,
+            'qrCodeUrl'     => $qrCodeUrl,
+            'backupCodes'   => $backupCodes,
+            'pushEnabled'   => $pushEnabled,
+        ]);
+    }
+
+    public function totpSetup(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $_SESSION['totp_pending_secret'] = TOTP::generateSecret();
+        $this->redirect('/settings/security');
+    }
+
+    public function totpConfirm(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $secret = $_SESSION['totp_pending_secret'] ?? '';
+        $code   = trim(Request::post('code', ''));
+
+        if (!$secret || !TOTP::verify($secret, $code)) {
+            Session::flash('error', 'Msimbo si sahihi. Jaribu tena.');
+            $this->redirect('/settings/security');
+        }
+
+        $userId      = Auth::id();
+        $backupResult = TOTP::generateBackupCodes();
+
+        Database::execute(
+            "INSERT INTO totp_secrets (user_id, secret, backup_codes, enabled, enabled_at, created_at)
+             VALUES (?,?,?,1,NOW(),NOW())
+             ON DUPLICATE KEY UPDATE secret=VALUES(secret), backup_codes=VALUES(backup_codes), enabled=1, enabled_at=NOW()",
+            [$userId, $secret, json_encode($backupResult['hashed'])]
+        );
+
+        unset($_SESSION['totp_pending_secret']);
+        $_SESSION['totp_backup_codes'] = $backupResult['plain'];
+
+        Audit::log('totp.enabled', 'Settings', 'user', $userId);
+        Session::flash('success', 'Uthibitishaji wa hatua mbili umewashwa. Hifadhi misimbo ya dharura salama!');
+        $this->redirect('/settings/security');
+    }
+
+    public function totpDisable(): void
+    {
+        $this->requireAuth();
+        $this->verifyCsrf();
+
+        $userId = Auth::id();
+        $code   = trim(Request::post('code', ''));
+        $record = Database::selectOne("SELECT secret FROM totp_secrets WHERE user_id=? AND enabled=1", [$userId]);
+
+        if (!$record || !TOTP::verify($record['secret'], $code)) {
+            Session::flash('error', 'Msimbo si sahihi.');
+            $this->redirect('/settings/security');
+        }
+
+        Database::execute("UPDATE totp_secrets SET enabled=0 WHERE user_id=?", [$userId]);
+        Audit::log('totp.disabled', 'Settings', 'user', $userId);
+        Session::flash('success', 'Uthibitishaji wa hatua mbili umezimwa.');
+        $this->redirect('/settings/security');
+    }
+
+    public function pushSubscribe(): void
+    {
+        $this->requireAuth();
+
+        $raw  = file_get_contents('php://input');
+        $data = json_decode($raw, true);
+
+        if (!isset($data['endpoint'], $data['keys']['auth'], $data['keys']['p256dh'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'invalid subscription']);
+            exit;
+        }
+
+        $userId = Auth::id();
+        $existing = Database::selectOne(
+            "SELECT id FROM push_subscriptions WHERE user_id=? AND endpoint=?",
+            [$userId, substr($data['endpoint'], 0, 500)]
+        );
+
+        if ($existing) {
+            Database::execute(
+                "UPDATE push_subscriptions SET p256dh=?, auth=? WHERE id=?",
+                [$data['keys']['p256dh'], $data['keys']['auth'], $existing['id']]
+            );
+        } else {
+            Database::insert(
+                "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+                 VALUES (?,?,?,?)",
+                [$userId, $data['endpoint'], $data['keys']['p256dh'], $data['keys']['auth']]
+            );
+        }
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    public function pushUnsubscribe(): void
+    {
+        $this->requireAuth();
+
+        $raw      = file_get_contents('php://input');
+        $data     = json_decode($raw, true);
+        $endpoint = $data['endpoint'] ?? '';
+
+        if ($endpoint) {
+            Database::execute(
+                "DELETE FROM push_subscriptions WHERE user_id=? AND endpoint=?",
+                [Auth::id(), $endpoint]
+            );
+        }
+
+        echo json_encode(['success' => true]);
+        exit;
     }
 }

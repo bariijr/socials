@@ -28,6 +28,8 @@ return [
         'mass_view', 'mass_manage',
         'catholic_view',
         'donations_view',
+        'committees_view', 'committees_manage',
+        'payments_view', 'payments_manage',
     ],
 
     'accountant' => [
@@ -47,6 +49,8 @@ return [
         'budget_view', 'budget_manage',
         'donations_view',
         'catholic_view',
+        'committees_view',
+        'payments_view',
     ],
 
     'priest' => [
@@ -68,6 +72,7 @@ return [
         'budget_view',
         'donations_view',
         'ai_knowledge_view',
+        'committees_view',
     ],
 
     'secretary' => [
@@ -86,6 +91,7 @@ return [
         'announcements_view', 'announcements_manage',
         'mass_view',
         'catholic_view',
+        'committees_view',
     ],
 
     'member' => [],
