@@ -6,7 +6,7 @@ use App\Core\Controller;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Audit;
-use App\Core\Channels\{Email, SMS};
+use App\Core\Channels\{Email, SMS, WhatsApp};
 
 class AdminController extends Controller
 {
@@ -207,11 +207,19 @@ class AdminController extends Controller
             Email::send($app['email'], $fullName, "Karibu — {$appName}", $html);
         }
 
-        // 5. Notify applicant by SMS
+        // 5. Notify applicant: WhatsApp first, fall back to SMS
         if ($app['phone']) {
-            $msg = "Ndugu {$fullName}, ombi lako limeidhinishwa. Ingia kwenye {$appUrl}/login. "
-                 . "Nywila ya muda: {$tempPass}. Badilisha baada ya kuingia. — {$appName}";
-            SMS::send($app['phone'], $msg);
+            $msg = "Ndugu {$fullName}, ombi lako la kujisajili limeidhinishwa.\n\n"
+                 . "Ingia kwenye: {$appUrl}/login\n"
+                 . "Nywila ya muda: {$tempPass}\n\n"
+                 . "Tafadhali badilisha nywila baada ya kuingia mara ya kwanza.\n— {$appName}";
+            $waSent = WhatsApp::send($app['phone'], $msg);
+            if (!$waSent) {
+                // WhatsApp failed — fall back to plain SMS
+                $smsMsg = "Ndugu {$fullName}, umeidhinishwa. Ingia: {$appUrl}/login "
+                        . "Nywila: {$tempPass} (Badilisha baada ya kuingia) — {$appName}";
+                SMS::send($app['phone'], $smsMsg);
+            }
         }
 
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Ombi limeidhinishwa na mwanachama ameundwa.'];

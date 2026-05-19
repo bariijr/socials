@@ -4,31 +4,35 @@ namespace App\Core\Channels;
 
 class WhatsApp
 {
+    private const API_URL = 'https://apigw.beemafrica.com/v1/be/whatsapp/text';
+
     public static function send(string $phone, string $message): bool
     {
         $phone     = self::normalizePhone($phone);
-        $accountSid = env('WA_ACCOUNT_SID', '');
-        $authToken  = env('WA_AUTH_TOKEN', '');
-        $from       = env('WA_FROM', '');
+        $apiKey    = env('BEEM_API_KEY', '');
+        $secretKey = env('BEEM_SECRET_KEY', '');
 
-        if (!$accountSid || !$authToken || !$from) {
-            error_log('WhatsApp: Twilio credentials not configured');
+        if (!$apiKey || !$secretKey) {
+            error_log('WhatsApp: Beem Africa credentials not configured (BEEM_API_KEY / BEEM_SECRET_KEY)');
             return false;
         }
 
-        $url = "https://api.twilio.com/2010-04-01/Accounts/{$accountSid}/Messages.json";
+        $payload = json_encode([
+            'to'      => ltrim($phone, '+'),
+            'message' => $message,
+        ]);
 
-        $ch = curl_init($url);
+        $ch = curl_init(self::API_URL);
         curl_setopt_array($ch, [
             CURLOPT_POST           => true,
-            CURLOPT_USERPWD        => "{$accountSid}:{$authToken}",
-            CURLOPT_POSTFIELDS     => http_build_query([
-                'From' => 'whatsapp:' . $from,
-                'To'   => 'whatsapp:' . $phone,
-                'Body' => $message,
-            ]),
+            CURLOPT_USERPWD        => "{$apiKey}:{$secretKey}",
+            CURLOPT_POSTFIELDS     => $payload,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
         ]);
 
         $response = curl_exec($ch);
@@ -41,7 +45,13 @@ class WhatsApp
             return false;
         }
 
-        return $httpCode >= 200 && $httpCode < 300;
+        if ($httpCode < 200 || $httpCode >= 300) {
+            error_log("WhatsApp Beem Africa HTTP {$httpCode}: {$response}");
+            return false;
+        }
+
+        $decoded = json_decode($response, true);
+        return isset($decoded['successful']) && $decoded['successful'] === true;
     }
 
     private static function normalizePhone(string $phone): string
