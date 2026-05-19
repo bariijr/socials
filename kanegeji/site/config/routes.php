@@ -157,11 +157,13 @@ $router->get('/pledges/{id}',            'Pledges\PledgeController@show');
 $router->post('/pledges/{id}/payment',   'Pledges\PledgeController@recordPayment');
 
 // ── RECONCILIATION ─────────────────────────────────────────
-$router->get('/reconciliation',            'Reconciliation\ReconciliationController@index');
-$router->post('/reconciliation/import',    'Reconciliation\ReconciliationController@import');
-$router->post('/reconciliation/match',     'Reconciliation\ReconciliationController@match');
-$router->post('/reconciliation/reconcile', 'Reconciliation\ReconciliationController@reconcile');
-$router->post('/reconciliation/delete',    'Reconciliation\ReconciliationController@deleteItem');
+$router->get('/reconciliation',                        'Reconciliation\ReconciliationController@index');
+$router->post('/reconciliation/import',                'Reconciliation\ReconciliationController@import');
+$router->post('/reconciliation/match',                 'Reconciliation\ReconciliationController@match');
+$router->post('/reconciliation/auto-match',            'Reconciliation\ReconciliationController@autoMatch');
+$router->post('/reconciliation/reconcile',             'Reconciliation\ReconciliationController@reconcile');
+$router->post('/reconciliation/delete',                'Reconciliation\ReconciliationController@deleteItem');
+$router->get('/reconciliation/search-transactions',    'Reconciliation\ReconciliationController@searchTransactions');
 
 // ── NOTIFICATIONS (bulk broadcast) ─────────────────────────
 $router->get('/notifications',         'Notifications\NotificationController@index');

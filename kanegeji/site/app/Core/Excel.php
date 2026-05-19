@@ -28,6 +28,32 @@ class Excel
         return $this;
     }
 
+    public function addSheet(string $name): self
+    {
+        $sheet = $this->spreadsheet->createSheet();
+        $sheet->setTitle(mb_substr($name, 0, 31));
+        $this->sheet = $sheet;
+        return $this;
+    }
+
+    public function cell(string $address, mixed $value): self
+    {
+        $this->sheet->setCellValue($address, $value);
+        return $this;
+    }
+
+    public function styleRange(string $range, array $style): self
+    {
+        $this->sheet->getStyle($range)->applyFromArray($style);
+        return $this;
+    }
+
+    public function mergeCells(string $range): self
+    {
+        $this->sheet->mergeCells($range);
+        return $this;
+    }
+
     public function headers(array $headers, string $startRow = '1'): self
     {
         $col = 'A';
@@ -68,8 +94,16 @@ class Excel
         return $this;
     }
 
+    public function activateFirst(): self
+    {
+        $this->spreadsheet->setActiveSheetIndex(0);
+        $this->sheet = $this->spreadsheet->getActiveSheet();
+        return $this;
+    }
+
     public function download(string $filename): void
     {
+        $this->spreadsheet->setActiveSheetIndex(0);
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');
         header('Cache-Control: max-age=0');
