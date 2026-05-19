@@ -86,9 +86,15 @@ class AIController extends Controller
         // Remove the last item (the user message we just saved)
         array_pop($history);
 
-        // Call AI with prior history + current message
-        $ai       = new AI();
-        $system   = AI::buildParishContext($pid);
+        // Search knowledge base for relevant context
+        $knowledgeContext = AI::searchKnowledge($pid, $message);
+
+        // Call AI with prior history + knowledge context + current message
+        $ai     = new AI();
+        $system = AI::buildParishContext($pid);
+        if ($knowledgeContext) {
+            $system .= "\n\n" . $knowledgeContext;
+        }
         $response = $ai->withHistory($history)->ask($message, $system);
 
         if (!$response) {

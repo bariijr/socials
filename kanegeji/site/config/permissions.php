@@ -21,8 +21,13 @@ return [
         'accounting.create', 'accounting.edit', 'accounting.delete',
         'pledges_view', 'pledges_manage',
         'notifications_view', 'notifications_send',
-        'ai_view',
+        'ai_view', 'ai_knowledge_view', 'ai_knowledge_manage',
         'reconciliation_view',
+        'budget_view', 'budget_manage',
+        'announcements_view', 'announcements_manage',
+        'mass_view', 'mass_manage',
+        'catholic_view',
+        'donations_view',
     ],
 
     'accountant' => [
@@ -39,6 +44,9 @@ return [
         'ai_view',
         'reconciliation_view',
         'accounting.approve',
+        'budget_view', 'budget_manage',
+        'donations_view',
+        'catholic_view',
     ],
 
     'priest' => [
@@ -54,6 +62,12 @@ return [
         'sacraments.view', 'sacraments.manage',
         'pledges_view',
         'ai_view',
+        'announcements_view', 'announcements_manage',
+        'mass_view', 'mass_manage',
+        'catholic_view',
+        'budget_view',
+        'donations_view',
+        'ai_knowledge_view',
     ],
 
     'secretary' => [
@@ -69,6 +83,9 @@ return [
         'pledges_view',
         'notifications_view', 'notifications_send',
         'ai_view',
+        'announcements_view', 'announcements_manage',
+        'mass_view',
+        'catholic_view',
     ],
 
     'member' => [],

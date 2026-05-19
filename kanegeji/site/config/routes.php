@@ -190,3 +190,51 @@ $router->post('/register', 'Auth\AuthController@storeApplication');
 
 // ── QR VERIFICATION (public) ───────────────────────────────
 $router->get('/verify/{code}', 'Auth\AuthController@verify');
+
+// ── BUDGET ─────────────────────────────────────────────────
+$router->get('/budget',              'Budget\BudgetController@index');
+$router->get('/budget/create',       'Budget\BudgetController@create');
+$router->post('/budget',             'Budget\BudgetController@store');
+$router->post('/budget/{id}/delete', 'Budget\BudgetController@destroy');
+
+// ── ANNOUNCEMENTS ──────────────────────────────────────────
+$router->get('/announcements',                   'Announcements\AnnouncementController@index');
+$router->get('/announcements/create',            'Announcements\AnnouncementController@create');
+$router->post('/announcements',                  'Announcements\AnnouncementController@store');
+$router->post('/announcements/{id}/toggle',      'Announcements\AnnouncementController@toggle');
+$router->post('/announcements/{id}/delete',      'Announcements\AnnouncementController@destroy');
+
+// ── MASS SCHEDULES ─────────────────────────────────────────
+$router->get('/mass-schedules',                  'MassSchedules\MassController@index');
+$router->post('/mass-schedules',                 'MassSchedules\MassController@store');
+$router->post('/mass-schedules/{id}/delete',     'MassSchedules\MassController@destroy');
+$router->post('/mass-schedules/{id}/toggle',     'MassSchedules\MassController@toggle');
+
+// ── AI KNOWLEDGE BASE ──────────────────────────────────────
+$router->get('/ai-knowledge',                    'AIKnowledge\AIKnowledgeController@index');
+$router->post('/ai-knowledge',                   'AIKnowledge\AIKnowledgeController@store');
+$router->post('/ai-knowledge/{id}/delete',       'AIKnowledge\AIKnowledgeController@destroy');
+$router->post('/ai-knowledge/{id}/toggle',       'AIKnowledge\AIKnowledgeController@toggle');
+
+// ── CATHOLIC CONTENT ───────────────────────────────────────
+$router->get('/catholic/prayers',                'Catholic\CatholicController@prayers');
+$router->get('/catholic/calendar',               'Catholic\CatholicController@calendar');
+
+// ── SACRAMENT CERTIFICATE ──────────────────────────────────
+$router->get('/sacraments/{id}/certificate',     'Sacraments\SacramentController@certificate');
+
+// ── PUBLIC WEBSITE ─────────────────────────────────────────
+$router->get('/',                                'Website\WebsiteController@home');
+$router->get('/give',                            'Website\WebsiteController@give');
+$router->post('/give',                           'Website\WebsiteController@storeDonation');
+$router->get('/mass-schedule-public',            'Website\WebsiteController@massSchedule');
+$router->get('/announcements-public',            'Website\WebsiteController@announcementsPublic');
+
+// ── ONLINE DONATIONS (staff) ───────────────────────────────
+$router->get('/donations',                       'Website\WebsiteController@donations');
+$router->post('/donations/{id}/verify',          'Website\WebsiteController@verifyDonation');
+
+// ── MEMBER PORTAL ──────────────────────────────────────────
+$router->get('/portal',                          'Portal\PortalController@dashboard');
+$router->get('/portal/contributions',            'Portal\PortalController@contributions');
+$router->get('/portal/receipts',                 'Portal\PortalController@receipts');

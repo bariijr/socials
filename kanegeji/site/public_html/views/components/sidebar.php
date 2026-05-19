@@ -44,8 +44,14 @@ $role = Auth::role();
             ['href' => '/documents',                  'icon' => 'folder',    'label' => __('nav.documents', 'Hati'),           'perm' => 'documents_view'],
             ['href' => '/events',                     'icon' => 'calendar',  'label' => __('nav.events', 'Matukio'),           'perm' => 'events_view'],
             ['href' => '/bookings',                   'icon' => 'building',  'label' => __('nav.bookings', 'Uhifadhi'),        'perm' => 'bookings_view'],
-            ['href' => '/notifications',              'icon' => 'bell',      'label' => __('nav.notifications', 'Matangazo'),  'perm' => 'notifications_view'],
+            ['href' => '/budget',                     'icon' => 'budget',    'label' => __('nav.budget', 'Bajeti'),           'perm' => 'budget_view'],
+            ['href' => '/announcements',              'icon' => 'announce',  'label' => __('nav.announcements', 'Matangazo'),  'perm' => 'announcements_view'],
+            ['href' => '/mass-schedules',             'icon' => 'church',    'label' => __('nav.mass', 'Ratiba ya Misa'),      'perm' => 'mass_view'],
+            ['href' => '/catholic/prayers',           'icon' => 'pray',      'label' => __('nav.catholic', 'Sala / Liturujia'), 'perm' => 'catholic_view'],
+            ['href' => '/notifications',              'icon' => 'bell',      'label' => __('nav.notifications', 'Ujumbe'),     'perm' => 'notifications_view'],
             ['href' => '/ai',                         'icon' => 'ai',        'label' => __('nav.ai', 'Msaidizi wa AI'),        'perm' => 'ai_view'],
+            ['href' => '/ai-knowledge',               'icon' => 'knowledge', 'label' => __('nav.knowledge', 'Maktaba ya AI'), 'perm' => 'ai_knowledge_view'],
+            ['href' => '/donations',                  'icon' => 'give',      'label' => __('nav.donations', 'Michango Mtandaoni'), 'perm' => 'donations_view'],
             ['href' => '/reports',                    'icon' => 'chart',     'label' => __('nav.reports', 'Ripoti'),           'perm' => 'reports.view'],
             ['href' => '/users',                      'icon' => 'shield',    'label' => __('nav.users', 'Watumiaji'),          'perm' => 'users.view'],
             ['href' => '/audit',                      'icon' => 'log',       'label' => __('nav.audit', 'Ukaguzi'),            'perm' => 'audit.view'],
@@ -74,6 +80,12 @@ $role = Auth::role();
             'bell'      => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>',
             'ai'        => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/>',
             'admin'     => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+            'budget'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>',
+            'announce'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>',
+            'church'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v4M8 6h8M10 6v2H8v8h8v-8h-2V6M8 14h8M12 10v4"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 22V12a6 6 0 0112 0v10"/>',
+            'pray'      => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v4M10 6h4"/>',
+            'knowledge' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>',
+            'give'      => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>',
         ];
         foreach ($links as $link):
             if ($link['perm'] === '__super_admin__' && Auth::role() !== 'super_admin') continue;

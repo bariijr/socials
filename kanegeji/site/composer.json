@@ -36,7 +36,14 @@
             "App\\Modules\\Reconciliation\\": "modules/Reconciliation/",
             "App\\Modules\\Notifications\\": "modules/Notifications/",
             "App\\Modules\\Admin\\": "modules/Admin/",
-            "App\\Modules\\AI\\": "modules/AI/"
+            "App\\Modules\\AI\\": "modules/AI/",
+            "App\\Modules\\Budget\\": "modules/Budget/",
+            "App\\Modules\\Announcements\\": "modules/Announcements/",
+            "App\\Modules\\MassSchedules\\": "modules/MassSchedules/",
+            "App\\Modules\\AIKnowledge\\": "modules/AIKnowledge/",
+            "App\\Modules\\Catholic\\": "modules/Catholic/",
+            "App\\Modules\\Website\\": "modules/Website/",
+            "App\\Modules\\Portal\\": "modules/Portal/"
         },
         "files": [
             "app/Helpers/helpers.php"

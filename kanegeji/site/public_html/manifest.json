@@ -1,0 +1,43 @@
+{
+    "name": "Parish ERP — Kanegeji",
+    "short_name": "Parokia",
+    "description": "Mfumo wa usimamizi wa parokia — Kanisa Katoliki Tanzania",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#701a75",
+    "orientation": "portrait-primary",
+    "scope": "/",
+    "lang": "sw",
+    "icons": [
+        {
+            "src": "/img/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/img/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable any"
+        }
+    ],
+    "categories": ["productivity", "finance", "utilities"],
+    "shortcuts": [
+        {
+            "name": "Ongeza Muamala",
+            "short_name": "Muamala",
+            "description": "Ongeza muamala mpya wa fedha",
+            "url": "/accounting/transactions/create",
+            "icons": [{"src": "/img/icon-192.png", "sizes": "192x192"}]
+        },
+        {
+            "name": "Wanachama",
+            "short_name": "Wanachama",
+            "description": "Angalia orodha ya wanachama",
+            "url": "/members",
+            "icons": [{"src": "/img/icon-192.png", "sizes": "192x192"}]
+        }
+    ]
+}

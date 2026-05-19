@@ -67,6 +67,36 @@ class AI
         return $data['choices'][0]['message']['content'] ?? null;
     }
 
+    /**
+     * Search the knowledge base for relevant context before calling OpenAI.
+     * Returns knowledge snippets as a string to prepend to the system prompt.
+     */
+    public static function searchKnowledge(int $parishId, string $query): string
+    {
+        try {
+            $q       = '%' . $query . '%';
+            $results = Database::select(
+                "SELECT title, content FROM ai_knowledge
+                 WHERE parish_id=? AND active=1
+                   AND (title LIKE ? OR content LIKE ?)
+                 ORDER BY CASE WHEN title LIKE ? THEN 0 ELSE 1 END ASC
+                 LIMIT 3",
+                [$parishId, $q, $q, $q]
+            );
+
+            if (empty($results)) return '';
+
+            $context = "Maarifa yanayohusiana kutoka kwenye hifadhidata ya parokia:\n\n";
+            foreach ($results as $r) {
+                $excerpt  = mb_substr(strip_tags($r['content']), 0, 600);
+                $context .= "**{$r['title']}**\n{$excerpt}\n\n";
+            }
+            return $context;
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
     public static function buildParishContext(int $parishId): string
     {
         $stats = Database::selectOne(

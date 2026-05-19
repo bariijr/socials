@@ -102,6 +102,42 @@ class SacramentController extends Controller
         redirect('/members/' . $memberId);
     }
 
+    public function certificate(int $id): void
+    {
+        $sac = Database::selectOne(
+            "SELECT s.*, m.first_name, m.last_name, m.date_of_birth, m.member_number,
+                    p.name as parish_name, p.diocese
+             FROM sacraments s
+             JOIN members m ON m.id = s.member_id
+             JOIN parishes p ON p.id = s.parish_id
+             WHERE s.id = ? AND s.parish_id = ?",
+            [$id, Auth::parishId()]
+        );
+        if (!$sac) redirect('/sacraments');
+
+        $typeLabels = [
+            'baptism'         => 'Cheti cha Ubatizo',
+            'confirmation'    => 'Cheti cha Kipaimara',
+            'first_communion' => 'Cheti cha Komunyo ya Kwanza',
+            'marriage'        => 'Cheti cha Ndoa',
+            'holy_orders'     => 'Cheti cha Upadre',
+            'anointing'       => 'Cheti cha Upako',
+        ];
+
+        $pdf = \App\Core\PDF::make();
+        $pdf->header();
+        $pdf->footer();
+
+        ob_start();
+        require BASE_PATH . '/modules/Sacraments/views/certificate_pdf.php';
+        $html = ob_get_clean();
+
+        $css = '@page { size: A4; margin: 2cm; } body { font-family: serif; }';
+        $pdf->html($html, $css);
+        $filename = 'cheti_' . str_replace(' ', '_', strtolower($sac['type'])) . '_' . $sac['id'] . '.pdf';
+        $pdf->download($filename);
+    }
+
     public function destroy(int $id): void
     {
         $this->requirePermission('members.edit');
