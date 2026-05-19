@@ -213,6 +213,46 @@ class PaymentController extends Controller
         exit;
     }
 
+    // ── Payment receipt PDF ───────────────────────────────────
+
+    public function receipt(string $externalId): void
+    {
+        $this->requireAuth();
+
+        $payment = Database::selectOne(
+            "SELECT p.*, m.first_name, m.last_name, m.member_number,
+                    pa.name as parish_name, pa.diocese
+             FROM payments p
+             LEFT JOIN members m ON m.id = p.member_id
+             JOIN parishes pa ON pa.id = p.parish_id
+             WHERE p.external_id = ? AND p.parish_id = ? AND p.status = 'completed'",
+            [$externalId, Auth::parishId()]
+        );
+
+        if (!$payment) {
+            Session::flash('error', 'Risiti haijapatikana au malipo hayajathibitishwa.');
+            $this->redirect('/portal/receipts');
+        }
+
+        $providerLabels = [
+            'mpesa'       => 'M-Pesa',
+            'tigopesa'    => 'Tigo Pesa',
+            'airtelmoney' => 'Airtel Money',
+            'halopesa'    => 'HaloPesa',
+        ];
+        $purposeLabels = [
+            'donation' => 'Mchango',
+            'pledge'   => 'Ahadi',
+            'fee'      => 'Ada',
+        ];
+
+        $html = PDF::renderTemplate('Payments/views/receipt_pdf', compact('payment', 'providerLabels', 'purposeLabels'));
+        $css  = '@page { size: A5; margin: 1.5cm; } body { font-family: sans-serif; font-size: 12px; }';
+
+        $filename = 'risiti_' . $payment['external_id'];
+        PDF::make(['format' => 'A5'])->html($html, $css)->download($filename);
+    }
+
     // ── Payment history ───────────────────────────────────────
 
     public function history(): void

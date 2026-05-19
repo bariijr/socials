@@ -188,6 +188,7 @@ $router->post('/ai/conversations/{id}/delete',   'AI\AIController@deleteConversa
 $router->get('/pay',                        'Payments\PaymentController@checkout');
 $router->post('/pay/initiate',              'Payments\PaymentController@initiate');
 $router->get('/pay/status/{externalId}',    'Payments\PaymentController@status');
+$router->get('/pay/receipt/{externalId}',   'Payments\PaymentController@receipt');
 $router->post('/pay/callback',              'Payments\PaymentController@callback');
 $router->get('/payments',                   'Payments\PaymentController@history');
 

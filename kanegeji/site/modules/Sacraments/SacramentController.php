@@ -2,10 +2,7 @@
 
 namespace App\Modules\Sacraments;
 
-use App\Core\Controller;
-use App\Core\Auth;
-use App\Core\Database;
-use App\Core\Audit;
+use App\Core\{Audit, Auth, Controller, Database, PDF};
 
 class SacramentController extends Controller
 {
@@ -121,21 +118,14 @@ class SacramentController extends Controller
             'first_communion' => 'Cheti cha Komunyo ya Kwanza',
             'marriage'        => 'Cheti cha Ndoa',
             'holy_orders'     => 'Cheti cha Upadre',
-            'anointing'       => 'Cheti cha Upako',
+            'anointing'       => 'Cheti cha Upako wa Wagonjwa',
         ];
 
-        $pdf = \App\Core\PDF::make();
-        $pdf->header();
-        $pdf->footer();
+        $html = PDF::renderTemplate('Sacraments/views/certificate_pdf', compact('sac', 'typeLabels'));
+        $css  = '@page { size: A4; margin: 2cm; } body { font-family: serif; }';
 
-        ob_start();
-        require BASE_PATH . '/modules/Sacraments/views/certificate_pdf.php';
-        $html = ob_get_clean();
-
-        $css = '@page { size: A4; margin: 2cm; } body { font-family: serif; }';
-        $pdf->html($html, $css);
-        $filename = 'cheti_' . str_replace(' ', '_', strtolower($sac['type'])) . '_' . $sac['id'] . '.pdf';
-        $pdf->download($filename);
+        $filename = 'cheti_' . strtolower($sac['type']) . '_' . $sac['id'];
+        PDF::make(['format' => 'A4'])->html($html, $css)->download($filename);
     }
 
     public function destroy(int $id): void

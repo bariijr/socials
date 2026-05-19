@@ -52,12 +52,18 @@
         </div>
     </div>
 
-    <div class="flex gap-3">
+    <div class="flex gap-3 flex-wrap">
         <?php if ($payment['status'] === 'pending'): ?>
         <button onclick="location.reload()"
                 class="flex-1 bg-brand-700 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-brand-800">
             Angalia Hali
         </button>
+        <?php endif; ?>
+        <?php if ($payment['status'] === 'completed'): ?>
+        <a href="/pay/receipt/<?= e($payment['external_id']) ?>"
+           class="flex-1 text-center bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700">
+            Pakua Risiti
+        </a>
         <?php endif; ?>
         <a href="/portal" class="flex-1 text-center border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
             Rudi Nyumbani
