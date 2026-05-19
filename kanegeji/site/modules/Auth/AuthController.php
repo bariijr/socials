@@ -2,7 +2,8 @@
 
 namespace App\Modules\Auth;
 
-use App\Core\{Auth, Audit, Controller, CSRF, Request, Session};
+use App\Core\{Auth, Audit, Controller, CSRF, Request, RateLimit, Session};
+use App\Core\Channels\Email;
 
 class AuthController extends Controller
 {
@@ -34,6 +35,13 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
+        // Rate limiting: max 5 attempts per 15 minutes per IP
+        $rlKey = 'login_' . $ip;
+        if (!RateLimit::check($rlKey, (int) env('RATE_LIMIT_LOGIN', 5), (int) env('RATE_LIMIT_WINDOW', 900))) {
+            Session::flash('error', 'Umejaribu mara nyingi sana. Subiri dakika 15 kisha ujaribu tena.');
+            $this->redirect('/login');
+        }
+
         $result = $this->service->attemptLogin($email, $password, $ip);
 
         if (!$result['success']) {
@@ -47,6 +55,7 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
+        RateLimit::clear($rlKey);
         Auth::login($result['user']);
         Audit::logLogin($email, 'success');
         Audit::log('login', 'Auth', 'user', $result['user']['id']);
@@ -76,9 +85,18 @@ class AuthController extends Controller
         $user  = $this->service->getUserByEmail($email);
 
         if ($user) {
-            $token = bin2hex(random_bytes(32));
+            $token   = bin2hex(random_bytes(32));
             $this->service->setResetToken($user['id'], $token);
-            // TODO: send email with reset link
+            $appUrl  = rtrim(env('APP_URL', ''), '/');
+            $link    = "{$appUrl}/reset-password?token={$token}";
+            $appName = env('APP_NAME', 'Parish ERP');
+            $html    = "<p>Ndugu <strong>" . htmlspecialchars($user['name']) . "</strong>,</p>
+                        <p>Tumepokea ombi la kubadilisha nywila yako.</p>
+                        <p>Bonyeza kiungo hapa chini kubadilisha nywila yako (kinaisha baada ya masaa 2):</p>
+                        <p><a href='{$link}' style='color:#7c3aed'>{$link}</a></p>
+                        <p>Kama hukutuma ombi hili, puuza ujumbe huu.</p>
+                        <p>— {$appName}</p>";
+            Email::send($user['email'], $user['name'], 'Badilisha Nywila — ' . $appName, $html);
         }
 
         // Always show same message to prevent email enumeration

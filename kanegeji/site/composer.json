@@ -43,7 +43,8 @@
             "App\\Modules\\AIKnowledge\\": "modules/AIKnowledge/",
             "App\\Modules\\Catholic\\": "modules/Catholic/",
             "App\\Modules\\Website\\": "modules/Website/",
-            "App\\Modules\\Portal\\": "modules/Portal/"
+            "App\\Modules\\Portal\\": "modules/Portal/",
+            "App\\Modules\\Search\\": "modules/Search/"
         },
         "files": [
             "app/Helpers/helpers.php"

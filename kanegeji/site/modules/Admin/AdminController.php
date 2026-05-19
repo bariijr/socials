@@ -6,6 +6,7 @@ use App\Core\Controller;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Audit;
+use App\Core\Channels\{Email, SMS};
 
 class AdminController extends Controller
 {
@@ -147,21 +148,100 @@ class AdminController extends Controller
     public function approveApplication(int $id): void
     {
         $this->verifyCsrf();
+
+        $app = Database::selectOne("SELECT * FROM member_applications WHERE id=?", [$id]);
+        if (!$app || $app['status'] !== 'pending') {
+            redirect('/admin/applications');
+        }
+
+        // 1. Create member record
+        $memberId = Database::insert(
+            "INSERT INTO members
+                (parish_id, first_name, last_name, phone, email, date_of_birth, gender,
+                 community_name, status, active, created_at)
+             VALUES (?,?,?,?,?,?,?,?,'active',1,NOW())",
+            [
+                $app['parish_id'], $app['first_name'], $app['last_name'],
+                $app['phone'] ?: null, $app['email'] ?: null,
+                $app['date_of_birth'] ?: null, $app['gender'] ?: null,
+                $app['community_name'] ?: null,
+            ]
+        );
+
+        // 2. Create user account with temporary password
+        $tempPass = bin2hex(random_bytes(4)); // 8-char hex
+        $hash     = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
+        Database::insert(
+            "INSERT INTO users (parish_id, member_id, name, email, password, role, active, created_at)
+             VALUES (?,?,?,?,?,'member',1,NOW())",
+            [
+                $app['parish_id'], $memberId,
+                $app['first_name'] . ' ' . $app['last_name'],
+                $app['email'] ?: null,
+                $hash,
+            ]
+        );
+
+        // 3. Mark application approved
         Database::execute(
             "UPDATE member_applications SET status='approved', reviewed_by=?, reviewed_at=NOW() WHERE id=?",
             [Auth::id(), $id]
         );
-        $_SESSION['flash'] = ['type' => 'success', 'message' => 'Ombi limeidhinishwa.'];
+
+        Audit::log('approve', 'Admin', 'member_applications', $id);
+
+        // 4. Notify applicant by email
+        $appUrl   = rtrim(env('APP_URL', ''), '/');
+        $appName  = env('APP_NAME', 'Parish ERP');
+        $fullName = $app['first_name'] . ' ' . $app['last_name'];
+        if ($app['email']) {
+            $html = "<p>Ndugu <strong>{$fullName}</strong>,</p>
+                     <p>Ombi lako la kujisajili limeidhinishwa. Unaweza sasa kuingia kwenye mfumo.</p>
+                     <ul>
+                       <li><strong>Barua pepe:</strong> {$app['email']}</li>
+                       <li><strong>Nywila ya muda:</strong> {$tempPass}</li>
+                     </ul>
+                     <p>Bonyeza hapa kuingia: <a href='{$appUrl}/login'>{$appUrl}/login</a></p>
+                     <p>Badilisha nywila yako baada ya kuingia mara ya kwanza.</p>
+                     <p>— {$appName}</p>";
+            Email::send($app['email'], $fullName, "Karibu — {$appName}", $html);
+        }
+
+        // 5. Notify applicant by SMS
+        if ($app['phone']) {
+            $msg = "Ndugu {$fullName}, ombi lako limeidhinishwa. Ingia kwenye {$appUrl}/login. "
+                 . "Nywila ya muda: {$tempPass}. Badilisha baada ya kuingia. — {$appName}";
+            SMS::send($app['phone'], $msg);
+        }
+
+        $_SESSION['flash'] = ['type' => 'success', 'message' => 'Ombi limeidhinishwa na mwanachama ameundwa.'];
         redirect('/admin/applications');
     }
 
     public function rejectApplication(int $id): void
     {
         $this->verifyCsrf();
+
+        $app = Database::selectOne("SELECT * FROM member_applications WHERE id=?", [$id]);
+
         Database::execute(
             "UPDATE member_applications SET status='rejected', reviewed_by=?, reviewed_at=NOW(), notes=? WHERE id=?",
             [Auth::id(), trim($_POST['reason'] ?? ''), $id]
         );
+
+        // Notify by email
+        if ($app && $app['email']) {
+            $appName  = env('APP_NAME', 'Parish ERP');
+            $fullName = $app['first_name'] . ' ' . $app['last_name'];
+            $reason   = trim($_POST['reason'] ?? '');
+            $html     = "<p>Ndugu <strong>{$fullName}</strong>,</p>
+                         <p>Ombi lako la kujisajili halikuweza kukubaliwa kwa sasa.</p>"
+                      . ($reason ? "<p>Sababu: {$reason}</p>" : '')
+                      . "<p>Kwa maswali, wasiliana na ofisi ya parokia.</p>
+                         <p>— {$appName}</p>";
+            Email::send($app['email'], $fullName, "Kuhusu Ombi Lako — {$appName}", $html);
+        }
+
         $_SESSION['flash'] = ['type' => 'info', 'message' => 'Ombi limekataliwa.'];
         redirect('/admin/applications');
     }

@@ -184,6 +184,9 @@ $router->get('/ai',                              'AI\AIController@index');
 $router->post('/ai/ask',                         'AI\AIController@ask');
 $router->post('/ai/conversations/{id}/delete',   'AI\AIController@deleteConversation');
 
+// ── GLOBAL SEARCH ──────────────────────────────────────────
+$router->get('/search', 'Search\SearchController@index');
+
 // ── SELF-REGISTRATION (public) ─────────────────────────────
 $router->get('/register',  'Auth\AuthController@showRegister');
 $router->post('/register', 'Auth\AuthController@storeApplication');
