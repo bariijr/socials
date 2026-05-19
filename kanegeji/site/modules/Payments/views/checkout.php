@@ -70,7 +70,7 @@
     </div>
 
     <p class="text-xs text-center text-gray-400">
-        Malipo yanashughulikiwa salama kupitia Azam Pay.
+        Malipo yanashughulikiwa salama kupitia Selcom PESA.
         Kiasi kitaonekana kwenye rekodi za parokia baada ya kuthibitishwa.
     </p>
 </div>

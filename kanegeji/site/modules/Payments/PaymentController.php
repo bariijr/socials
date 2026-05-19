@@ -2,7 +2,7 @@
 
 namespace App\Modules\Payments;
 
-use App\Core\{Audit, Auth, Controller, Database, Payment, Request, Session};
+use App\Core\{Audit, Auth, Controller, Database, Payment, Request, Session, Selcom};
 
 class PaymentController extends Controller
 {
@@ -64,12 +64,22 @@ class PaymentController extends Controller
 
         $externalId = 'KAN-' . Auth::parishId() . '-' . time() . '-' . random_int(100, 999);
         $memberId   = null;
+        $buyerName  = 'Mwanachama';
+        $buyerEmail = env('MAIL_FROM_ADDRESS', 'noreply@example.com');
 
-        $member = Database::selectOne(
-            "SELECT id FROM members WHERE id = (SELECT member_id FROM users WHERE id=? LIMIT 1)",
+        // Fetch buyer details for Selcom order
+        $userRow = Database::selectOne(
+            "SELECT u.email, m.id as member_id, CONCAT(m.first_name,' ',m.last_name) as full_name
+             FROM users u
+             LEFT JOIN members m ON m.id = u.member_id
+             WHERE u.id = ?",
             [Auth::id()]
         );
-        if ($member) $memberId = $member['id'];
+        if ($userRow) {
+            $memberId   = $userRow['member_id'];
+            $buyerEmail = $userRow['email'] ?: $buyerEmail;
+            $buyerName  = trim($userRow['full_name'] ?? '') ?: $buyerName;
+        }
 
         // Persist payment record (pending)
         $paymentId = Database::insert(
@@ -78,12 +88,14 @@ class PaymentController extends Controller
             [Auth::parishId(), $memberId, $externalId, $provider, $phone, $amount, $purpose, $referenceId ?: null]
         );
 
-        // Initiate Azam Pay STK push
+        // Initiate payment via configured gateway (Selcom default)
         $result = Payment::initiateMno([
             'phone'       => $phone,
             'amount'      => $amount,
             'provider'    => $provider,
             'external_id' => $externalId,
+            'name'        => $buyerName,
+            'email'       => $buyerEmail,
             'currency'    => 'TZS',
         ]);
 
@@ -118,6 +130,29 @@ class PaymentController extends Controller
         if (!$payment) {
             Session::flash('error', 'Malipo hayajapatikana.');
             $this->redirect('/portal');
+        }
+
+        // Actively poll gateway when status is still pending
+        if ($payment['status'] === 'pending' && !empty($payment['gateway_ref'])) {
+            $gwStatus = Payment::queryStatus($payment['gateway_ref']);
+            if ($gwStatus && $gwStatus['status'] !== 'pending') {
+                Database::execute(
+                    "UPDATE payments SET status=?, updated_at=NOW() WHERE id=?",
+                    [$gwStatus['status'], $payment['id']]
+                );
+                $payment['status'] = $gwStatus['status'];
+
+                // Auto-post income on confirmed completion
+                if ($gwStatus['status'] === 'completed' && $payment['purpose'] === 'donation') {
+                    $this->postDonationTransaction($payment);
+                }
+                if ($gwStatus['status'] === 'completed' && $payment['purpose'] === 'pledge' && $payment['reference_id']) {
+                    Database::execute(
+                        "UPDATE pledges SET amount_paid = amount_paid + ?, updated_at=NOW() WHERE id=?",
+                        [$payment['amount'], $payment['reference_id']]
+                    );
+                }
+            }
         }
 
         $this->view('Payments/views/status', compact('payment'));
