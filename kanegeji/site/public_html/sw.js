@@ -1,9 +1,8 @@
-const CACHE = 'parokia-v1';
+const CACHE = 'parokia-v2';
 const PRECACHE = [
-    '/',
-    '/dashboard',
-    '/login',
     '/manifest.json',
+    // Do NOT precache pages that require auth or may redirect — navigations are
+    // handled by the browser directly (see fetch handler below).
 ];
 
 self.addEventListener('install', e => {
@@ -50,7 +49,13 @@ self.addEventListener('notificationclick', e => {
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
 
-    // Skip non-GET, cross-origin, admin POST requests, API calls
+    // Navigation requests (page loads) must be handled by the browser, not the SW.
+    // The browser sends navigations with redirect:'manual', so a 302 auth redirect
+    // becomes an opaque redirect response — returning it from respondWith() causes
+    // "redirected response used for a request whose redirect mode is not follow".
+    if (e.request.mode === 'navigate') return;
+
+    // Skip non-GET, cross-origin, storage paths
     if (e.request.method !== 'GET') return;
     if (url.origin !== self.location.origin) return;
     if (url.pathname.startsWith('/storage/')) return;
@@ -58,8 +63,8 @@ self.addEventListener('fetch', e => {
     e.respondWith(
         caches.match(e.request).then(cached => {
             const network = fetch(e.request).then(res => {
-                // Cache successful HTML/CSS/JS responses
-                if (res.ok && ['text/html', 'text/css', 'application/javascript', 'image/'].some(t => (res.headers.get('content-type') || '').includes(t))) {
+                // Cache only static assets — never HTML pages (they may redirect)
+                if (res.ok && ['text/css', 'application/javascript', 'image/'].some(t => (res.headers.get('content-type') || '').includes(t))) {
                     const clone = res.clone();
                     caches.open(CACHE).then(c => c.put(e.request, clone));
                 }
