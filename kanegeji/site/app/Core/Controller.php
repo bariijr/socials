@@ -47,6 +47,12 @@ abstract class Controller
 
     protected function redirect(string $url, int $status = 302): never
     {
+        // Flush session to disk before redirect so the next request can read it.
+        // Without this, session_regenerate_id(true) may not have written the new
+        // session file before exit, causing the dashboard/auth redirect loop.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
         http_response_code($status);
         header("Location: {$url}");
         exit;

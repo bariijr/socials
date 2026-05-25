@@ -119,10 +119,11 @@ CREATE TABLE users (
     FOREIGN KEY (role_id) REFERENCES roles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Default super admin (password: Admin@123 — CHANGE IN PRODUCTION)
+-- Default super admin password: "password" (cost-10 bcrypt — CHANGE IMMEDIATELY IN PRODUCTION)
+-- Run database/reset_admin_password.php after first deploy to set a strong password.
 INSERT INTO users (parish_id, name, email, phone, password_hash, role_id, lang)
 VALUES (1, 'System Administrator', 'admin@kanegeji.go.tz', '+255700000000',
-        '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 1, 'sw');
+        '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 1, 'sw');
 
 CREATE TABLE login_logs (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

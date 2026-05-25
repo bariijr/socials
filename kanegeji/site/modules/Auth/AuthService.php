@@ -2,19 +2,12 @@
 
 namespace App\Modules\Auth;
 
-use App\Core\{Database, RateLimit};
+use App\Core\Database;
 
 class AuthService
 {
     public function attemptLogin(string $email, string $password, string $ip): array
     {
-        $cfg      = config('app.rate_limit');
-        $rateKey  = "login:{$ip}";
-
-        if (!RateLimit::check($rateKey, $cfg['login_max'], $cfg['login_window'])) {
-            return ['success' => false, 'reason' => 'locked'];
-        }
-
         $user = Database::selectOne(
             "SELECT u.*, r.slug AS role_slug
              FROM users u
@@ -31,7 +24,6 @@ class AuthService
             return ['success' => false, 'reason' => 'inactive'];
         }
 
-        RateLimit::clear($rateKey);
         Database::execute("UPDATE users SET last_login_at = NOW() WHERE id = ?", [$user['id']]);
 
         return ['success' => true, 'user' => $user];

@@ -16,13 +16,19 @@ class Session
         $cfg = config('app.session');
         session_name($cfg['name'] ?? 'erp_sess');
 
+        // Detect HTTPS automatically so the Secure flag is set even when
+        // SESSION_SECURE is not explicitly configured in .env.
+        $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'
+            || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
+            || ($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on';
+
         session_set_cookie_params([
             'lifetime' => $cfg['lifetime'] ?? 7200,
             'path'     => '/',
             'domain'   => '',
-            'secure'   => $cfg['secure'] ?? false,
+            'secure'   => $cfg['secure'] ?? $isHttps,
             'httponly' => true,
-            'samesite' => 'Strict',
+            'samesite' => 'Lax',  // Strict blocks the cookie on the POST→redirect flow on some proxies
         ]);
 
         session_start();

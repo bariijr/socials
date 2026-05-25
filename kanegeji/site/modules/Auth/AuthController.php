@@ -50,27 +50,30 @@ class AuthController extends Controller
                 'inactive' => 'Akaunti haifanyi kazi. Wasiliana na msimamizi.',
                 default    => __('auth.login_failed', 'Barua pepe au nywila si sahihi.'),
             };
-            Audit::logLogin($email, $result['reason'] === 'locked' ? 'locked' : 'failed', $result['reason']);
             Session::flash('error', $msg);
+            try { Audit::logLogin($email, $result['reason'] === 'locked' ? 'locked' : 'failed', $result['reason']); } catch (\Throwable) {}
             $this->redirect('/login');
         }
 
         RateLimit::clear($rlKey);
 
         // Check if user has TOTP 2FA enabled
-        $totp2fa = Database::selectOne(
-            "SELECT 1 FROM totp_secrets WHERE user_id=? AND enabled=1 LIMIT 1",
-            [$result['user']['id']]
-        );
+        $totp2fa = false;
+        try {
+            $totp2fa = Database::selectOne(
+                "SELECT 1 FROM totp_secrets WHERE user_id=? AND enabled=1 LIMIT 1",
+                [$result['user']['id']]
+            );
+        } catch (\Throwable) {}
         if ($totp2fa) {
             $_SESSION['pending_2fa_user_id'] = $result['user']['id'];
-            Audit::log('login.2fa_required', 'Auth', 'user', $result['user']['id']);
+            try { Audit::log('login.2fa_required', 'Auth', 'user', $result['user']['id']); } catch (\Throwable) {}
             $this->redirect('/login/totp');
         }
 
         Auth::login($result['user']);
-        Audit::logLogin($email, 'success');
-        Audit::log('login', 'Auth', 'user', $result['user']['id']);
+        try { Audit::logLogin($email, 'success'); } catch (\Throwable) {}
+        try { Audit::log('login', 'Auth', 'user', $result['user']['id']); } catch (\Throwable) {}
 
         Session::flash('success', __('auth.login_success', 'Umeingia mafanikio.'));
         $this->redirect('/dashboard');
