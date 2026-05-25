@@ -3,14 +3,14 @@
  * KANEGEJI LOGIN FIX — one-time script.
  * Fixes invalid password hash, clears rate-limiter, shows diagnostic info.
  *
- * 1. Upload to server root: public_html/kanegeji/database/fix_login.php
- * 2. Visit:  https://kanegeji.insider.co.tz/database/fix_login.php?pw=YourNewPassword
+ * 1. Upload this file to: public_html/kanegeji/public_html/fix_login.php
+ * 2. Visit:  https://kanegeji.insider.co.tz/fix_login.php?pw=YourNewPassword
  * 3. DELETE this file immediately after use.
  */
 
 define('BASE_PATH', dirname(__DIR__));
 
-// ── Load .env manually (no autoloader needed) ─────────────────────────────────
+// ── Load .env manually (no autoloader needed) ────────────────────────────────
 $envFile = BASE_PATH . '/.env';
 if (file_exists($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
@@ -45,7 +45,9 @@ try {
 }
 
 // ── Show current admin user ───────────────────────────────────────────────────
-$user = $pdo->query("SELECT id, email, password_hash, active, deleted_at FROM users WHERE role_id = 1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$user = $pdo->query(
+    "SELECT id, email, password_hash, active, deleted_at FROM users WHERE role_id = 1 LIMIT 1"
+)->fetch(PDO::FETCH_ASSOC);
 
 if (!$user) {
     echo "<span style='color:#f87171'>✗ No super_admin user found (role_id = 1).</span>\n";
@@ -56,14 +58,17 @@ if (!$user) {
 echo "Admin user:\n";
 echo "  ID     : {$user['id']}\n";
 echo "  Email  : {$user['email']}\n";
-echo "  Active : " . ($user['active'] ? 'yes' : '<span style="color:#f87171">NO — account disabled!</span>') . "\n";
-echo "  Deleted: " . ($user['deleted_at'] ? "<span style='color:#f87171'>{$user['deleted_at']}</span>" : 'no') . "\n";
+echo "  Active : " . ($user['active']
+    ? 'yes'
+    : '<span style="color:#f87171">NO — account disabled!</span>') . "\n";
+echo "  Deleted: " . ($user['deleted_at']
+    ? "<span style='color:#f87171'>{$user['deleted_at']}</span>"
+    : 'no') . "\n";
 
-// Test if hash is valid bcrypt
 $hashOk = strlen($user['password_hash']) === 60 && str_starts_with($user['password_hash'], '$2');
 echo "  Hash   : " . ($hashOk
     ? "<span style='color:#4ade80'>valid bcrypt</span>"
-    : "<span style='color:#f87171'>INVALID (not bcrypt) — this is why login fails!</span>") . "\n\n";
+    : "<span style='color:#f87171'>INVALID — this is why password_verify() fails for every password!</span>") . "\n\n";
 
 // ── Reset password ────────────────────────────────────────────────────────────
 $newPassword = trim($_GET['pw'] ?? '');
@@ -99,13 +104,13 @@ echo "Rate limiter: <span style='color:#4ade80'>cleared {$cleared} file(s)</span
 $sessionPath = session_save_path() ?: sys_get_temp_dir();
 $sessionOk   = is_dir($sessionPath) && is_writable($sessionPath);
 echo "Sessions:\n";
-echo "  Save path: {$sessionPath}\n";
-echo "  Writable : " . ($sessionOk
+echo "  Save path : {$sessionPath}\n";
+echo "  Writable  : " . ($sessionOk
     ? "<span style='color:#4ade80'>yes</span>"
-    : "<span style='color:#f87171'>NO — sessions cannot be saved! This breaks login.</span>") . "\n\n";
+    : "<span style='color:#f87171'>NO — sessions cannot be saved! This breaks login entirely.</span>") . "\n\n";
 
 // ── Summary ───────────────────────────────────────────────────────────────────
-echo "─────────────────────────────────────────────────────\n";
+echo "─────────────────────────────────────────────────────────\n";
 echo "Login now with:\n";
 echo "  URL      : https://kanegeji.insider.co.tz/login\n";
 echo "  Email    : {$user['email']}\n";
