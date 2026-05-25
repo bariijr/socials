@@ -1,13 +1,17 @@
 <!DOCTYPE html>
-<html lang="<?= \App\Core\Lang::locale() ?>" class="h-full" x-data="{ sidebarOpen: false, darkMode: localStorage.getItem('darkMode')==='1' }" x-init="$watch('darkMode', v => localStorage.setItem('darkMode', v?'1':'0'))" :class="{ 'dark': darkMode }">
+<html lang="<?= \App\Core\Lang::locale() ?>" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($pageTitle ?? __('nav.dashboard', 'Dashboard')) ?> — <?= e(__('app.name', 'Parish ERP')) ?></title>
     <meta name="csrf-token" content="<?= csrf_token() ?>">
-    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
+        // Apply dark class immediately from localStorage to prevent flash-of-light-mode
+        if (localStorage.getItem('darkMode') === '1') {
+            document.documentElement.classList.add('dark');
+        }
+        // tailwind.config MUST be set before the CDN script for darkMode:'class' to work
+        tailwind = { config: {
             darkMode: 'class',
             theme: {
                 extend: {
@@ -22,8 +26,9 @@
                     }
                 }
             }
-        }
+        }};
     </script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <link rel="icon" href="<?= asset('img/favicon.ico') ?>" type="image/x-icon">
@@ -34,7 +39,16 @@
         .sidebar-link.active { @apply bg-brand-700 text-white; }
     </style>
 </head>
-<body class="h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased">
+<body class="h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased"
+      x-data="{
+          sidebarOpen: false,
+          darkMode: localStorage.getItem('darkMode') === '1',
+          toggleDark() {
+              this.darkMode = !this.darkMode;
+              localStorage.setItem('darkMode', this.darkMode ? '1' : '0');
+              document.documentElement.classList.toggle('dark', this.darkMode);
+          }
+      }">
 
 <?php require BASE_PATH . '/public_html/views/components/sidebar.php'; ?>
 
@@ -52,7 +66,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
         </a>
-        <button @click="darkMode = !darkMode" class="text-white/80 hover:text-white p-1">
+        <button @click="toggleDark()" class="text-white/80 hover:text-white p-1">
             <svg x-show="!darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
             </svg>
@@ -78,7 +92,7 @@
             </div>
         </form>
         <div class="flex items-center gap-2 ml-4">
-            <button @click="darkMode = !darkMode" class="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <button @click="toggleDark()" class="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <svg x-show="!darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
                 </svg>
