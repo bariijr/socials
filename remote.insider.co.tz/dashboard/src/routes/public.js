@@ -14,10 +14,42 @@ const registerLimiter = rateLimit({
   message: { error: 'Too many registration attempts. Try again later.' },
 });
 
+const unlockLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  message: 'Too many attempts. Try again later.',
+});
+
 const RD_VER = '1.4.8';
+const INSTALL_PASSWORD = process.env.INSTALL_PASSWORD || 'Insider';
+
+// ── Guard: require install session unlock ─────────────────────────────────────
+function requireInstallAccess(req, res, next) {
+  if (req.session.installUnlocked) return next();
+  return res.redirect('/install/unlock');
+}
+
+// ── GET /install/unlock ───────────────────────────────────────────────────────
+installRouter.get('/unlock', (req, res) => {
+  if (req.session.installUnlocked) return res.redirect('/install');
+  res.render('install-unlock', {
+    title: `Access Required · ${res.locals.appName || 'InsiderRemote'}`,
+  });
+});
+
+// ── POST /install/unlock ──────────────────────────────────────────────────────
+installRouter.post('/unlock', unlockLimiter, (req, res) => {
+  if ((req.body.password || '').trim() === INSTALL_PASSWORD) {
+    req.session.installUnlocked = true;
+    return res.redirect('/install');
+  }
+  req.session.flash = { error: 'Incorrect password. Please try again.' };
+  return res.redirect('/install/unlock');
+});
 
 // ── GET /install ──────────────────────────────────────────────────────────────
-installRouter.get('/', async (req, res) => {
+installRouter.get('/', requireInstallAccess, async (req, res) => {
   try {
     const s = await getSettings();
     const domain    = process.env.DOMAIN || 'remote.insider.co.tz';
