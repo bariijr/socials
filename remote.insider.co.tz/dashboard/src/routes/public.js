@@ -14,12 +14,15 @@ const registerLimiter = rateLimit({
   message: { error: 'Too many registration attempts. Try again later.' },
 });
 
+const RD_VER = '1.4.8';
+
 // ── GET /install ──────────────────────────────────────────────────────────────
 installRouter.get('/', async (req, res) => {
   try {
     const s = await getSettings();
-    const domain  = process.env.DOMAIN || 'remote.insider.co.tz';
-    const apiBase = `https://${domain}`;
+    const domain    = process.env.DOMAIN || 'remote.insider.co.tz';
+    const apiBase   = `https://${domain}`;
+    const publicKey = process.env.RUSTDESK_PUBLIC_KEY || '9A5dd+PihusRR652Jc7Lw+cJYNMHIUn6flsbRUInJrI=';
     res.render('install', {
       title:       'Install — ' + (s.app_name || 'InsiderRemote'),
       appName:     s.app_name     || 'InsiderRemote',
@@ -28,6 +31,8 @@ installRouter.get('/', async (req, res) => {
       faviconUrl:  s.favicon_url  || '/img/favicon.ico',
       domain,
       apiBase,
+      publicKey,
+      rdVer: RD_VER,
       user:  null,
       flash: {},
     });
@@ -416,7 +421,7 @@ function buildWindowsScript(server, publicKey, apiBase, appName, company) {
     `            $url = "https://github.com/rustdesk/rustdesk/releases/download/v$ver/rustdesk-$ver-x86_64.exe"`,
     `            Write-Log "Detected version $ver"`,
     `        } catch {`,
-    `            $url = 'https://github.com/rustdesk/rustdesk/releases/download/v1.3.8/rustdesk-1.3.8-x86_64.exe'`,
+    `            $url = 'https://github.com/rustdesk/rustdesk/releases/download/1.4.8/rustdesk-1.4.8-x86_64.exe'`,
     `            Write-Log "Version detect failed, using fallback"`,
     `        }`,
     `        Write-Log "Downloading: $url"`,
@@ -570,7 +575,7 @@ if ! command -v rustdesk &>/dev/null; then
     ARCH="$(uname -m)"
     TMP_PKG="/tmp/rustdesk-setup"
 
-    LATEST_VER="1.3.8"
+    LATEST_VER="1.4.8"
     LATEST_URL="https://github.com/rustdesk/rustdesk/releases/download/\${LATEST_VER}"
 
     if [ -f /etc/debian_version ] || command -v dpkg &>/dev/null; then
@@ -687,7 +692,7 @@ echo ""
 if [ ! -d "/Applications/RustDesk.app" ]; then
     echo -e "\${CYAN}[1/4] Downloading RustDesk for macOS...\${NC}"
     ARCH="\$(uname -m)"
-    VER="1.3.8"
+    VER="1.4.8"
     if [ "\$ARCH" = "arm64" ]; then
         DMG_URL="https://github.com/rustdesk/rustdesk/releases/download/\${VER}/rustdesk-\${VER}-aarch64.dmg"
     else
