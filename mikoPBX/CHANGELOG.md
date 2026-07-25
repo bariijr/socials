@@ -23,6 +23,14 @@ Format: `[YYYY-MM-DD] vX.Y.Z — Description`
 
 ---
 
+## [2026-07-25] v1.0.3 — Add privileged mode for FreeBSD compatibility
+
+### Changed
+- Added `privileged: true` to docker-compose.yml — required for MikoPBX to
+  fully initialize its FreeBSD-based services (nginx, asterisk) inside Linux Docker
+
+---
+
 ## [2026-07-25] v1.0.2 — Expose web UI on host port 4000
 
 ### Changed
