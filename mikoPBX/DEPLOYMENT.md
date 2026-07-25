@@ -41,7 +41,7 @@ After the container starts, add a proxy host in NPM:
 
 | Field                    | Value                              |
 |--------------------------|------------------------------------|
-| **Domain Names**         | `pbx.yourdomain.com`              |
+| **Domain Names**         | `pbx.insider.co.tz`              |
 | **Scheme**               | `http`                             |
 | **Forward Hostname/IP**  | `mikopbx_app`                     |
 | **Forward Port**         | `80`                               |
@@ -107,7 +107,7 @@ crontab -e
 ```bash
 # Access web UI directly on port 8080 (no NPM needed)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-# Open: http://localhost:8080
+# Open: http://localhost:4001
 ```
 
 ---

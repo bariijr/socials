@@ -23,4 +23,13 @@ Format: `[YYYY-MM-DD] vX.Y.Z — Description`
 
 ---
 
+## [2026-07-25] v1.0.1 — Port + Domain Config
+
+### Changed
+- Dev port: `8080` → `4001` (docker-compose.dev.yml)
+- Domain: `pbx.yourdomain.com` → `pbx.insider.co.tz` (all files)
+- Host IP: set to `107.174.35.100` in .env.example (EXTERNAL_IP + HOST_IP)
+
+---
+
 *Add new entries above this line after each change.*

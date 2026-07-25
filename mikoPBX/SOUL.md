@@ -18,8 +18,10 @@
 - **Core Purpose**: Self-hosted PBX phone system (FreeBSD + Asterisk) providing SIP trunking, IVR, call routing, voicemail, and call recording for InsiderTechSol internal or client telephony.
 - **Target Audience**: IT admins, InsiderTechSol internal ops / client telephony deployments
 - **Business Owner**: Insider Tech Sol
-- **Primary Domain**: `pbx.yourdomain.com` (configure in .env + NPM)
-- **Admin Panel**: `https://pbx.yourdomain.com` (via Nginx Proxy Manager)
+- **Primary Domain**: `https://pbx.insider.co.tz`
+- **Admin Panel**: `https://pbx.insider.co.tz` (via Nginx Proxy Manager)
+- **Host IP**: `107.174.35.100`
+- **Dev Port**: `4001`
 - **Current Version**: v1.0.0
 - **Project Status**: Active
 
@@ -44,7 +46,7 @@ Storage:     Docker named volumes (mikopbx_cf, mikopbx_storage)
 Internet
   └── Cloudflare DNS
         └── Nginx Proxy Manager (web-proxy network)
-              └── pbx.yourdomain.com → mikopbx_app:80 (HTTP proxy)
+              └── pbx.insider.co.tz → mikopbx_app:80 (HTTP proxy)
 
 VoIP (direct host binding — bypasses NPM):
   ├── UDP/TCP 5060  → SIP signaling
@@ -73,7 +75,7 @@ SSH Admin Console:
 | Call Routing | ✅ Active | Built-in MikoPBX module                    |
 | Voicemail    | ✅ Active | Built-in MikoPBX module                    |
 | Call Recording| ✅ Active| Stored in mikopbx_storage volume           |
-| Web Admin    | ✅ Active | Proxied via NPM → pbx.yourdomain.com        |
+| Web Admin    | ✅ Active | Proxied via NPM → pbx.insider.co.tz        |
 
 ---
 
@@ -96,7 +98,7 @@ SSH Admin Console:
 | Feature / Component        | Description                                          | Added On   |
 |---------------------------|------------------------------------------------------|------------|
 | Docker Compose stack       | Production compose with web-proxy network + volumes | 2026-07-25 |
-| Nginx Proxy Manager setup  | NPM proxy host docs for pbx.yourdomain.com          | 2026-07-25 |
+| Nginx Proxy Manager setup  | NPM proxy host docs for pbx.insider.co.tz          | 2026-07-25 |
 | SIP/RTP port bindings      | Host-level bindings for VoIP traffic                | 2026-07-25 |
 | Automated backup script    | Daily volume backups to /var/backups/{hostname}/    | 2026-07-25 |
 | Dev compose override       | Port 8080 direct access without NPM                 | 2026-07-25 |
@@ -125,7 +127,7 @@ MIKOPBX_SSH_PORT:     set in .env ✓
 ### System Map
 ```
 Internet → Cloudflare → Nginx Proxy Manager (web-proxy network)
-  └── pbx.yourdomain.com → mikopbx_app:80 (web admin)
+  └── pbx.insider.co.tz → mikopbx_app:80 (web admin)
 
 Direct host ports (VoIP — cannot go through NPM):
   ├── :5060 UDP/TCP  → SIP
@@ -173,7 +175,7 @@ Backups:
 [x] DEPLOYMENT.md with NPM proxy host instructions
 [ ] .env filled with real values on VPS
 [ ] web-proxy network exists on VPS
-[ ] NPM proxy host configured for pbx.yourdomain.com
+[ ] NPM proxy host configured for pbx.insider.co.tz
 [ ] EXTERNAL_IP set in MikoPBX admin → Network settings
 [ ] Firewall rules applied (5060 UDP/TCP, 5061 TCP, 10000-10200 UDP)
 [ ] Admin password changed from default

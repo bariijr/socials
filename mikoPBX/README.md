@@ -15,7 +15,7 @@ docker compose up -d
 
 | Traffic Type   | Route                                      |
 |----------------|--------------------------------------------|
-| Web Admin UI   | NPM → `pbx.yourdomain.com` → `mikopbx_app:80` |
+| Web Admin UI   | NPM → `pbx.insider.co.tz` → `mikopbx_app:80` |
 | SIP Signaling  | Direct host port 5060 (UDP/TCP)            |
 | SIP/TLS        | Direct host port 5061 (TCP)                |
 | RTP Media      | Direct host ports 10000–10200 (UDP)        |
