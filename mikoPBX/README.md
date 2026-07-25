@@ -15,7 +15,7 @@ docker compose up -d
 
 | Traffic Type   | Route                                      |
 |----------------|--------------------------------------------|
-| Web Admin UI   | NPM → `pbx.insider.co.tz` → `mikopbx_app:80` |
+| Web Admin UI   | NPM → `pbx.insider.co.tz` → `107.174.35.100:4000` |
 | SIP Signaling  | Direct host port 5060 (UDP/TCP)            |
 | SIP/TLS        | Direct host port 5061 (TCP)                |
 | RTP Media      | Direct host ports 10000–10200 (UDP)        |
@@ -23,7 +23,7 @@ docker compose up -d
 
 ## NPM Proxy Host
 
-Forward to: `http://mikopbx_app:80`
+Forward to: `http://107.174.35.100:4000`
 Enable: Websockets, Force SSL, HTTP/2
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for full setup instructions.
