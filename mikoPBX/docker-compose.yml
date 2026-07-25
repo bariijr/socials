@@ -2,7 +2,7 @@ version: '3.8'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MikoPBX — Production Docker Compose
-# Web UI proxied via Nginx Proxy Manager on web-proxy network
+# Web UI on host port 4000 → NPM forward to 107.174.35.100:4000
 # SIP/RTP ports bound directly to host (VoIP requires direct routing)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -17,6 +17,8 @@ services:
     environment:
       - TZ=${TZ}
     ports:
+      # Web admin UI — NPM forwards pbx.insider.co.tz → host:4000 → container:80
+      - "4000:80/tcp"
       # SIP signaling — UDP + TCP
       - "${HOST_IP}:5060:5060/udp"
       - "${HOST_IP}:5060:5060/tcp"
@@ -37,12 +39,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
 
 volumes:
   mikopbx_cf:

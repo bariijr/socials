@@ -45,8 +45,8 @@ Storage:     Docker named volumes (mikopbx_cf, mikopbx_storage)
 ```
 Internet
   └── Cloudflare DNS
-        └── Nginx Proxy Manager (web-proxy network)
-              └── pbx.insider.co.tz → mikopbx_app:80 (HTTP proxy)
+        └── Nginx Proxy Manager
+              └── pbx.insider.co.tz → 107.174.35.100:4000 (host port binding)
 
 VoIP (direct host binding — bypasses NPM):
   ├── UDP/TCP 5060  → SIP signaling
@@ -83,7 +83,7 @@ SSH Admin Console:
 
 | Port       | Protocol | Purpose                | Exposed To      |
 |-----------|----------|------------------------|-----------------|
-| 80        | TCP      | MikoPBX Web Admin UI   | NPM (internal)  |
+| 4000      | TCP      | MikoPBX Web Admin UI   | Host → NPM      |
 | 222       | TCP      | MikoPBX SSH Console    | localhost:2222  |
 | 5060      | UDP/TCP  | SIP Signaling          | Public          |
 | 5061      | TCP      | SIP/TLS                | Public          |

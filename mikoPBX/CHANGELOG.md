@@ -23,6 +23,19 @@ Format: `[YYYY-MM-DD] vX.Y.Z — Description`
 
 ---
 
+## [2026-07-25] v1.0.2 — Expose web UI on host port 4000
+
+### Changed
+- Added `4000:80` port mapping in docker-compose.yml — NPM forwards to `107.174.35.100:4000`
+- Removed broken healthcheck (MikoPBX has no /health endpoint)
+- Updated SOUL.md network architecture diagram
+
+### NPM Setting
+- Forward Hostname: `107.174.35.100`
+- Forward Port: `4000`
+
+---
+
 ## [2026-07-25] v1.0.1 — Port + Domain Config
 
 ### Changed
