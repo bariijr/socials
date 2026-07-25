@@ -10,8 +10,7 @@ services:
     container_name: mikopbx_app
     restart: unless-stopped
     privileged: true
-    devices:
-      - /dev/console:/dev/console
+    entrypoint: ["/bin/sh", "-c", "mknod -m 622 /dev/console c 5 1 2>/dev/null; exec /sbin/docker-entrypoint"]
     cap_add:
       - NET_ADMIN
       - SYS_PTRACE
