@@ -1,0 +1,17 @@
+# Environment — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Backup artifacts
+backup/*.tar.gz
+backup/*.sql.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

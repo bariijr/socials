@@ -1,0 +1,57 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MikoPBX — Production Docker Compose
+# Web UI proxied via Nginx Proxy Manager on web-proxy network
+# SIP/RTP ports bound directly to host (VoIP requires direct routing)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  mikopbx:
+    image: ghcr.io/mikopbx/mikopbx-x86-64:latest
+    container_name: mikopbx_app
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+    environment:
+      - TZ=${TZ}
+    ports:
+      # SIP signaling — UDP + TCP
+      - "${HOST_IP}:5060:5060/udp"
+      - "${HOST_IP}:5060:5060/tcp"
+      # SIP over TLS
+      - "${HOST_IP}:5061:5061/tcp"
+      # RTP media streams
+      - "${HOST_IP}:10000-10200:10000-10200/udp"
+      # SSH admin console (MikoPBX built-in)
+      - "127.0.0.1:${MIKOPBX_SSH_PORT}:222/tcp"
+    volumes:
+      - mikopbx_cf:/cf
+      - mikopbx_storage:/storage
+      - /var/backups/${HOSTNAME}/mikopbx:/backups:rw
+    networks:
+      - web-proxy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mikopbx_cf:
+    driver: local
+    name: mikopbx_cf
+  mikopbx_storage:
+    driver: local
+    name: mikopbx_storage
+
+networks:
+  web-proxy:
+    external: true

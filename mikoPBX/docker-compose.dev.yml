@@ -1,0 +1,20 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MikoPBX — Development Override
+# Exposes web UI directly on 8080 for local testing without NPM
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  mikopbx:
+    ports:
+      # Expose web admin directly in dev (NPM not required locally)
+      - "8080:80/tcp"
+    environment:
+      - TZ=${TZ}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
