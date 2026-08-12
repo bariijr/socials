@@ -1,0 +1,286 @@
+from datetime import datetime
+
+from pydantic import BaseModel, EmailStr, Field, model_validator
+
+
+class AirportLookupOut(BaseModel):
+    icao: str
+    iata: str | None
+    name: str
+    city: str | None
+    country_name: str | None
+
+
+class AircraftTypeLookupOut(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    icao_type: str
+    manufacturer: str | None
+    model_series: str | None
+
+
+class CountryLookupOut(BaseModel):
+    iso3: str
+    name: str
+
+
+class FirLookupOut(BaseModel):
+    icao_fir_code: str
+    name: str
+
+
+class PersonPublicIn(BaseModel):
+    # Task #107: widened from CREW|PAX to real-world positions. CREW/PAX
+    # remain valid as generic fallbacks (existing stored data, quick entry);
+    # see app.domain.credentials.CREW_ROLES/PAX_ROLES for how each buckets
+    # into the souls-on-board crew/pax split.
+    role: str = Field(pattern="^(PIC|FO|FA|MECHANIC|ENGINEER|CREW|PAX|VIP|PRINCIPAL|OTHER)$")
+    nationality_iso3: str = Field(min_length=3, max_length=3)
+
+
+class LegCheckIn(BaseModel):
+    dep_icao: str = Field(min_length=3, max_length=4)
+    arr_icao: str = Field(min_length=3, max_length=4)
+    call_sign: str | None = Field(default=None, max_length=20)
+    # Exactly one of these two drives the plan. reference_datetime
+    # (departure) is used directly if given; otherwise it's back-calculated
+    # from required_arrival_datetime once the route's EET is known (see
+    # app.services.leg_feasibility_service.compute_leg_feasibility) — a
+    # dispatcher who knows "must land by X" rather than "departing at Y".
+    reference_datetime: datetime | None = None
+    required_arrival_datetime: datetime | None = None
+    avoid_states: list[str] = Field(default_factory=list)
+    include_states: list[str] = Field(default_factory=list)
+    avoid_firs: list[str] = Field(default_factory=list)
+    include_firs: list[str] = Field(default_factory=list)
+    # As typed by the dispatcher, e.g. "FAKN PKV UT915 VHA UL432 TUPIR B527
+    # BJA L432 GAVDA GAVDA1B HRYR" — stored and shown as-is on permit
+    # paperwork. Never parsed or geometrically resolved (no licensed
+    # waypoint/airway database); overflown countries/FIRs still come from
+    # the great-circle approximation below, not from this string.
+    filed_route: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def _exactly_one_time_driver(self) -> "LegCheckIn":
+        has_dep = self.reference_datetime is not None
+        has_arr = self.required_arrival_datetime is not None
+        if has_dep == has_arr:
+            raise ValueError("Provide exactly one of reference_datetime or required_arrival_datetime, not both/neither.")
+        return self
+
+
+class FeasibilityCheckIn(BaseModel):
+    aircraft_icao_type: str
+    # Free text on the public door — never DB-linked here (only the admin
+    # Trip Manager autofills from a registration; see AircraftLookupOut).
+    aircraft_registration: str | None = None
+    entered_mtow_kg: float | None = None
+    operator_airline_name: str | None = None
+    persons: list[PersonPublicIn] = Field(default_factory=list)
+    legs: list[LegCheckIn] = Field(min_length=1, max_length=8)
+
+
+class StateOut(BaseModel):
+    iso3: str
+    name: str
+
+
+class FirOut(BaseModel):
+    icao_fir_code: str
+    name: str | None
+
+
+class RouteOut(BaseModel):
+    distance_nm: float
+    eet_hours: float
+    states: list[StateOut]
+    firs: list[FirOut]
+
+
+class RoutePreviewOut(BaseModel):
+    distance_nm: float
+    eet_hours: float
+    states: list[StateOut]
+    firs: list[FirOut]
+    track_points: list[tuple[float, float]]
+    state_geometry: dict[str, dict]
+    fir_geometry: dict[str, dict]
+
+
+class PermitDeadlineOut(BaseModel):
+    file_by: datetime
+    deadline_status: str
+    lead_time_hours: float
+    lead_time_is_fallback: bool
+
+
+class OverflightPermitOut(BaseModel):
+    country_iso3: str
+    country_name: str
+    entry_datetime: datetime
+    exit_datetime: datetime
+    deadline: PermitDeadlineOut
+
+
+class LandingPermitOut(BaseModel):
+    country_iso3: str
+    country_name: str
+    entry_datetime: datetime
+    exit_datetime: datetime
+    deadline: PermitDeadlineOut
+
+
+class GroundHandlingOrderOut(BaseModel):
+    country_iso3: str
+    country_name: str
+    earliest_icao: str
+    earliest_event_at: datetime
+    deadline: PermitDeadlineOut
+
+
+class ServiceRequirementOut(BaseModel):
+    service_code: str
+    service_name: str
+    scope: str
+    icao: str
+    country_iso3: str
+
+
+class AvoidIncludeOut(BaseModel):
+    violated: bool
+    avoided_transited: list[str]
+    required_missed: list[str]
+
+
+class PermitsOut(BaseModel):
+    overflight_permits: list[OverflightPermitOut]
+    landing_permits: list[LandingPermitOut]
+    ground_handling_orders: list[GroundHandlingOrderOut]
+    service_requirements: list[ServiceRequirementOut]
+    state_avoid_include: AvoidIncludeOut
+    fir_avoid_include: AvoidIncludeOut
+
+
+class TechStopSuggestionOut(BaseModel):
+    icao: str
+    name: str | None
+    leg1_distance_nm: float
+    leg2_distance_nm: float
+    added_distance_nm: float
+
+
+class CapabilityOut(BaseModel):
+    planning_status: str
+    max_range_nm: float | None
+    practical_range_nm: float | None
+    exceeds: bool | None
+    margin_nm: float | None
+    margin_tight: bool
+    tech_stop_suggestions: list[TechStopSuggestionOut]
+
+
+class PersonVisaOut(BaseModel):
+    person_id: str
+    role: str
+    nationality_iso3: str
+    visa_requirement: str
+    visa_answered_by_layer: str
+
+
+class CredentialsOut(BaseModel):
+    persons: list[PersonVisaOut]
+    souls_on_board_total: int
+    souls_on_board_exceeds_max_pax: bool
+
+
+class RerouteOut(BaseModel):
+    found: bool
+    extra_distance_nm: float | None
+    extra_time_hours: float | None
+    extra_fuel_kg: float | None
+
+
+class NavFeesSummaryOut(BaseModel):
+    """Total only — no per-FIR/provider breakdown. That itemization is
+    Trip-Manager-only (app.schemas.trip.NavFeesDetailOut); this shared
+    shape is what the public Feasibility IQ door is allowed to show.
+
+    Numeric fields are None (never a guessed number) until fully_priced —
+    every crossed FIR needs a real, admin-entered NavFeeProvider rate.
+    """
+
+    fully_priced: bool
+    subtotal_usd: float | None
+    margin_percent: float
+    margin_usd: float | None
+    total_usd: float | None
+
+
+class PermitFeesSummaryOut(BaseModel):
+    """Total only — no per-country/category breakdown. That itemization is
+    Trip-Manager-only (app.schemas.trip.PermitFeesDetailOut); this shared
+    shape is what the public Viability IQ door is allowed to show. Covers
+    CAA permit-filing fees + nafisat + the flat JTL service fee — a
+    separate cost dimension from nav_fees above (see
+    app.services.permit_fee_service's module docstring for why the two
+    aren't merged into one number).
+
+    Numeric fields are None (never a guessed number) until fully_priced —
+    every permit line item needs real, admin-entered CAA_FEE and NAFISAT
+    provider rates.
+    """
+
+    fully_priced: bool
+    caa_subtotal_usd: float | None
+    nafisat_subtotal_usd: float | None
+    jtl_subtotal_usd: float
+    total_usd: float | None
+
+
+class LegResultOut(BaseModel):
+    dep_icao: str
+    arr_icao: str
+    call_sign: str | None = None
+    # Always the resolved departure/arrival instants, regardless of which
+    # one the caller originally drove the plan off (see LegCheckIn).
+    reference_datetime: datetime
+    arrival_datetime: datetime
+    filed_route: str | None
+    route: RouteOut
+    permits: PermitsOut
+    capability: CapabilityOut
+    credentials: CredentialsOut
+    reroute: RerouteOut | None
+    nav_fees: NavFeesSummaryOut | None
+    # Both default so a Trip's frozen computed_snapshot (see
+    # trip_service._leg_out) — taken before this field existed — still
+    # validates on read instead of 500ing forever; a fresh computation
+    # always populates them for real.
+    permit_fees: PermitFeesSummaryOut | None = None
+    verdict: str
+    # Plain-English explanations behind `verdict` — capability shortfalls,
+    # avoid/include conflicts, urgent permit deadlines — so an operator
+    # (public or Trip Manager) sees *why*, not just the verdict word. Never
+    # empty on a fresh computation: a clean leg gets one affirmative "no
+    # issues" reason. Defaults to [] only for pre-existing frozen snapshots
+    # that predate this field.
+    reasons: list[str] = Field(default_factory=list)
+
+
+class FeasibilityCheckOut(BaseModel):
+    check_id: str
+    legs: list[LegResultOut]
+    overall_verdict: str
+
+
+class RequestQuoteIn(BaseModel):
+    check_id: str
+    contact_name: str
+    contact_email: EmailStr
+    contact_phone: str | None = None
+    notes: str | None = None
+
+
+class RequestQuoteOut(BaseModel):
+    trip_id: str
+    status: str

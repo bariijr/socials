@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  /* Deep navy-charcoal rather than flat black — aviation-night-sky base
+     for the luxury pass (task #88), not a pure grayscale dark mode. */
+  --color-base: 10 12 17;
+  --color-surface: 20 23 31;
+  --color-fg: 255 255 255;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-base: 255 255 255;
+  --color-surface: 244 244 247;
+  --color-fg: 10 12 17;
+}
+
+html {
+  @apply bg-base text-fg;
+}
+
+body {
+  @apply font-sans antialiased;
+}
+
+.mono-figures {
+  font-variant-numeric: tabular-nums;
+  @apply font-mono;
+}
+
+.status-chip {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide;
+}
+
+.status-chip-ok {
+  @apply bg-success/20 text-success;
+}
+
+.status-chip-warn {
+  @apply bg-warning/20 text-warning;
+}
+
+.status-chip-danger {
+  @apply bg-danger/20 text-danger;
+}
+
+.status-chip-neutral {
+  @apply bg-fg/10 text-fg/70;
+}
+
+/* Task #111 — VIQ progressive-disclosure wizard: a subtle reveal for each
+   stage as it unlocks, not a hard pop-in. */
+@keyframes wizard-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: wizard-stage-in 0.25s ease-out;
+}

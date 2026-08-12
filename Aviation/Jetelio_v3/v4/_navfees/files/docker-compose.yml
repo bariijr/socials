@@ -1,0 +1,114 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: jetelio-nav-db
+    environment:
+      POSTGRES_USER: jetelio
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: jetelio_nav
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jetelio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jetelio-network
+
+  # PostGIS extension (optional, for advanced FIR queries)
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: jetelio-nav-postgis
+    environment:
+      POSTGRES_USER: jetelio
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: jetelio_nav
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    networks:
+      - jetelio-network
+    profiles:
+      - postgis  # Only run if explicitly enabled
+
+  # Navigation Fee Calculator API
+  nav-calculator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jetelio-nav-api
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DEBUG: "False"
+      DATABASE_URL: postgresql://jetelio:password@postgres:5432/jetelio_nav
+      JETELIO_API_BASE: http://jetelio-core:8001
+      JETELIO_MARGIN_PERCENT: 15.0
+      ENABLE_WIND_OPTIMIZATION: "True"
+      EXCEL_DATA_PATH: /app/data/ans_providers.xlsx
+      FIR_GEOJSON_PATH: /app/data/fir_boundaries.geojson
+      USE_POSTGIS: "False"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - jetelio-network
+    restart: unless-stopped
+
+  # Optional: Jetelio Core API (for full integration testing)
+  jetelio-core:
+    image: jetelio-core:latest
+    container_name: jetelio-core-api
+    environment:
+      DATABASE_URL: postgresql://jetelio:password@postgres:5432/jetelio_main
+      NAV_CALCULATOR_URL: http://nav-calculator:8000
+      NAV_CALCULATOR_API_KEY: dev-key
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - nav-calculator
+    networks:
+      - jetelio-network
+    profiles:
+      - full-stack  # Only run for full integration testing
+
+volumes:
+  postgres_data:
+  postgis_data:
+
+networks:
+  jetelio-network:
+    driver: bridge
+
+# Usage:
+#
+# Development (PostgreSQL only):
+#   docker-compose up -d
+#
+# With PostGIS:
+#   docker-compose --profile postgis up -d
+#
+# Full stack (includes mock Jetelio core):
+#   docker-compose --profile full-stack up -d
+#
+# Stop:
+#   docker-compose down
+#
+# View logs:
+#   docker-compose logs -f nav-calculator
+#
+# Connect to database:
+#   docker exec -it jetelio-nav-db psql -U jetelio -d jetelio_nav

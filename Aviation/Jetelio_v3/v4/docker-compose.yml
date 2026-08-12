@@ -1,0 +1,202 @@
+# Jetelio V3 (v4 rebuild) — one codebase, one `docker compose up`.
+# Services: db (PostGIS) · redis · minio · mailhog (dev) · api · worker · web · nginx
+name: jetelio-v4
+
+services:
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: jetelio_v4_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jetelio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-jetelio_v4}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - /var/backups/jetelio_v4/db:/backups
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jetelio} -d ${POSTGRES_DB:-jetelio_v4}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${DB_HOST_PORT:-15432}:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: jetelio_v4_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    container_name: jetelio_v4_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-jetelio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio_data:/data
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${MINIO_CONSOLE_PORT:-19001}:9001"
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: jetelio_v4_mailhog
+    restart: unless-stopped
+    profiles: ["dev"]
+    networks: [jetelio]
+    ports:
+      - "${MAILHOG_UI_PORT:-18025}:8025"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: jetelio_v4_api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jetelio}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-jetelio_v4}
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ./data:/app/data
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: jetelio_v4_worker
+    restart: unless-stopped
+    # api's entrypoint already runs migrations; the worker skips that step
+    # (running `alembic upgrade head` from two containers at once against
+    # an empty database is a real race) and only starts once api is healthy.
+    entrypoint: []
+    # -B embeds Celery Beat in this same worker process rather than a
+    # second container — fine for a single-worker dev/small deployment;
+    # would need splitting into a dedicated beat service before ever
+    # running more than one worker replica (multiple embedded beats would
+    # each fire the schedule independently).
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-B", "--loglevel=INFO", "--concurrency=2"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jetelio}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-jetelio_v4}
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      IMAP_HOST: ${IMAP_HOST:-}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USER: ${IMAP_USER:-}
+      IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+      IMAP_USE_SSL: ${IMAP_USE_SSL:-true}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      api: { condition: service_healthy }
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  api-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: test
+    container_name: jetelio_v4_api_test
+    profiles: ["test"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jetelio}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-jetelio_v4}
+      TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jetelio}:${POSTGRES_PASSWORD}@db:5432/jetelio_v4_test
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [jetelio]
+    entrypoint: []
+    volumes:
+      - ./data:/app/data
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+    container_name: jetelio_v4_web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  nginx:
+    build:
+      context: ./nginx
+    container_name: jetelio_v4_nginx
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+    networks: [jetelio]
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+networks:
+  jetelio:
+    name: jetelio_v4_net
+
+volumes:
+  db_data:
+  redis_data:
+  minio_data:
