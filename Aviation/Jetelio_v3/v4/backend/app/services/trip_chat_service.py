@@ -1,7 +1,8 @@
-"""Trip-builder chat parsing (task #125) — turns a free-text or
-structured permit-request message into a pre-fillable trip/leg draft.
+"""Trip-builder chat parsing (task #125, provider swapped to DeepSeek in
+task #127) — turns a free-text or structured permit-request message into
+a pre-fillable trip/leg draft.
 
-Two-step, deliberately kept separate: app.core.chat.anthropic_provider
+Two-step, deliberately kept separate: app.core.chat.deepseek_provider
 extracts verbatim *intent* (location/country names, dates) and is
 instructed never to invent a code; this module is the only place that
 resolves those names against real DB rows (the exact same search
@@ -18,7 +19,8 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat.anthropic_provider import LegExtraction, TripExtraction, extract_trip_request
+from app.core.chat.deepseek_provider import extract_trip_request
+from app.core.chat.schema import LegExtraction, TripExtraction
 from app.services import feasibility_iq_service
 
 

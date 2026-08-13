@@ -49,8 +49,11 @@ class Settings(BaseSettings):
 
     # Empty means "not configured" — trip_chat_service's parse endpoint is a
     # no-op (NO_PROVIDER_CONFIGURED-style honesty) until the user supplies
-    # their own key, same pattern as imap_host above.
-    anthropic_api_key: str = ""
+    # their own key, same pattern as imap_host above. Task #127: switched
+    # from Anthropic to DeepSeek (OpenAI-compatible function calling,
+    # https://api.deepseek.com) — user's explicit choice, after Anthropic's
+    # account hit a billing wall (task #125, §7.19).
+    deepseek_api_key: str = ""
 
     # Named-settings seed defaults (also written into the `settings` table on
     # first migration/import so they are editable at runtime thereafter).

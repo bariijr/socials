@@ -176,7 +176,7 @@ class TestChatParse:
         import app.api.routers.feasibility as feasibility_router
 
         class _FakeSettings:
-            anthropic_api_key = ""
+            deepseek_api_key = ""
 
         monkeypatch.setattr(feasibility_router, "get_settings", lambda: _FakeSettings())
 
@@ -198,11 +198,11 @@ class TestChatParse:
     @pytest.mark.asyncio
     async def test_successful_parse_resolves_real_codes(self, client, monkeypatch, public_leg_fixture):
         # End-to-end through the real router + real trip_chat_service
-        # resolution logic + real seeded DB rows — only the Anthropic call
+        # resolution logic + real seeded DB rows — only the DeepSeek call
         # itself is mocked, so this also exercises the router's JSON
         # serialization of the resolved draft, not just the service layer.
         import app.services.trip_chat_service as trip_chat_service_module
-        from app.core.chat.anthropic_provider import LegExtraction, TripExtraction
+        from app.core.chat.schema import LegExtraction, TripExtraction
 
         g = public_leg_fixture
         extraction = TripExtraction(

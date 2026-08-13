@@ -2202,6 +2202,53 @@ already existed.
   clean (all four new routes compiled). No backend code changed for this task — everything consumed
   was already real, tested, working API surface; only the frontend was missing.
 
+### 7.21 Trip-builder chat provider swapped: Anthropic → DeepSeek (task #127)
+
+Task #125's Anthropic integration hit a real billing wall (§7.19 — "credit balance too low"). User's
+explicit choice: switch providers rather than wait, supplying a DeepSeek key.
+
+- **Extracted the provider-agnostic parts first**: `app/core/chat/schema.py` now owns the shared
+  `LegExtraction`/`TripExtraction` dataclasses, the JSON-schema `INPUT_SCHEMA`, `TOOL_NAME`/
+  `TOOL_DESCRIPTION`, and `SYSTEM_PROMPT` — none of it Anthropic- or DeepSeek-specific. This is what
+  made the swap touch zero lines in `app.services.trip_chat_service`: it always imported
+  `extract_trip_request` as a plain name from "the provider module," so redirecting that one import
+  line was the entire integration point.
+- **`app/core/chat/deepseek_provider.py`** replaces the deleted `anthropic_provider.py` — DeepSeek's
+  chat API is OpenAI-compatible, so this talks to `https://api.deepseek.com/chat/completions`
+  directly over `httpx` (already a dependency throughout this backend) rather than adding a whole
+  provider SDK for one endpoint. Same forced-tool-call pattern as before
+  (`tool_choice: {"type": "function", "function": {"name": ...}}`), model `deepseek-chat`. Same
+  never-raises, log-and-return-`None` discipline on any failure.
+  `anthropic` removed from `requirements.txt` (no longer used anywhere). Config field renamed
+  `anthropic_api_key` → `deepseek_api_key` (`app/config.py`); the `/feasibility/chat-parse` "not
+  configured" check (`app/api/routers/feasibility.py`) and `.env`/`.env.example` updated to match.
+- **Real, unrelated breakage found and fixed along the way, explicitly scoped by the user before
+  touching it**: `backend/app/main.py` had a genuine syntax error (a duplicated, orphaned import
+  block) from separate, in-progress work on a new "Coordinator" feature
+  (`app/api/routers/coordinator.py`, `app/importer/loaders/uaa_coordinator.py`, an
+  `/admin/coordinator` frontend page) that isn't part of this task and was actively being built
+  concurrently in the same working tree. Confirmed with the user before touching anything outside
+  this task's own scope — fixed *only* the duplicate-import syntax error in `main.py` (de-duplicated,
+  kept the version that already includes `coordinator`) and *only* one bad import inside
+  `coordinator.py` itself (`app.schemas.base` doesn't exist; aliased to the real
+  `app.schemas.common.Page`, matching every other router's import pattern) — both fixes were
+  necessary just to make `app.main` importable again for this task's own test suite to run, nothing
+  else in either file touched. **`main.py`/`coordinator.py`/`uaa_coordinator.py`/the new
+  `/admin/coordinator` frontend page are deliberately left uncommitted** — that feature is the
+  user's own in-progress work, not this task's, and isn't this session's to commit.
+- **Tests**: unchanged in substance — `test_trip_chat_service.py`/`test_feasibility_api.py::
+  TestChatParse` already mocked at the `trip_chat_service.extract_trip_request` boundary (a
+  module-attribute patch, not an import-path patch), so the provider swap needed only an import-path
+  fix (`anthropic_provider` → `schema` for the shared dataclasses), not new test logic. 329 passing,
+  unchanged count.
+- **Live-verified against the real DeepSeek API, with the user's own key**: same finding as task
+  #125's Anthropic attempt — the request reached DeepSeek correctly authenticated and formatted
+  (a clean `402 Payment Required` / `"Insufficient Balance"`, not an auth or malformed-request
+  error), confirming the integration itself is wired correctly; this DeepSeek account also needs
+  funds added before a parse will actually succeed. Confirmed directly against DeepSeek's API with
+  `curl`, independent of this app, to rule out an app-side misconfiguration before reporting it as
+  an account-balance issue.
+
 ---
 
 ## 8. Document storage & Excel import/export

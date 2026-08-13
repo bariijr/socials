@@ -12,7 +12,7 @@ from datetime import date
 import pytest
 import pytest_asyncio
 
-from app.core.chat.anthropic_provider import LegExtraction, TripExtraction
+from app.core.chat.schema import LegExtraction, TripExtraction
 from app.models.aircraft import AircraftPerformance
 from app.models.airport import Airport
 from app.models.country import Country
@@ -141,7 +141,7 @@ class TestParseTripMessage:
     @pytest.mark.asyncio
     async def test_extraction_failure_returns_none(self, session, monkeypatch, chat_fixture_data):
         # No API key / a failed Anthropic call — the provider itself
-        # already returns None in that case (see anthropic_provider.py);
+        # already returns None in that case (see deepseek_provider.py);
         # parse_trip_message must propagate that honestly, never fabricate
         # an empty-but-successful-looking draft.
         _mock_extraction(monkeypatch, None)
