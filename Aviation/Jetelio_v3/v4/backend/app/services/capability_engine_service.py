@@ -36,12 +36,16 @@ class CapabilityPlan:
     tech_stop_suggestions: list[TechStopSuggestion]
 
 
-async def _fetch_tech_stop_candidates(session: AsyncSession, exclude_icao: set[str]) -> list[TechStopCandidate]:
-    rows = (
-        await session.execute(
-            select(Airport).where(Airport.is_airport_of_entry.is_(True), Airport.deleted_at.is_(None))
-        )
-    ).scalars().all()
+async def _fetch_tech_stop_candidates(
+    session: AsyncSession, exclude_icao: set[str], avoid_states: set[str] | None = None
+) -> list[TechStopCandidate]:
+    stmt = select(Airport).where(Airport.is_airport_of_entry.is_(True), Airport.deleted_at.is_(None))
+    if avoid_states:
+        # A tech stop is a real landing, not just an overflight — suggesting
+        # one inside a country the trip is explicitly avoiding would defeat
+        # the constraint the user just set (task #124).
+        stmt = stmt.where(Airport.country_iso3.not_in(avoid_states))
+    rows = (await session.execute(stmt)).scalars().all()
     return [
         TechStopCandidate(
             icao=row.icao,
@@ -68,6 +72,7 @@ async def compute_leg_capability(
     arr_lat: float,
     arr_lon: float,
     distance_nm: float,
+    avoid_states: set[str] | None = None,
 ) -> CapabilityPlan:
     perf = await session.get(AircraftPerformance, aircraft_icao_type)
     if perf is None:
@@ -95,7 +100,7 @@ async def compute_leg_capability(
 
     tech_stop_suggestions: list[TechStopSuggestion] = []
     if capability.exceeds:
-        candidates = await _fetch_tech_stop_candidates(session, {dep_icao, arr_icao})
+        candidates = await _fetch_tech_stop_candidates(session, {dep_icao, arr_icao}, avoid_states)
         # No per-aircraft minimum-runway/fuel-grade requirement is modeled
         # yet (AircraftPerformance carries no landing-distance field), so
         # those two filters are left open here — range/AOE/operating-hours

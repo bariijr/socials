@@ -148,6 +148,48 @@ async def corridor_with_middle_obstacle(session, draw_unique_iso3):
 
 
 @pytest_asyncio.fixture
+async def corridor_with_avoid_and_include_target(session, draw_unique_iso3):
+    """Same dep/arr/avoided-C shape as corridor_with_middle_obstacle, plus a
+    fourth state D south of the direct equatorial line — nowhere near the
+    direct A->B track, so the only way find_alternate_route's path can
+    cross it is by deliberately routing through it for an include_states
+    constraint (task #124), not by accident of the avoid-C detour.
+    """
+    iso_a, iso_b, iso_c, iso_d = draw_unique_iso3(4)
+
+    session.add_all(
+        [
+            Country(iso3=iso_a, name=f"Country {iso_a}"),
+            Country(iso3=iso_b, name=f"Country {iso_b}"),
+            Country(iso3=iso_c, name=f"Country {iso_c}"),
+            Country(iso3=iso_d, name=f"Country {iso_d}"),
+        ]
+    )
+    await session.flush()
+
+    session.add_all(
+        [
+            CountryGeometry(iso3=iso_a, geom=from_shape(_square(-15, -5, -5, 5), srid=4326)),
+            CountryGeometry(iso3=iso_b, geom=from_shape(_square(5, -5, 15, 5), srid=4326)),
+            CountryGeometry(iso3=iso_c, geom=from_shape(_square(-2, -1, 2, 1), srid=4326)),
+            CountryGeometry(iso3=iso_d, geom=from_shape(_square(-2, -10, 2, -6), srid=4326)),
+        ]
+    )
+
+    dep_icao = f"D{iso_a}"[:4].upper()
+    arr_icao = f"A{iso_b}"[:4].upper()
+    session.add_all(
+        [
+            Airport(icao=dep_icao, name="Dep Test", lat=0.0, lon=-10.0, country_iso3=iso_a),
+            Airport(icao=arr_icao, name="Arr Test", lat=0.0, lon=10.0, country_iso3=iso_b),
+        ]
+    )
+    await session.flush()
+
+    return {"iso_a": iso_a, "iso_b": iso_b, "iso_c": iso_c, "iso_d": iso_d, "dep_icao": dep_icao, "arr_icao": arr_icao}
+
+
+@pytest_asyncio.fixture
 async def corridor_with_fir_obstacle(session, geo_region_base_lon, draw_unique_iso3):
     """Same shape as corridor_with_middle_obstacle, but the obstacle is a
     FIR rather than a country — avoid_firs must block the corridor grid
@@ -243,3 +285,52 @@ class TestFindAlternateRoute:
 
         assert result.found is True
         assert result.extra_distance_nm is not None and result.extra_distance_nm > 0
+
+    @pytest.mark.asyncio
+    async def test_include_state_forces_a_waypoint_chain(self, session, corridor_with_avoid_and_include_target):
+        """task #124 — an include_states constraint must actually route
+        *through* the required state, not just be reported as "missed" the
+        way the old (avoid-only) find_alternate_route silently did.
+        """
+        g = corridor_with_avoid_and_include_target
+        route = await routing_engine_service.resolve_leg_route(session, g["dep_icao"], g["arr_icao"])
+
+        result = await routing_engine_service.find_alternate_route(
+            session,
+            g["dep_icao"],
+            g["arr_icao"],
+            route.distance_nm,
+            avoid_states={g["iso_c"]},
+            include_states={g["iso_d"]},
+            block_speed_kts=470,
+            fuel_burn_kg_per_hr=None,
+        )
+
+        assert result.found is True
+        assert result.distance_nm is not None and result.distance_nm > route.distance_nm
+        result_states = [s.iso3 for s in result.states]
+        assert g["iso_d"] in result_states
+        assert g["iso_c"] not in result_states
+        assert result.sample_point_count == len(result.track_points)
+
+    @pytest.mark.asyncio
+    async def test_unresolvable_include_state_is_unreachable(self, session, corridor_with_middle_obstacle):
+        # An include_states code with no real country_geometry row can't be
+        # given a real waypoint — must fail honestly (found=False) rather
+        # than silently ignore the constraint, which is the exact bug this
+        # task fixes one layer up.
+        g = corridor_with_middle_obstacle
+
+        result = await routing_engine_service.find_alternate_route(
+            session,
+            g["dep_icao"],
+            g["arr_icao"],
+            1000.0,
+            avoid_states=set(),
+            include_states={"ZZZ"},
+            block_speed_kts=470,
+            fuel_burn_kg_per_hr=None,
+        )
+
+        assert result.found is False
+        assert result.distance_nm is None

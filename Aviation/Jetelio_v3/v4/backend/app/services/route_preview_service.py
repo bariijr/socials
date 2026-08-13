@@ -95,6 +95,8 @@ async def preview_route(
             route.distance_nm,
             avoid_states or set(),
             avoid_firs=avoid_firs,
+            include_states=include_states,
+            include_firs=include_firs,
             block_speed_kts=settings_map["default_block_speed_kts"],
             fuel_burn_kg_per_hr=None,
         )
@@ -102,8 +104,8 @@ async def preview_route(
         alt_extra_distance_nm = alt.extra_distance_nm
         alt_extra_time_hours = alt.extra_time_hours
         alt_track_points = alt.track_points or []
-        alt_state_codes = alt.states or []
-        alt_fir_codes = list(alt.firs or [])
+        alt_state_codes = [s.iso3 for s in (alt.states or [])]
+        alt_fir_codes = [(f.icao_fir_code, f.name) for f in (alt.firs or [])]
 
     all_state_codes = list({*route_states_iso3, *alt_state_codes})
     all_fir_codes = list({*route_firs_codes, *(code for code, _ in alt_fir_codes)})

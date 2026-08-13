@@ -97,9 +97,11 @@ export function RoutePreviewPanel({
         <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
           {data.reroute?.found ? (
             <>
-              This route crosses an avoided state/FIR (or misses a required one) — shown dashed below. The
-              alternate route avoiding it adds ~{data.reroute.extra_distance_nm?.toFixed(0)} NM
-              {data.reroute.extra_time_hours && ` (+${data.reroute.extra_time_hours.toFixed(1)} h)`}.
+              The direct track (dashed below) crosses an avoided state/FIR (or misses a required one) — the plan
+              will automatically use the alternate route (solid) instead, adding ~
+              {data.reroute.extra_distance_nm?.toFixed(0)} NM
+              {data.reroute.extra_time_hours && ` (+${data.reroute.extra_time_hours.toFixed(1)} h)`}. Permits and
+              fees are computed against the alternate, not the direct track.
             </>
           ) : (
             <>This route crosses an avoided state/FIR (or misses a required one) — no viable alternate route found.</>

@@ -10,7 +10,13 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ValidationFailedError
-from app.domain.permits import DeadlineStatus, StopEvent, compute_state_crossings, determine_feasibility_verdict
+from app.domain.permits import (
+    DeadlineStatus,
+    StopEvent,
+    check_avoid_include_violation,
+    compute_state_crossings,
+    determine_feasibility_verdict,
+)
 from app.models.aircraft import AircraftPerformance
 from app.models.airport import Airport
 from app.services import (
@@ -99,6 +105,56 @@ async def compute_leg_feasibility(
     perf = await session.get(AircraftPerformance, aircraft_icao_type)
 
     route = await routing_engine_service.resolve_leg_route(session, dep_icao, arr_icao)
+    route_states = [s.iso3 for s in route.states]
+    route_firs = [f.icao_fir_code for f in route.firs]
+
+    # task #124 — the direct route's own violation is checked *before* any
+    # of permits/capability/nav-fees run, so a viable alternate can be
+    # swapped in as `route` itself for all of them, instead of only ever
+    # reporting a distance delta after the fact (the old behavior the user
+    # reported: permits/map still reflected the direct, violating track).
+    # `original_violated` is kept separate from permits' own (post-swap)
+    # avoid_include_violated — it's what verdict determination needs to
+    # still report NOT_FEASIBLE_AS_ROUTED for a leg that only works because
+    # it was automatically replanned, even though the committed route no
+    # longer violates anything.
+    state_violation = check_avoid_include_violation(route_states, avoid_states, include_states)
+    fir_violation = check_avoid_include_violation(route_firs, avoid_firs, include_firs)
+    original_violated = state_violation.violated or fir_violation.violated
+
+    reroute: RerouteResult | None = None
+    if original_violated:
+        reroute = await routing_engine_service.find_alternate_route(
+            session,
+            dep_icao,
+            arr_icao,
+            route.distance_nm,
+            avoid_states,
+            avoid_firs=avoid_firs,
+            include_states=include_states,
+            include_firs=include_firs,
+            block_speed_kts=perf.cruise_tas_kts if perf and perf.cruise_tas_kts else settings_map["default_block_speed_kts"],
+            fuel_burn_kg_per_hr=perf.fuel_burn_kg_per_hr if perf else None,
+        )
+        if reroute.found:
+            # User's explicit choice (task #124): auto-commit — the
+            # alternate becomes the real route for everything below, not
+            # just a map overlay. dep_icao/arr_icao/from_cache are the only
+            # RoutePlan fields with no reroute equivalent; the reroute
+            # itself is never persisted to route_cache (it's a per-request,
+            # per-constraint computation, same as the rest of avoid/include).
+            route = RoutePlan(
+                dep_icao=dep_icao,
+                arr_icao=arr_icao,
+                distance_nm=reroute.distance_nm,
+                sample_point_count=reroute.sample_point_count,
+                states=reroute.states,
+                firs=reroute.firs,
+                from_cache=False,
+            )
+            route_states = [s.iso3 for s in route.states]
+            route_firs = [f.icao_fir_code for f in route.firs]
+
     eet_hours = routing_engine_service.resolve_eet_hours(
         route.distance_nm, perf.cruise_tas_kts if perf else None, settings_map
     )
@@ -110,8 +166,6 @@ async def compute_leg_feasibility(
         reference_datetime = required_arrival_datetime - timedelta(hours=eet_hours)
     trip_end = reference_datetime + timedelta(hours=eet_hours)
 
-    route_states = [s.iso3 for s in route.states]
-    route_firs = [f.icao_fir_code for f in route.firs]
     stops = [
         StopEvent(country_iso3=dep.country_iso3, icao=dep_icao, event_datetime=reference_datetime),
         StopEvent(country_iso3=arr.country_iso3, icao=arr_icao, event_datetime=trip_end),
@@ -146,6 +200,7 @@ async def compute_leg_feasibility(
         arr_lat=arr.lat,
         arr_lon=arr.lon,
         distance_nm=route.distance_nm,
+        avoid_states=avoid_states,
     )
 
     credentials = await credentials_engine_service.compute_leg_credentials(
@@ -157,19 +212,6 @@ async def compute_leg_feasibility(
         max_pax=perf.max_pax if perf else None,
         role_is_crew=role_is_crew,
     )
-
-    reroute: RerouteResult | None = None
-    if permits.avoid_include_violated:
-        reroute = await routing_engine_service.find_alternate_route(
-            session,
-            dep_icao,
-            arr_icao,
-            route.distance_nm,
-            avoid_states,
-            avoid_firs=avoid_firs,
-            block_speed_kts=perf.cruise_tas_kts if perf and perf.cruise_tas_kts else settings_map["default_block_speed_kts"],
-            fuel_burn_kg_per_hr=perf.fuel_burn_kg_per_hr if perf else None,
-        )
 
     capability_exceeds_even_with_tech_stop = bool(
         capability.capability and capability.capability.exceeds and not capability.tech_stop_suggestions
@@ -186,7 +228,14 @@ async def compute_leg_feasibility(
 
     verdict = determine_feasibility_verdict(
         capability_exceeds_even_with_tech_stop=capability_exceeds_even_with_tech_stop,
-        avoid_include_violated=permits.avoid_include_violated,
+        # original_violated (pre-swap), not permits.avoid_include_violated —
+        # once a viable alternate is auto-committed, permits are computed
+        # against the now-compliant route and correctly stop reporting a
+        # violation. Verdict still needs to know the *original* direct
+        # track required replanning, to keep reporting NOT_FEASIBLE_AS_ROUTED
+        # rather than a plain FEASIBLE that hides the fact this leg only
+        # works because it was automatically rerouted.
+        avoid_include_violated=original_violated,
         reroute_found=bool(reroute and reroute.found),
         margin_tight=margin_tight,
     )

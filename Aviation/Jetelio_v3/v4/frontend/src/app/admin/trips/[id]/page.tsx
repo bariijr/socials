@@ -525,6 +525,11 @@ export default function TripDetailPage() {
                 <p className="text-sm text-fg/50">No permits required.</p>
               )}
             </div>
+            {/* task #124 — permits are now auto-committed to a viable
+                alternate route the moment one exists, so this warning only
+                ever fires when no viable alternate was found (a real
+                NOT_FEASIBLE case). A successful auto-reroute gets a
+                separate, non-warning info block below instead. */}
             {(leg.result.permits.state_avoid_include.violated || leg.result.permits.fir_avoid_include.violated) && (
               <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 {leg.result.permits.state_avoid_include.avoided_transited.length > 0 && (
@@ -539,6 +544,15 @@ export default function TripDetailPage() {
                 {leg.result.permits.fir_avoid_include.required_missed.length > 0 && (
                   <p>Required FIR(s) not transited: {leg.result.permits.fir_avoid_include.required_missed.join(", ")}</p>
                 )}
+                <p className="mt-1 text-fg/70">No viable alternate route found.</p>
+              </div>
+            )}
+            {leg.result.reroute?.found && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-fg/70">
+                Route automatically adjusted to satisfy avoid/include constraints — adds ~
+                {leg.result.reroute.extra_distance_nm?.toFixed(0)} NM
+                {leg.result.reroute.extra_time_hours && ` (+${leg.result.reroute.extra_time_hours.toFixed(1)} h)`} vs. the
+                direct track. Permits above already reflect the route actually flown.
               </div>
             )}
           </section>

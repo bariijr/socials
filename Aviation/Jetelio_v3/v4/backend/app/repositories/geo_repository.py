@@ -112,6 +112,38 @@ async def fetch_simplified_fir_geometry(
     )
 
 
+_REPRESENTATIVE_POINT_SQL = """
+    SELECT ST_Y(pt) AS lat, ST_X(pt) AS lon
+    FROM (SELECT ST_PointOnSurface(geom) AS pt FROM {table} WHERE {code_col} = :code LIMIT 1) t
+"""
+
+
+async def _resolve_representative_point(
+    session: AsyncSession, code: str, *, table: str, code_col: str
+) -> tuple[float, float] | None:
+    stmt = text(_REPRESENTATIVE_POINT_SQL.format(table=table, code_col=code_col))
+    row = (await session.execute(stmt, {"code": code})).first()
+    if row is None or row.lat is None:
+        return None
+    return (row.lat, row.lon)
+
+
+async def resolve_country_representative_point(session: AsyncSession, iso3: str) -> tuple[float, float] | None:
+    """A real point guaranteed to fall inside the country's own polygon
+    (ST_PointOnSurface, not centroid — a centroid of a concave shape can
+    land outside it). Used to give find_alternate_route a genuine waypoint
+    to route *through* for an include_states constraint — there's no
+    airport-selection heuristic here (which airport would even be "the"
+    representative one), just "a real point verifiably inside this real
+    country's real geometry."
+    """
+    return await _resolve_representative_point(session, iso3, table="country_geometry", code_col="iso3")
+
+
+async def resolve_fir_representative_point(session: AsyncSession, fir_code: str) -> tuple[float, float] | None:
+    return await _resolve_representative_point(session, fir_code, table="fir_boundaries", code_col="icao_fir_code")
+
+
 def first_entry_ordered(hits: list[GeoHit]) -> list[GeoHit]:
     """One GeoHit per distinct code — its first occurrence along the
     track — ordered, de-duplicated, and in the order the track first

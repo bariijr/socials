@@ -42,6 +42,13 @@ export function FeasibilityResultsCard({ result, title }: { result: LegResult; t
             FIRs: {result.route.firs.map((f) => f.name ?? f.icao_fir_code).join(", ")}
           </div>
         )}
+        {/* task #124 — permits/route are now auto-committed to a viable
+            alternate the moment one exists, so avoidIncludeViolated (from
+            permits, computed against whatever route actually got
+            committed) is only ever true here when NO viable alternate was
+            found — this stays a real warning, not a "here's an option"
+            note. A successful auto-reroute gets its own, separate,
+            non-warning info block below instead. */}
         {avoidIncludeViolated && (
           <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
             {result.permits.state_avoid_include.avoided_transited.length > 0 && (
@@ -56,13 +63,15 @@ export function FeasibilityResultsCard({ result, title }: { result: LegResult; t
             {result.permits.fir_avoid_include.required_missed.length > 0 && (
               <p>Required FIR(s) not transited: {result.permits.fir_avoid_include.required_missed.join(", ")}</p>
             )}
-            {result.reroute?.found && (
-              <p className="mt-1 text-fg/70">
-                Alternate route adds ~{result.reroute.extra_distance_nm?.toFixed(0)} NM
-                {result.reroute.extra_time_hours && ` (+${result.reroute.extra_time_hours.toFixed(1)} h)`}.
-              </p>
-            )}
-            {result.reroute && !result.reroute.found && <p className="mt-1 text-fg/70">No viable alternate route found.</p>}
+            <p className="mt-1 text-fg/70">No viable alternate route found.</p>
+          </div>
+        )}
+        {result.reroute?.found && (
+          <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-fg/70">
+            Route automatically adjusted to satisfy your avoid/include constraints — adds ~
+            {result.reroute.extra_distance_nm?.toFixed(0)} NM
+            {result.reroute.extra_time_hours && ` (+${result.reroute.extra_time_hours.toFixed(1)} h)`} vs. the direct
+            track. Distance/EET and permits above already reflect the route actually flown.
           </div>
         )}
       </section>

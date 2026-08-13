@@ -921,6 +921,64 @@ Chrome extension not connected, same limitation as §4.24/§7.17) — the map's 
 was not checked in a live browser, only the endpoints, the TypeScript build, and the backend logic
 under test.
 
+**Avoid/include now actually reroutes permits/fees/capability, not just the map (task #124)**.
+Real bug the user caught live: plotted a real leg, set avoid one country + include another, and the
+returned permit list still had the avoided country's permit and was missing the included country's
+— task #121 above only ever patched the *display* layer (the map's dashed/alternate track); the
+underlying `compute_leg_feasibility` orchestration still fed permits/nav-fees/capability from the
+original direct route unconditionally, computing `find_alternate_route` only afterward, purely to
+report a distance delta nothing downstream ever consumed. Two compounding gaps, both fixed:
+
+1. **`find_alternate_route` never honored `include_states`/`include_firs` at all** — its A* search
+   only excluded avoided nodes; nothing rewarded or required passing through a required region.
+   Rewritten (`app/services/routing_engine_service.py`) into a corridor-segment helper
+   (`_corridor_segment_route`, generalized from airport-to-airport to arbitrary lat/lon so it can be
+   chained) plus waypoint resolution: each included state/FIR gets one real point
+   (`geo_repository.resolve_country_representative_point`/`..._fir_...`, `ST_PointOnSurface` — a
+   real point verifiably inside the real polygon, not a fabricated "capital" guess), ordered by
+   greedy nearest-neighbor from departure, and the route is chained dep -> waypoint(s) -> arr, each
+   leg independently avoid-compliant. An include region with no resolvable geometry fails honestly
+   (`found=False`) rather than silently dropping the constraint — repeating the bug one layer down
+   would be worse than reporting it can't be satisfied. `RerouteResult.states`/`.firs` changed from
+   flat lists to structured `StateEntry`/`FirEntry` (with `first_entry_index`) precisely so the
+   result is `RoutePlan`-shaped and can fully replace the direct route below, not just annotate it.
+2. **Nothing downstream ever used the alternate.** `leg_feasibility_service.compute_leg_feasibility`
+   restructured: the direct route's own violation is checked (`check_avoid_include_violation`, the
+   same domain function permits already used internally) *before* permits/capability/nav-fees run.
+   **User's explicit choice**: auto-commit, not suggest-then-accept — the moment a viable alternate
+   exists, it's swapped in as `route` itself (a synthetic `RoutePlan` built straight from the
+   reroute's own states/firs/distance/sample_point_count), and every downstream computation
+   (`route_states`/`route_firs`, `eet_hours`, `state_crossings`, permits, capability/tech-stops,
+   nav fees, permit fees) naturally operates on it since they all read the same local `route`
+   variable. `permits.avoid_include_violated` now correctly comes back `False` once a swap
+   succeeds — verdict determination keeps a separate pre-swap `original_violated` flag specifically
+   so `NOT_FEASIBLE_AS_ROUTED` still fires (a leg that only works *because* it was auto-replanned
+   shouldn't silently read as a plain `FEASIBLE`), while a leg with no viable alternate still
+   correctly reports `NOT_FEASIBLE` off the unchanged direct route.
+3. **User's second requirement, same session**: if the (now-longer, rerouted) distance exceeds the
+   aircraft's practical range, the trip should still plot but suggest a reasonable tech stop — this
+   already worked by construction once `capability_engine_service.compute_leg_capability` received
+   the swapped `route.distance_nm`, but tech-stop candidates (`is_airport_of_entry` airports — the
+   existing "capital/high-traffic" proxy, not a new one invented for this) could have included one
+   inside the very state being avoided. `avoid_states` threaded into
+   `compute_leg_capability`/`_fetch_tech_stop_candidates` to exclude those.
+
+**Tests**: `test_routing_engine_service.py::TestFindAlternateRoute` — `include_states` forces a real
+waypoint chain (state present in the result, avoided one absent, distance longer than direct); an
+unresolvable `include_states` code fails honestly. New
+`test_leg_feasibility_service.py::TestAvoidIncludeAutoReroute` — the exact reported scenario
+end-to-end (avoided country's permit gone, included country's permit present, `avoid_include_violated`
+now `False`, distance/EET reflect the real route, verdict `NOT_FEASIBLE_AS_ROUTED`, `reroute.found`
+`True`); a no-viable-alternate case stays on the direct route and reports `NOT_FEASIBLE`. New
+`test_capability_engine_service.py` — a tech-stop candidate inside an avoided state is excluded, a
+safe one is still suggested. Full suite: 323 passing, stable across two consecutive clean runs.
+Frontend `next build` clean — `FeasibilityResultsCard.tsx` and the admin Permits tab split the old
+single warning block into two: a real warning (only when no alternate exists) and a new
+non-warning info note ("route automatically adjusted... adds ~X NM") for the auto-committed case;
+`RoutePreviewPanel.tsx`'s live-preview copy reworded from "the alternate route avoiding it adds..."
+(optional-sounding) to "...will automatically use the alternate route instead" (factual, since it
+now genuinely will be). Live-verified through nginx post-rebuild.
+
 **Client-side search on the five admin list pages (task #122)**: Trips, Countries, Operators,
 Fleet (aircraft-performance types), and Vendors all already fetch their full list in one call
 (`page_size=500`/`200`) and render it through the shared `DataTable`; added a `SearchInput`
@@ -2144,11 +2202,11 @@ make test                      # domain unit tests (no DB needed) + integration 
 Integration tests need a real PostgreSQL + PostGIS database (geometry columns have no SQLite
 equivalent) and a reachable MinIO (aircraft document tests upload/download for real, no mock) —
 `docker compose --profile test run --rm api-test pytest -q` is the exact command used throughout
-this build to verify every change. **318 tests passing** as of the most recent full-suite run
-(task #123 completion — 315 (task #121) + 3 new (§7.15a's `TestPublicAircraftLookup`); task #122's
-admin search/filter work added no new backend tests (client-side only); count previously dropped
-from 309 to 299 at task #110 as captcha-specific tests were deleted along with the feature, see
-§4.22), zero known failures. Note:
+this build to verify every change. **323 tests passing** as of the most recent full-suite run
+(task #124 completion — 318 (task #123) + 5 new (§5.1's include-waypoint-chaining and
+auto-reroute-commit coverage); task #122's admin search/filter work added no new backend tests
+(client-side only); count previously dropped from 309 to 299 at task #110 as captcha-specific tests
+were deleted along with the feature, see §4.22), zero known failures. Note:
 `api-test` builds from its own Dockerfile
 `target: test` — rebuilding `api`/`web` does not rebuild it; always `docker compose build api-test`
 too, or a stale image will silently run old test files without erroring (see §4.20).

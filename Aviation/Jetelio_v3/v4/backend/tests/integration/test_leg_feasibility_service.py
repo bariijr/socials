@@ -249,3 +249,130 @@ class TestComputeLegFeasibility:
         )
 
         assert result.filed_route == route_text
+
+
+@pytest_asyncio.fixture
+async def corridor_with_avoid_and_include(session, draw_unique_iso3):
+    """dep in A (west), arr in B (east), with C directly on the equator
+    between them (the avoided state — a direct track genuinely crosses it)
+    and D off to the south (the included state — nothing about the direct
+    A->B track would otherwise pass anywhere near it). Mirrors the real
+    scenario the user reported (task #124): avoid one real country, include
+    another the direct route never touches at all.
+    """
+    iso_a, iso_b, iso_c, iso_d = draw_unique_iso3(4)
+
+    session.add_all(
+        [
+            Country(iso3=iso_a, name=f"Country {iso_a}"),
+            Country(iso3=iso_b, name=f"Country {iso_b}"),
+            Country(iso3=iso_c, name=f"Country {iso_c}"),
+            Country(iso3=iso_d, name=f"Country {iso_d}"),
+        ]
+    )
+    await session.flush()
+    session.add_all(
+        [
+            CountryGeometry(iso3=iso_a, geom=from_shape(_square(-15, -5, -5, 5), srid=4326)),
+            CountryGeometry(iso3=iso_b, geom=from_shape(_square(5, -5, 15, 5), srid=4326)),
+            CountryGeometry(iso3=iso_c, geom=from_shape(_square(-2, -1, 2, 1), srid=4326)),
+            CountryGeometry(iso3=iso_d, geom=from_shape(_square(-2, -10, 2, -6), srid=4326)),
+        ]
+    )
+
+    dep_icao = f"D{iso_a}"[:4].upper()
+    arr_icao = f"A{iso_b}"[:4].upper()
+    session.add_all(
+        [
+            Airport(icao=dep_icao, name="Dep Test", lat=0.0, lon=-10.0, country_iso3=iso_a, is_airport_of_entry=True),
+            Airport(icao=arr_icao, name="Arr Test", lat=0.0, lon=10.0, country_iso3=iso_b, is_airport_of_entry=True),
+        ]
+    )
+    session.add(VisaMatrixCell(country_iso3=iso_b, nationality_iso3=iso_b, requirement=VisaRequirement.NOT_REQUIRED, source="test"))
+    await session.flush()
+
+    return {"iso_a": iso_a, "iso_b": iso_b, "iso_c": iso_c, "iso_d": iso_d, "dep_icao": dep_icao, "arr_icao": arr_icao}
+
+
+class TestAvoidIncludeAutoReroute:
+    @pytest.mark.asyncio
+    async def test_avoided_state_removed_and_included_state_added_after_reroute(
+        self, session, corridor_with_avoid_and_include
+    ):
+        g = corridor_with_avoid_and_include
+        aircraft_icao_type = await _seed_aircraft(session, max_range_nm=3000)
+
+        # Confirm the premise: with no constraints, the direct route really
+        # does cross C and does NOT cross D.
+        direct = await leg_feasibility_service.compute_leg_feasibility(
+            session,
+            dep_icao=g["dep_icao"],
+            arr_icao=g["arr_icao"],
+            aircraft_icao_type=aircraft_icao_type,
+            persons=[],
+            reference_datetime=datetime.now(timezone.utc) + timedelta(hours=200),
+        )
+        direct_states = [s.iso3 for s in direct.route.states]
+        assert g["iso_c"] in direct_states
+        assert g["iso_d"] not in direct_states
+
+        result = await leg_feasibility_service.compute_leg_feasibility(
+            session,
+            dep_icao=g["dep_icao"],
+            arr_icao=g["arr_icao"],
+            aircraft_icao_type=aircraft_icao_type,
+            persons=[],
+            reference_datetime=datetime.now(timezone.utc) + timedelta(hours=200),
+            avoid_states={g["iso_c"]},
+            include_states={g["iso_d"]},
+        )
+
+        # This is the exact bug reported: avoid Zimbabwe/include Zambia
+        # returned a permit list with Zambia excluded and Zimbabwe included
+        # — i.e. nothing downstream ever used the alternate route. The
+        # committed route (and everything computed from it) must now
+        # reflect the real, replanned path.
+        committed_states = [s.iso3 for s in result.route.states]
+        assert g["iso_c"] not in committed_states
+        assert g["iso_d"] in committed_states
+        assert g["iso_c"] not in [p.country_iso3 for p in result.permits.overflight_permits]
+        assert g["iso_d"] in [p.country_iso3 for p in result.permits.overflight_permits]
+        # permits' own avoid/include check now runs against the committed
+        # (compliant) route, so it correctly no longer reports a violation.
+        assert result.permits.avoid_include_violated is False
+        # The committed distance/EET reflect the real (longer) path flown —
+        # not the original direct-track numbers.
+        assert result.route.distance_nm > direct.route.distance_nm
+        assert result.eet_hours > direct.eet_hours
+        # But the verdict still tells the truth about the original plan:
+        # this leg only works because it was automatically replanned.
+        assert result.verdict == FeasibilityVerdict.NOT_FEASIBLE_AS_ROUTED
+        assert result.reroute is not None
+        assert result.reroute.found is True
+        assert result.reroute.extra_distance_nm > 0
+
+    @pytest.mark.asyncio
+    async def test_no_viable_alternate_keeps_direct_route_and_is_not_feasible(self, session, two_country_leg):
+        g = two_country_leg
+        aircraft_icao_type = await _seed_aircraft(session, max_range_nm=3000)
+
+        # The arrival state itself is avoided — no detour can land in B
+        # while also avoiding B, so this must fail honestly rather than
+        # silently keep the (impossible) direct route.
+        result = await leg_feasibility_service.compute_leg_feasibility(
+            session,
+            dep_icao=g["dep_icao"],
+            arr_icao=g["arr_icao"],
+            aircraft_icao_type=aircraft_icao_type,
+            persons=[],
+            reference_datetime=datetime.now(timezone.utc) + timedelta(hours=200),
+            avoid_states={g["iso_b"]},
+        )
+
+        assert result.reroute is not None
+        assert result.reroute.found is False
+        assert result.verdict == FeasibilityVerdict.NOT_FEASIBLE
+        # Route stays the direct (violating) one — the only route there is
+        # to report anything real against.
+        assert g["iso_b"] in [s.iso3 for s in result.route.states]
+        assert result.permits.avoid_include_violated is True
