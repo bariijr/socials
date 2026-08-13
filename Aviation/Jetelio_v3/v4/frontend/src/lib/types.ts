@@ -264,6 +264,46 @@ export interface FirLookup {
   name: string;
 }
 
+// Trip-builder chat parsing (task #125) — every *_query field is what the
+// message literally said; icao/iso3/icao_type are null when the backend
+// couldn't confidently resolve it against real data (never a guessed code).
+export interface ResolvedAirport {
+  query: string;
+  icao: string | null;
+  name: string | null;
+}
+
+export interface ResolvedCountry {
+  query: string;
+  iso3: string | null;
+  name: string | null;
+}
+
+export interface ResolvedAircraftType {
+  query: string;
+  icao_type: string | null;
+  name: string | null;
+}
+
+export interface ChatLegDraft {
+  departure: ResolvedAirport;
+  arrival: ResolvedAirport;
+  departure_date: string | null;
+  departure_time_utc: string | null;
+  avoid_countries: ResolvedCountry[];
+  include_countries: ResolvedCountry[];
+}
+
+export interface ChatTripDraft {
+  aircraft_registration: string | null;
+  aircraft_type: ResolvedAircraftType | null;
+  operator_name: string | null;
+  crew_count: number | null;
+  pax_count: number | null;
+  legs: ChatLegDraft[];
+  warnings: string[];
+}
+
 // A real, admin-editable role code (task #120) — see GET /person-roles —
 // not a fixed union anymore. PIC/SIC/FO/FA/MECHANIC/ENGINEER/
 // MEDICAL_STAFF/CREW/PAX/VIP/PRINCIPAL/OTHER are seeded by default.

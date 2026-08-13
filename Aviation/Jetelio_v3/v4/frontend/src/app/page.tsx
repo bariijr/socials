@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import type {
   AircraftTypeLookup,
+  ChatTripDraft,
   FeasibilityCheckRequest,
   FeasibilityCheckResult,
   LegInput,
@@ -19,6 +20,7 @@ import { LegSummaryTable } from "@/components/LegSummaryTable";
 import { RequestQuoteForm } from "@/components/RequestQuoteForm";
 import { CombinedRouteMap } from "@/components/CombinedRouteMap";
 import { StatusChip } from "@/components/StatusChip";
+import { TripChatInput } from "@/components/TripChatInput";
 
 const MAX_LEGS = 8;
 const LB_PER_KG = 2.20462;
@@ -106,13 +108,16 @@ export default function FeasibilityIQPage() {
   // operator/contact data (see PublicAircraftLookupOut's docstring), so
   // "Operator / airline" stays a manual field a requester fills in
   // themselves, same as before.
-  async function runRegistrationLookup() {
-    if (!registration.trim()) return;
+  async function runRegistrationLookup(overrideRegistration?: string) {
+    // Accepts an explicit value (rather than always reading the `registration`
+    // state closure) so a caller that just called setRegistration(...) in the
+    // same tick — e.g. applyChatDraft below — doesn't look up the stale
+    // pre-update value React's async state batching would otherwise leave here.
+    const value = (overrideRegistration ?? registration).trim();
+    if (!value) return;
     setLookingUp(true);
     try {
-      const found = await api.get<PublicAircraftLookup>(
-        `/feasibility/aircraft-lookup?registration=${encodeURIComponent(registration.trim())}`
-      );
+      const found = await api.get<PublicAircraftLookup>(`/feasibility/aircraft-lookup?registration=${encodeURIComponent(value)}`);
       setAircraft({ icao_type: found.icao_type, manufacturer: null, model_series: null });
       if (found.mtow_kg !== null) {
         setMtowKg(String(found.mtow_kg));
@@ -129,6 +134,45 @@ export default function FeasibilityIQPage() {
       setRegistrationMatched(false);
     } finally {
       setLookingUp(false);
+    }
+  }
+
+  // task #125 — TripChatInput hands back a parsed draft; this just
+  // pre-fills the same state every field above is already bound to, so
+  // the user reviews/edits exactly like a manually-entered trip before
+  // ever submitting. Only touches fields the message actually resolved —
+  // an unresolved dep/arr/country becomes an empty string/is omitted,
+  // never a guessed code, so the user sees exactly what needs a manual pick.
+  function applyChatDraft(draft: ChatTripDraft) {
+    if (draft.aircraft_type?.icao_type) {
+      setAircraft({ icao_type: draft.aircraft_type.icao_type, manufacturer: null, model_series: draft.aircraft_type.name });
+    }
+    if (draft.operator_name) {
+      setOperatorAirlineName(draft.operator_name);
+    }
+    if (draft.legs.length > 0) {
+      setLegs(
+        draft.legs.map((leg) => ({
+          dep_icao: leg.departure.icao ?? "",
+          arr_icao: leg.arrival.icao ?? "",
+          reference_datetime: leg.departure_date
+            ? new Date(`${leg.departure_date}T${leg.departure_time_utc ?? "09:00"}:00Z`).toISOString()
+            : null,
+          required_arrival_datetime: null,
+          arrival_datetime_override: null,
+          avoid_states: leg.avoid_countries.map((c) => c.iso3).filter((v): v is string => Boolean(v)),
+          include_states: leg.include_countries.map((c) => c.iso3).filter((v): v is string => Boolean(v)),
+          avoid_firs: [],
+          include_firs: [],
+        }))
+      );
+    }
+    if (draft.aircraft_registration) {
+      setRegistration(draft.aircraft_registration.toUpperCase());
+      // Reuses the same real-registry autofill a manual entry would
+      // trigger — only overrides the chat-resolved type if the message
+      // itself didn't already give one.
+      void runRegistrationLookup(draft.aircraft_registration);
     }
   }
 
@@ -167,6 +211,8 @@ export default function FeasibilityIQPage() {
         <MarketingPanel />
 
         <form onSubmit={onSubmit} className="space-y-6 rounded-2xl border border-accent/15 bg-surface p-4 shadow-lg shadow-black/20 sm:p-6">
+        <TripChatInput onParsed={applyChatDraft} />
+
         {/* Stage 1 of 3 — Aircraft. Always visible; nothing downstream can
             be planned without it, so it's never gated. */}
         <WizardStage step={1} label="Aircraft">
@@ -181,7 +227,7 @@ export default function FeasibilityIQPage() {
                   setRegistration(e.target.value.toUpperCase());
                   setRegistrationMatched(false);
                 }}
-                onBlur={runRegistrationLookup}
+                onBlur={() => runRegistrationLookup()}
                 className="mono-figures h-11 w-full rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
               />
               {lookingUp && <p className="mt-1 text-xs text-fg/50">Checking…</p>}

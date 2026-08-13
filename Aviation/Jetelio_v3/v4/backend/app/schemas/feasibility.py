@@ -342,3 +342,49 @@ class RequestQuoteIn(BaseModel):
 class RequestQuoteOut(BaseModel):
     trip_id: str
     status: str
+
+
+class ChatParseIn(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+
+
+class ResolvedAirportOut(BaseModel):
+    query: str
+    icao: str | None
+    name: str | None
+
+
+class ResolvedCountryOut(BaseModel):
+    query: str
+    iso3: str | None
+    name: str | None
+
+
+class ResolvedAircraftTypeOut(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    query: str
+    icao_type: str | None
+    name: str | None
+
+
+class ChatLegDraftOut(BaseModel):
+    departure: ResolvedAirportOut
+    arrival: ResolvedAirportOut
+    departure_date: str | None
+    departure_time_utc: str | None
+    avoid_countries: list[ResolvedCountryOut]
+    include_countries: list[ResolvedCountryOut]
+
+
+class ChatTripDraftOut(BaseModel):
+    aircraft_registration: str | None
+    aircraft_type: ResolvedAircraftTypeOut | None
+    operator_name: str | None
+    crew_count: int | None
+    pax_count: int | None
+    legs: list[ChatLegDraftOut]
+    # Human-readable notes about anything that didn't confidently resolve —
+    # the frontend surfaces these so the user knows exactly what to
+    # double-check before submitting.
+    warnings: list[str]

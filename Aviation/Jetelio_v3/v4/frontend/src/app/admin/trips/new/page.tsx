@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import type {
   AircraftLookup,
   AircraftTypeLookup,
+  ChatTripDraft,
   ClientLookup,
   LegInput,
   PersonPublicInput,
@@ -21,6 +22,7 @@ import { AircraftTypePicker } from "@/components/AircraftTypePicker";
 import { PersonsEditor } from "@/components/PersonsEditor";
 import { LegEditor } from "@/components/LegEditor";
 import { RoutePreviewPanel } from "@/components/RoutePreviewPanel";
+import { TripChatInput } from "@/components/TripChatInput";
 
 const MAX_LEGS = 20;
 const LB_PER_KG = 2.20462;
@@ -117,12 +119,17 @@ export default function NewTripPage() {
 
   // Registration -> autofill AC type/MTOW/operator/billing-client options.
   // Admin-only lookup; never available on the public form.
-  async function runLookup() {
-    if (!registration.trim()) return;
+  async function runLookup(overrideRegistration?: string) {
+    // Accepts an explicit value so a caller that just called
+    // setRegistration(...) in the same tick — applyChatDraft below —
+    // doesn't look up the stale pre-update value React's async state
+    // batching would otherwise leave in the `registration` closure.
+    const value = (overrideRegistration ?? registration).trim();
+    if (!value) return;
     setLookingUp(true);
     setLookupError(null);
     try {
-      const found = await api.get<AircraftLookup>(`/trips/aircraft-lookup?registration=${encodeURIComponent(registration.trim())}`);
+      const found = await api.get<AircraftLookup>(`/trips/aircraft-lookup?registration=${encodeURIComponent(value)}`);
       setLookup(found);
       setAircraft({ icao_type: found.icao_type, manufacturer: null, model_series: null });
       if (found.mtow_kg !== null) {
@@ -134,6 +141,44 @@ export default function NewTripPage() {
       setLookupError(err instanceof ApiError && err.status === 404 ? "No aircraft found for this registration." : "Lookup failed.");
     } finally {
       setLookingUp(false);
+    }
+  }
+
+  // task #125 — TripChatInput hands back a parsed draft; pre-fills the
+  // same state every field below is already bound to. operator_name from
+  // the message has nowhere to go directly here (this page has no manual
+  // operator field — admin trips are for real registered aircraft, so
+  // operator name always comes from the registration lookup instead);
+  // setting registration below and re-running that lookup covers it
+  // whenever the message's registration matches a real fleet aircraft.
+  function applyChatDraft(draft: ChatTripDraft) {
+    if (draft.aircraft_type?.icao_type) {
+      setAircraft({ icao_type: draft.aircraft_type.icao_type, manufacturer: null, model_series: draft.aircraft_type.name });
+    }
+    if (draft.legs.length > 0) {
+      setLegs(
+        draft.legs.map((leg) => ({
+          dep_icao: leg.departure.icao ?? "",
+          arr_icao: leg.arrival.icao ?? "",
+          reference_datetime: leg.departure_date
+            ? new Date(`${leg.departure_date}T${leg.departure_time_utc ?? "09:00"}:00Z`).toISOString()
+            : null,
+          required_arrival_datetime: null,
+          arrival_datetime_override: null,
+          avoid_states: leg.avoid_countries.map((c) => c.iso3).filter((v): v is string => Boolean(v)),
+          include_states: leg.include_countries.map((c) => c.iso3).filter((v): v is string => Boolean(v)),
+          avoid_firs: [],
+          include_firs: [],
+          client_id: null,
+          registration: null,
+          leg_type: "PRIMARY",
+          leg_status: "PENDING",
+        }))
+      );
+    }
+    if (draft.aircraft_registration) {
+      setRegistration(draft.aircraft_registration.toUpperCase());
+      void runLookup(draft.aircraft_registration);
     }
   }
 
@@ -214,6 +259,7 @@ export default function NewTripPage() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-fg/10 p-4">
+        <TripChatInput onParsed={applyChatDraft} />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <AircraftTypePicker value={aircraft} onChange={setAircraft} />
           <div>
@@ -223,12 +269,12 @@ export default function NewTripPage() {
                 type="text"
                 value={registration}
                 onChange={(e) => setRegistration(e.target.value.toUpperCase())}
-                onBlur={runLookup}
+                onBlur={() => runLookup()}
                 className="mono-figures h-11 w-full rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
               />
               <button
                 type="button"
-                onClick={runLookup}
+                onClick={() => runLookup()}
                 disabled={lookingUp || !registration.trim()}
                 className="h-11 shrink-0 rounded-md border border-fg/20 px-3 text-sm text-fg/70 hover:border-fg/40 disabled:opacity-50"
               >

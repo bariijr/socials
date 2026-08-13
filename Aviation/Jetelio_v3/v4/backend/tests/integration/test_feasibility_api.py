@@ -170,6 +170,77 @@ class TestPublicAircraftLookup:
         assert resp.json()["registration"] == g["registration"]
 
 
+class TestChatParse:
+    @pytest.mark.asyncio
+    async def test_returns_503_when_not_configured(self, client, monkeypatch):
+        import app.api.routers.feasibility as feasibility_router
+
+        class _FakeSettings:
+            anthropic_api_key = ""
+
+        monkeypatch.setattr(feasibility_router, "get_settings", lambda: _FakeSettings())
+
+        resp = await client.post("/feasibility/chat-parse", json={"message": "test"})
+        assert resp.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_returns_502_when_extraction_fails(self, client, monkeypatch):
+        import app.services.trip_chat_service as trip_chat_service_module
+
+        async def _fake_parse(session, message, *, today):
+            return None
+
+        monkeypatch.setattr(trip_chat_service_module, "parse_trip_message", _fake_parse)
+
+        resp = await client.post("/feasibility/chat-parse", json={"message": "test"})
+        assert resp.status_code == 502
+
+    @pytest.mark.asyncio
+    async def test_successful_parse_resolves_real_codes(self, client, monkeypatch, public_leg_fixture):
+        # End-to-end through the real router + real trip_chat_service
+        # resolution logic + real seeded DB rows — only the Anthropic call
+        # itself is mocked, so this also exercises the router's JSON
+        # serialization of the resolved draft, not just the service layer.
+        import app.services.trip_chat_service as trip_chat_service_module
+        from app.core.chat.anthropic_provider import LegExtraction, TripExtraction
+
+        g = public_leg_fixture
+        extraction = TripExtraction(
+            aircraft_registration="N123AB",
+            aircraft_type_query=None,
+            operator_name="Test Operator LLC",
+            crew_count=None,
+            pax_count=None,
+            legs=[
+                LegExtraction(
+                    departure_query=g["dep_icao"],
+                    arrival_query=g["arr_icao"],
+                    departure_date="2026-09-01",
+                    departure_time_utc=None,
+                    avoid_country_queries=[],
+                    include_country_queries=[],
+                )
+            ],
+        )
+
+        async def _fake_extract(message: str, *, today):
+            return extraction
+
+        monkeypatch.setattr(trip_chat_service_module, "extract_trip_request", _fake_extract)
+
+        resp = await client.post("/feasibility/chat-parse", json={"message": "irrelevant — extraction is mocked"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        assert body["aircraft_registration"] == "N123AB"
+        assert body["operator_name"] == "Test Operator LLC"
+        assert len(body["legs"]) == 1
+        assert body["legs"][0]["departure"]["icao"] == g["dep_icao"]
+        assert body["legs"][0]["arrival"]["icao"] == g["arr_icao"]
+        assert body["legs"][0]["departure_date"] == "2026-09-01"
+        assert body["warnings"] == []
+
+
 class TestFeasibilityCheck:
     @pytest.mark.asyncio
     async def test_check_returns_public_projection_without_passport_fields(self, client, public_leg_fixture):

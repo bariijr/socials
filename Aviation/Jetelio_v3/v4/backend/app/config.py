@@ -47,6 +47,11 @@ class Settings(BaseSettings):
 
     import_source_xlsx: str = "/app/data/JTLlayout-Index_admin.xlsx"
 
+    # Empty means "not configured" — trip_chat_service's parse endpoint is a
+    # no-op (NO_PROVIDER_CONFIGURED-style honesty) until the user supplies
+    # their own key, same pattern as imap_host above.
+    anthropic_api_key: str = ""
+
     # Named-settings seed defaults (also written into the `settings` table on
     # first migration/import so they are editable at runtime thereafter).
     default_permit_lead_time_hours: float = 72

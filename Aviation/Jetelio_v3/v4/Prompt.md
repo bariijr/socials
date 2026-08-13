@@ -18,6 +18,8 @@ before ever talking to a human.
 
 ```bash
 cp .env.example .env        # fill in POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD, JWT_SECRET_KEY
+                             # ANTHROPIC_API_KEY is optional — only the trip-builder chat (§7.19)
+                             # needs it; everything else works with it left empty
 make up                     # docker compose up --build -d — migrations run automatically
 make import                 # loads .LAYOUT/JTLlayout-Index_admin.xlsx and prints the readiness report
 ```
@@ -2079,6 +2081,71 @@ instantiated during trip *creation*.
   to 1. Browser UI itself not visually checked — the Claude in Chrome extension still wasn't
   connected in this environment, same limitation as §4.24/§7.17.
 
+### 7.19 Trip-builder chat input (task #125)
+
+User asked for a chatbot that can take a free-text or structured (CAA-style ATTN/FROM/ACFT
+OPERATOR/ITINERARY block) message and build a trip from it, on both VIQ and admin, with the
+parsed result shown for verification before anything commits — same "user's explicit choice"
+pattern already established for the map redesign and public registration autofill (§5.1, §7.15a):
+Anthropic (Claude) API with the user's own key, pre-filling the *existing* trip/leg builder form
+rather than a separate custom preview screen.
+
+- **Two-step extraction, deliberately kept separate**: `app/core/chat/anthropic_provider.py`
+  (`extract_trip_request`, model `claude-sonnet-5`, forced tool-use for reliable structured JSON —
+  `tool_choice: {"type": "tool", ...}`) extracts *verbatim* location/country names, dates, and
+  avoid/include phrases — the system prompt explicitly instructs it never to convert a name into
+  an ICAO/ISO code itself, never to guess one, and never to "correct" a name it doesn't recognize.
+  `app/services/trip_chat_service.py` is the *only* place that resolves those verbatim names
+  against real data — reusing the exact same `feasibility_iq_service.search_airports`/
+  `search_countries`/`search_aircraft_types` functions the public lookup endpoints already use, top
+  ranked match wins, no match means `icao`/`iso3` stays `null` and a plain-English warning is
+  added (`"Could not match ... — please select it manually."`), never a fabricated code. Same
+  "never trust free text as ground truth" discipline `route_preview_service` already applies to a
+  dispatcher's own `filed_route` string — an LLM hallucinating a plausible airport code would be
+  exactly the kind of fabricated operational data this codebase's own §3/§11 convention exists to
+  prevent, so the resolution step is structurally incapable of accepting one.
+- **`POST /feasibility/chat-parse`** — public (no cost/vendor data involved, same rationale as the
+  rest of this router), but on its own, much stricter rate-limit bucket: new
+  `chat_parse_rate_limit_per_hour` setting (default 10/hour, vs. the shared 30/hour `lookup`
+  buckets) since each call is a real, paid Anthropic API request, not a free DB query.
+  `rate_limit()` (`app/core/rate_limit.py`) generalized to accept a `limit_setting_key` override
+  rather than hardcoding the one shared setting, for this bucket to use its own ceiling. Empty
+  `ANTHROPIC_API_KEY` → `503` (`NO_PROVIDER_CONFIGURED`-style honesty, same as `imap_host`);
+  extraction failure (bad response, API error) → `502` with a generic public-facing message —
+  the real reason is logged server-side (`logger.warning(..., exc_info=True)`) for an admin to
+  diagnose, never leaked to an unauthenticated caller.
+- **`TripChatInput.tsx`** — a textarea + "Fill in from message" button, hands the raw parsed draft
+  back to the page via `onParsed`, which maps it into that page's *own* existing form state
+  (`applyChatDraft` in both `app/page.tsx` and `admin/trips/new/page.tsx`) — never submits
+  anything itself. Registration set from the draft re-runs the same real-registry autofill lookup
+  (§7.15a on VIQ, the admin Trip Manager's own on admin) a manual entry would trigger, passing the
+  new value explicitly rather than reading it back from React state in the same tick (state
+  updates are async — reading `registration` right after `setRegistration(...)` would see the
+  stale pre-update value). Admin's page has no manual operator-name field at all (operator always
+  comes from a real registration match, per that page's existing "every registration is expected
+  to be a real fleet aircraft" convention) — a chat-extracted operator name with no matching
+  registration has nowhere to go there and is silently not applied, unlike VIQ where it fills a
+  real free-text field.
+- **Real bug caught while wiring this up**: both pages' registration `<input>` had
+  `onBlur={runLookup}` / `onBlur={runRegistrationLookup}` — passing the function reference
+  directly meant React's synthetic `FocusEvent` would be passed as the new optional
+  `overrideRegistration` parameter once that parameter was added, breaking the lookup (`.trim()`
+  on an event object). Fixed to `onBlur={() => runLookup()}` on both pages before it ever shipped.
+- **Tests**: `test_trip_chat_service.py` — matched locations resolve to real seeded codes; an
+  unmatched location/country stays `null` and produces a warning (not a guess); extraction failure
+  propagates as `None`, never a fabricated empty-but-successful draft. `test_feasibility_api.py::
+  TestChatParse` — `503` when unconfigured, `502` when extraction fails, and a real end-to-end
+  round trip (real router + real resolution + real seeded DB rows, only the Anthropic call itself
+  mocked) asserting the JSON response's resolved codes. 329 tests passing, zero regressions.
+  Frontend `next build` clean.
+- **Live-verified through nginx post-rebuild, with the user's own real API key — and a real finding
+  from doing so**: the request reached Anthropic's API correctly authenticated and formatted (got
+  past auth into billing/credit validation, which only happens for a well-formed request), but
+  failed with `Your credit balance is too low to access the Anthropic API` — confirming the
+  integration itself is wired correctly; the account it's using needs credits added before a parse
+  will actually succeed. This is exactly the failure mode the `502` design above exists for: caught
+  cleanly, logged with the real reason, generic message shown publicly.
+
 ---
 
 ## 8. Document storage & Excel import/export
@@ -2202,11 +2269,11 @@ make test                      # domain unit tests (no DB needed) + integration 
 Integration tests need a real PostgreSQL + PostGIS database (geometry columns have no SQLite
 equivalent) and a reachable MinIO (aircraft document tests upload/download for real, no mock) —
 `docker compose --profile test run --rm api-test pytest -q` is the exact command used throughout
-this build to verify every change. **323 tests passing** as of the most recent full-suite run
-(task #124 completion — 318 (task #123) + 5 new (§5.1's include-waypoint-chaining and
-auto-reroute-commit coverage); task #122's admin search/filter work added no new backend tests
-(client-side only); count previously dropped from 309 to 299 at task #110 as captcha-specific tests
-were deleted along with the feature, see §4.22), zero known failures. Note:
+this build to verify every change. **329 tests passing** as of the most recent full-suite run
+(task #125 completion — 323 (task #124) + 6 new (§7.19's `test_trip_chat_service.py` +
+`TestChatParse`); task #122's admin search/filter work added no new backend tests (client-side
+only); count previously dropped from 309 to 299 at task #110 as captcha-specific tests were
+deleted along with the feature, see §4.22), zero known failures. Note:
 `api-test` builds from its own Dockerfile
 `target: test` — rebuilding `api`/`web` does not rebuild it; always `docker compose build api-test`
 too, or a stale image will silently run old test files without erroring (see §4.20).

@@ -3,11 +3,14 @@ vendor data anywhere in this router; see app.services.feasibility_iq_service
 for the public-safe projection of the internal engine output.
 """
 
-from fastapi import APIRouter, Depends, Query, Response
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import logging
 
+from app.config import get_settings
 from app.core.email_client import send_email
 from app.core.errors import NotFoundError
 from app.core.rate_limit import rate_limit
@@ -15,6 +18,9 @@ from app.database import get_db
 from app.schemas.feasibility import (
     AircraftTypeLookupOut,
     AirportLookupOut,
+    ChatLegDraftOut,
+    ChatParseIn,
+    ChatTripDraftOut,
     CountryLookupOut,
     FeasibilityCheckIn,
     FeasibilityCheckOut,
@@ -24,12 +30,23 @@ from app.schemas.feasibility import (
     RequestQuoteIn,
     RequestQuoteOut,
     ReroutePreviewOut,
+    ResolvedAircraftTypeOut,
+    ResolvedAirportOut,
+    ResolvedCountryOut,
     RoutePreviewOut,
     StateOut,
     WorldOutlineOut,
 )
 from app.schemas.person_role import PersonRoleOut
-from app.services import feasibility_iq_service, notification_service, person_role_service, pnr_pdf_service, route_preview_service, trip_service
+from app.services import (
+    feasibility_iq_service,
+    notification_service,
+    person_role_service,
+    pnr_pdf_service,
+    route_preview_service,
+    trip_chat_service,
+    trip_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +91,53 @@ async def aircraft_lookup(
     if result is None:
         raise NotFoundError("Aircraft", registration)
     return result
+
+
+@router.post(
+    "/chat-parse",
+    response_model=ChatTripDraftOut,
+    dependencies=[Depends(rate_limit("chat", limit_setting_key="chat_parse_rate_limit_per_hour"))],
+)
+async def chat_parse(payload: ChatParseIn, session: AsyncSession = Depends(get_db)) -> ChatTripDraftOut:
+    """Parses a free-text or structured permit-request message into a
+    pre-fillable trip/leg draft (task #125) — used to pre-fill the existing
+    trip/leg builder form on both VIQ and admin, never to submit anything
+    directly. Public (no cost/vendor data involved, same rationale as the
+    rest of this router) but on its own, much stricter rate-limit bucket
+    since each call is a real, paid Anthropic API request.
+    """
+    if not get_settings().anthropic_api_key:
+        raise HTTPException(status_code=503, detail="Trip-builder chat isn't configured on this deployment yet.")
+
+    draft = await trip_chat_service.parse_trip_message(session, payload.message, today=date.today())
+    if draft is None:
+        raise HTTPException(
+            status_code=502, detail="Couldn't parse that message — try rephrasing, or fill in the form manually."
+        )
+
+    return ChatTripDraftOut(
+        aircraft_registration=draft.aircraft_registration,
+        aircraft_type=(
+            ResolvedAircraftTypeOut(query=draft.aircraft_type.query, icao_type=draft.aircraft_type.icao_type, name=draft.aircraft_type.name)
+            if draft.aircraft_type
+            else None
+        ),
+        operator_name=draft.operator_name,
+        crew_count=draft.crew_count,
+        pax_count=draft.pax_count,
+        legs=[
+            ChatLegDraftOut(
+                departure=ResolvedAirportOut(query=leg.departure.query, icao=leg.departure.icao, name=leg.departure.name),
+                arrival=ResolvedAirportOut(query=leg.arrival.query, icao=leg.arrival.icao, name=leg.arrival.name),
+                departure_date=leg.departure_date,
+                departure_time_utc=leg.departure_time_utc,
+                avoid_countries=[ResolvedCountryOut(query=c.query, iso3=c.iso3, name=c.name) for c in leg.avoid_countries],
+                include_countries=[ResolvedCountryOut(query=c.query, iso3=c.iso3, name=c.name) for c in leg.include_countries],
+            )
+            for leg in draft.legs
+        ],
+        warnings=draft.warnings,
+    )
 
 
 @router.get("/countries", response_model=list[CountryLookupOut], dependencies=[Depends(rate_limit("lookup"))])

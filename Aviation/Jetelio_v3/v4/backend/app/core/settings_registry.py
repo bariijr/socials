@@ -143,6 +143,13 @@ NAMED_SETTINGS: list[SettingDefinition] = [
         description="Public Feasibility IQ: max requests per (client IP, endpoint bucket) per rolling hour.",
     ),
     SettingDefinition(
+        key="chat_parse_rate_limit_per_hour",
+        value_type=SettingValueType.INTEGER,
+        default_value="10",
+        description="Trip-builder chat parsing: max requests per (client IP) per rolling hour — kept far below "
+        "feasibility_iq_rate_limit_per_hour since each call is a real, paid LLM API request, not a free DB lookup.",
+    ),
+    SettingDefinition(
         key="feasibility_quote_ttl_seconds",
         value_type=SettingValueType.INTEGER,
         default_value="1800",
