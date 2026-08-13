@@ -203,6 +203,157 @@ export interface AircraftDocumentRecord {
   created_at: string;
 }
 
+// --- Person / Party / polymorphic Document + Credential (task #89/#109/#126) ---
+
+export type PersonRoleHint = "CREW" | "PAX" | "BOTH";
+
+export interface Person {
+  id: string;
+  party_id: string | null;
+  full_name: string;
+  date_of_birth: string | null;
+  nationality_iso3: string | null;
+  role_hint: PersonRoleHint;
+  email: string | null;
+  phone: string | null;
+  passport_number: string | null;
+  passport_expiry: string | null;
+  notes: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonCreateRequest {
+  full_name: string;
+  party_id?: string | null;
+  date_of_birth?: string | null;
+  nationality_iso3?: string | null;
+  role_hint?: PersonRoleHint;
+  email?: string | null;
+  phone?: string | null;
+  passport_number?: string | null;
+  passport_expiry?: string | null;
+  notes?: string | null;
+}
+
+export type PartyRoleType = "OPERATOR" | "CLIENT" | "VENDOR" | "AGENT" | "WALK_IN";
+
+export interface Party {
+  id: string;
+  name: string;
+  legal_name: string | null;
+  country_iso3: string | null;
+  address: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  notes: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartyRole {
+  id: string;
+  party_id: string;
+  role: PartyRoleType;
+  operator_id: string | null;
+  client_id: string | null;
+  vendor_id: string | null;
+  credit_limit_minor_units: number | null;
+  notes: string | null;
+  linked_name: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartyDetail extends Party {
+  roles: PartyRole[];
+}
+
+export interface PartyCreateRequest {
+  name: string;
+  legal_name?: string | null;
+  country_iso3?: string | null;
+  address?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  notes?: string | null;
+}
+
+export interface PartyRoleCreateRequest {
+  party_id: string;
+  role: PartyRoleType;
+  operator_id?: string | null;
+  client_id?: string | null;
+  vendor_id?: string | null;
+  credit_limit_minor_units?: number | null;
+  notes?: string | null;
+}
+
+export type DocumentEntityType = "PERSON" | "PARTY";
+
+export interface DocumentTypeTemplateField {
+  key: string;
+  label: string;
+  type: "string" | "date" | "list";
+}
+
+export interface DocumentTypeTemplate {
+  doc_type: string;
+  name: string;
+  applies_to_entity_type: DocumentEntityType;
+  expected_fields: DocumentTypeTemplateField[];
+}
+
+export type DocumentStatus = "PENDING_VERIFICATION" | "VERIFIED" | "REJECTED" | "SUPERSEDED";
+
+export interface EntityDocument {
+  id: string;
+  entity_type: DocumentEntityType;
+  entity_id: string;
+  doc_type: string;
+  filename: string;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  // OCR is fire-and-forget (Celery, dispatched right after upload) — both
+  // stay null until it finishes, or forever if OCR is disabled/unavailable
+  // for this file. Never treat null as an error; the fields just always
+  // remain manually fillable regardless.
+  ocr_raw_output: { engine: string; text: string } | null;
+  extracted_fields: Record<string, string> | null;
+  status: DocumentStatus;
+  verified_by: string | null;
+  verified_on: string | null;
+  supersedes_document_id: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+  version: number;
+}
+
+export interface Credential {
+  id: string;
+  document_id: string;
+  rating_code: string;
+  rating_name: string | null;
+  issued_on: string | null;
+  expires_on: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CredentialCreateRequest {
+  document_id: string;
+  rating_code: string;
+  rating_name?: string | null;
+  issued_on?: string | null;
+  expires_on?: string | null;
+}
+
 export interface AircraftPerformanceItem {
   icao_type: string;
   manufacturer: string | null;

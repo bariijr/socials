@@ -16,6 +16,24 @@ export function getCurrentUserRole(): string | null {
   }
 }
 
+/** Decodes the stored JWT's `email` claim — display/attribution only
+ * (e.g. Document.verified_by), same "not real authorization" caveat as
+ * getCurrentUserRole above; the backend attributes actions from its own
+ * authenticated session, this is just what the UI shows/prefills.
+ */
+export function getCurrentUserEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = window.localStorage.getItem("jetelio_access_token");
+  if (!token) return null;
+  try {
+    const payload = token.split(".")[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof decoded.email === "string" ? decoded.email : null;
+  } catch {
+    return null;
+  }
+}
+
 export function canWrite(role: string | null): boolean {
   return role === "SUPER_ADMIN" || role === "OPERATIONS_SPECIALIST";
 }

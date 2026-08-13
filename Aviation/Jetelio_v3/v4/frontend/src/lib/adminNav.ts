@@ -15,5 +15,7 @@ export const ADMIN_NAV_LINKS: AdminNavLink[] = [
   { href: "/aircraft", label: "Aircraft" },
   { href: "/operators", label: "Operators" },
   { href: "/vendors", label: "Vendors" },
+  { href: "/admin/persons", label: "Persons" },
+  { href: "/admin/parties", label: "Parties" },
   { href: "/admin/data", label: "Data Import" },
 ];

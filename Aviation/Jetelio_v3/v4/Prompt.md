@@ -330,9 +330,9 @@ them are byte-for-byte the tables they were in §4.2–§4.3.
   hardcodes an `"aircraft/..."` prefix) was left untouched; a new `build_entity_key()` was added
   alongside it for Person/Party documents rather than generalizing `build_key` in place — keeps
   existing aircraft document keys/tests unaffected by construction, not just by outcome.
-- **No frontend UI** for any of this yet — same precedent as `NavFeeProvider`/`PermitFeeProvider`
-  (§4.5): backend-CRUD-only for now, reachable via the API/docs. Routers: `/parties`,
-  `/party-roles`, `/persons`, `/documents/{entity_type}/{entity_id}/...`,
+- **Frontend UI landed in task #126 (§7.20)** — `/admin/persons`, `/admin/parties`, and a
+  `DocumentsPanel` covering upload/list/download/delete/verify + OCR review + Credentials.
+  Routers: `/parties`, `/party-roles`, `/persons`, `/documents/{entity_type}/{entity_id}/...`,
   `/document-type-templates`, `/credentials`.
 
 ### 4.7 Settings
@@ -2145,6 +2145,62 @@ rather than a separate custom preview screen.
   integration itself is wired correctly; the account it's using needs credits added before a parse
   will actually succeed. This is exactly the failure mode the `502` design above exists for: caught
   cleanly, logged with the real reason, generic message shown publicly.
+
+### 7.20 Person/Party admin pages + document upload/OCR-review UI (task #126)
+
+User said they couldn't see the OCR feature anywhere in the app. Investigation confirmed why: task
+#109's Tesseract pipeline (§4.23) and the whole polymorphic Person/Party/Document/Credential system
+underneath it (task #89, §4.6) were built **entirely backend-only** — real, tested, working
+endpoints, but zero frontend. Worse, there was nowhere to *put* a documents widget: no
+`/admin/persons` or `/admin/parties` page existed at all, no frontend types for `Person`/`Party`/
+`Document`/`Credential`, and the Trip page's own "Documents" tab was (and remains) the stale
+"lands in Phase 5" placeholder flagged earlier in this same session. Building the OCR UI therefore
+meant building the Person/Party admin surface first, not bolting a widget onto something that
+already existed.
+
+- **New pages**: `/admin/persons` (list, `SearchInput`/`matchesQuery` reused from task #122, inline
+  "Add person" form) + `/admin/persons/[id]` (editable fields via the existing `EditableInfoField`/
+  `EditableInfoSelect` pattern from `operators/[id]/page.tsx`, plus the new documents panel).
+  `/admin/parties` + `/admin/parties/[id]` mirror the same shape, with a Roles section showing every
+  linked `PartyRole` (`OPERATOR`/`CLIENT`/`VENDOR`/`AGENT`/`WALK_IN`) and an "Add role" control
+  scoped to `AGENT`/`WALK_IN` only — the other three link to a real existing Operator/Client/Vendor
+  row (`party_roles.operator_id` etc., exactly one of the three per `app/schemas/party.py`'s
+  validation) and this app has no Operator/Client/Vendor picker component yet to support that
+  safely; noted as a real gap rather than faked with a raw ID text box. Both list pages added to
+  `ADMIN_NAV_LINKS` (`lib/adminNav.ts`, the task #99 single-source-of-truth nav list).
+- **`DocumentsPanel.tsx`** — generic over `entity_type`/`entity_id`, structurally copied from the
+  already-working `AircraftDocumentsPanel` (`operators/[id]/page.tsx`, a different, older
+  polymorphic-adjacent system keyed by `aircraft_id`) for upload/list/download/delete, using
+  `api.upload`/`api.download` (already existed in `lib/api.ts`, unused until now outside that one
+  panel). What it adds on top:
+  - **A "Review" flow, not an editable-fields form** — deliberately. `DocumentTypeTemplate.
+    expected_fields` describes what a license/passport/certificate *should* have, and
+    `Document.extracted_fields` is Tesseract's best-effort guess at those values (§4.23's own
+    docstring: "an honestly-scoped heuristic, not a verification mechanism") — but there is no
+    backend endpoint to persist a human's correction to those specific field values (`DocumentVerifyIn`
+    is only `version`/`status`/`verified_by`). Building input boxes that looked editable but silently
+    had nowhere to save would be worse than not building them, so the OCR-suggested values render
+    read-only ("reference only — confirm against the real file") next to a raw-OCR-text `<details>`
+    block, and the actual action is binary: **Mark verified** / **Reject** against the real
+    `/verify` endpoint.
+  - **Credentials are real, not a suggestion** — a `list`-typed expected field (`PILOT_LICENSE`'s
+    "ratings") maps to actual `Credential` rows, a genuinely separate CRUD resource
+    (`/credentials?document_id=`), so that one gets a real add/remove sub-list
+    (`CredentialsSection`) instead of a read-only OCR guess.
+  - `getCurrentUserEmail()` added to `lib/jwt.ts` (decodes the JWT's `email` claim, same
+    display-only caveat as the existing `getCurrentUserRole()`) to populate `verified_by` without a
+    manual prompt.
+- **Live-verified against the real stack, not just built**: logged in as a real seeded user,
+  created a real `Person` via `POST /persons`, uploaded a real synthetic passport image (`PIL`-drawn
+  inside the `api` container, copied out, uploaded via `curl -F`) to `POST /documents/PERSON/{id}`,
+  confirmed `ocr_raw_output`/`extracted_fields` were `null` immediately (async, as documented) and
+  populated correctly ~8s later on re-fetch with **real Tesseract-extracted text** — imperfect
+  (`"Expinydate"` for "Expiry date", one guessed field grabbing the wrong nearby value), which is
+  the expected, honestly-labeled behavior this UI is built around, not a bug. Verified the document
+  via the real `/verify` endpoint (status flipped to `VERIFIED`, `verified_by`/`verified_on`
+  populated), then deleted the test document and person to leave no residue. Frontend `next build`
+  clean (all four new routes compiled). No backend code changed for this task — everything consumed
+  was already real, tested, working API surface; only the frontend was missing.
 
 ---
 
