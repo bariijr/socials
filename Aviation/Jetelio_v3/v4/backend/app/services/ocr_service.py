@@ -1,5 +1,6 @@
-"""Runs the Tesseract OCR pipeline (task #109) against an already-uploaded
-Person/Party Document and writes the result back.
+"""Runs the Tesseract OCR pipeline (task #109), then optionally an LLM
+extraction pass on top of it (task #137), against an already-uploaded
+Person/Party Document, and writes the result back.
 
 Gracefully does nothing if OCR is disabled via the ocr_enabled setting, the
 document can't be found, or the OCR provider itself can't process the file
@@ -7,6 +8,20 @@ document can't be found, or the OCR provider itself can't process the file
 same NO_PROVIDER_CONFIGURED-style honesty as every other optional
 integration in this system: the mechanism exists, but produces no
 fabricated activity when there is no real result behind it.
+
+The LLM pass is text-first (task #137's explicit choice): Tesseract's
+already-cheap, already-running raw text goes to
+app.core.ocr.llm_extractor.extract_fields_via_llm, which reuses the exact
+same chat-provider dispatcher (priority/suspension/timeout/workload
+failover) task #131 built for trip-chat — not a second AI-provider
+pipeline. LLM-found fields override the regex guess for the same key (a
+capable model reading the whole text is generally more reliable than a
+blind proximity-window regex), but the regex guess survives for any key
+the LLM left null — no field a working heuristic already found is ever
+discarded just because the LLM pass ran. If no provider is
+configured/available, extract_fields_via_llm returns None and the regex
+result is used exactly as before task #137 — this stays a pure addition,
+never a regression when no LLM is funded.
 
 run_document_ocr takes an injected session, matching every other service
 module's DI convention in this codebase (document_service, settings_service,
@@ -22,6 +37,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.document_template_registry import DOCUMENT_TEMPLATES_BY_TYPE
+from app.core.ocr.llm_extractor import extract_fields_via_llm
 from app.core.ocr.tesseract_provider import extract_text_and_fields
 from app.core import storage
 from app.database import AsyncSessionLocal, engine
@@ -48,13 +65,26 @@ async def run_document_ocr(session: AsyncSession, document_id: UUID) -> bool:
     if result is None:
         return False
 
+    extracted_fields = dict(result.extracted_fields)
+    llm_extraction_used = False
+    template = DOCUMENT_TEMPLATES_BY_TYPE.get(doc.doc_type)
+    if template is not None:
+        llm_fields = await extract_fields_via_llm(session, result.raw_text, template)
+        if llm_fields:
+            extracted_fields.update(llm_fields)
+            llm_extraction_used = True
+
     repo = Repository(session, Document)
     await repo.update(
         doc.id,
         None,
         {
-            "ocr_raw_output": {"engine": result.engine, "text": result.raw_text},
-            "extracted_fields": result.extracted_fields,
+            "ocr_raw_output": {
+                "engine": result.engine,
+                "text": result.raw_text,
+                "llm_extraction_used": llm_extraction_used,
+            },
+            "extracted_fields": extracted_fields,
         },
     )
     await write_audit_log(
@@ -64,7 +94,7 @@ async def run_document_ocr(session: AsyncSession, document_id: UUID) -> bool:
         action="OCR_PROCESSED",
         entity_type="Document",
         entity_id=str(doc.id),
-        to_value={"extracted_fields": result.extracted_fields},
+        to_value={"extracted_fields": extracted_fields, "llm_extraction_used": llm_extraction_used},
     )
     await session.commit()
     return True

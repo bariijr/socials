@@ -1,16 +1,19 @@
-"""Ollama-backed trip-request extraction — one of four interchangeable
-providers (task #130: ollama/deepseek/anthropic/openai all wired at once,
-admin picks via the chat_provider named setting). Self-hosted, no API
-key/billing, originally added standalone in task #129 after DeepSeek
-(task #127) and Anthropic (task #125) both hit real billing walls. Ollama
-exposes an OpenAI-compatible chat endpoint, so this talks to it directly
-over `httpx` (already a dependency throughout this backend), same shape
-as the other three provider modules in this package.
+"""Ollama-backed LLM tool-calling — one of four interchangeable providers
+(task #130: ollama/deepseek/anthropic/openai all wired at once, admin
+picks priority via named settings). Self-hosted, no API key/billing,
+originally added standalone in task #129 after DeepSeek (task #127) and
+Anthropic (task #125) both hit real billing walls. Ollama exposes an
+OpenAI-compatible chat endpoint, so this talks to it directly over
+`httpx` (already a dependency throughout this backend), same shape as
+the other three provider modules in this package.
 
-See app.core.chat.schema for the shared, provider-agnostic extraction
-contract — this module only wraps that schema into the request shape and
-unwraps the response. See app.core.chat.dispatcher for how the admin's
-provider choice picks this module over the other three.
+`call_tool` is the generic primitive (any tool schema/system prompt —
+task #137 reuses it for OCR field extraction, not just trip-chat).
+`extract_trip_request` is a thin wrapper over it using
+app.core.chat.schema's trip-specific contract, kept so
+app.services.trip_chat_service's existing call site/tests are untouched.
+See app.core.chat.dispatcher for how the admin's priority/suspension
+choice picks this module over the other three.
 
 Never raises — every failure mode (no base URL configured, network/API
 error, a malformed or missing tool-call, or a small local model that
@@ -40,7 +43,7 @@ logger = logging.getLogger(__name__)
 # Fallback only — app.core.chat.dispatcher normally passes the live
 # chat_timeout_ollama_seconds named setting (task #132, admin-editable
 # without a deploy) as the `timeout` kwarg below. This constant only
-# matters when extract_trip_request is called directly without one (e.g.
+# matters when a provider function is called directly without one (e.g.
 # a script). Live-measured: a real llama3.2:1b tool-call on CPU took ~41s
 # with the container able to actually hold the model in memory (task #131
 # — under a tighter memory limit it thrashes to disk and takes far
@@ -52,7 +55,15 @@ def is_configured() -> bool:
     return bool(get_settings().ollama_base_url)
 
 
-async def extract_trip_request(message: str, *, today: date, timeout: float | None = None) -> TripExtraction | None:
+async def call_tool(
+    message: str,
+    *,
+    system_prompt: str,
+    tool_name: str,
+    tool_description: str,
+    input_schema: dict,
+    timeout: float | None = None,
+) -> dict | None:
     settings = get_settings()
     if not settings.ollama_base_url:
         return None
@@ -61,16 +72,16 @@ async def extract_trip_request(message: str, *, today: date, timeout: float | No
     payload = {
         "model": settings.ollama_model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT.format(today=today.isoformat())},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": message},
         ],
         "tools": [
             {
                 "type": "function",
-                "function": {"name": TOOL_NAME, "description": TOOL_DESCRIPTION, "parameters": INPUT_SCHEMA},
+                "function": {"name": tool_name, "description": tool_description, "parameters": input_schema},
             }
         ],
-        "tool_choice": {"type": "function", "function": {"name": TOOL_NAME}},
+        "tool_choice": {"type": "function", "function": {"name": tool_name}},
         "stream": False,
     }
 
@@ -83,7 +94,7 @@ async def extract_trip_request(message: str, *, today: date, timeout: float | No
             response.raise_for_status()
             body = response.json()
     except Exception:
-        logger.warning("Ollama trip extraction request failed", exc_info=True)
+        logger.warning("Ollama tool-call request failed", exc_info=True)
         return None
 
     try:
@@ -93,11 +104,23 @@ async def extract_trip_request(message: str, *, today: date, timeout: float | No
         # versions and a JSON string on others — handle both rather than
         # assuming one, since a small local model's exact output shape is
         # less predictable than a hosted provider's.
-        raw = json.loads(arguments) if isinstance(arguments, str) else arguments
+        return json.loads(arguments) if isinstance(arguments, str) else arguments
     except (KeyError, IndexError, TypeError, ValueError):
-        logger.warning("Ollama trip extraction response had no usable tool call", exc_info=True)
+        logger.warning("Ollama tool-call response had no usable tool call", exc_info=True)
         return None
 
+
+async def extract_trip_request(message: str, *, today: date, timeout: float | None = None) -> TripExtraction | None:
+    raw = await call_tool(
+        message,
+        system_prompt=SYSTEM_PROMPT.format(today=today.isoformat()),
+        tool_name=TOOL_NAME,
+        tool_description=TOOL_DESCRIPTION,
+        input_schema=INPUT_SCHEMA,
+        timeout=timeout,
+    )
+    if raw is None:
+        return None
     try:
         return parse_extraction(raw)
     except Exception:

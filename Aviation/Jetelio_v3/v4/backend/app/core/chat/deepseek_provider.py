@@ -1,15 +1,18 @@
-"""DeepSeek-backed trip-request extraction — one of four interchangeable
-providers (task #130: ollama/deepseek/anthropic/openai all wired at once,
-admin picks via the chat_provider named setting) after DeepSeek alone hit a
-real billing wall (task #127, credit balance too low). DeepSeek's chat API
-is OpenAI-compatible, so this talks to it directly over `httpx` (already a
-dependency throughout this backend) rather than pulling in a whole
-provider SDK for one endpoint.
+"""DeepSeek-backed LLM tool-calling — one of four interchangeable
+providers (task #130: ollama/deepseek/anthropic/openai all wired at
+once, admin picks priority via named settings) after DeepSeek alone hit
+a real billing wall (task #127, credit balance too low). DeepSeek's
+chat API is OpenAI-compatible, so this talks to it directly over
+`httpx` (already a dependency throughout this backend) rather than
+pulling in a whole provider SDK for one endpoint.
 
-See app.core.chat.schema for the shared, provider-agnostic extraction
-contract — this module only wraps that schema into DeepSeek's request
-shape and unwraps its response. See app.core.chat.dispatcher for how the
-admin's provider choice picks this module over the other three.
+`call_tool` is the generic primitive (any tool schema/system prompt —
+task #137 reuses it for OCR field extraction, not just trip-chat).
+`extract_trip_request` is a thin wrapper over it using
+app.core.chat.schema's trip-specific contract, kept so
+app.services.trip_chat_service's existing call site/tests are untouched.
+See app.core.chat.dispatcher for how the admin's priority/suspension
+choice picks this module over the other three.
 
 Never raises — every failure mode (no API key configured, network/API
 error, a malformed or missing tool-call) returns None, the same
@@ -46,7 +49,15 @@ def is_configured() -> bool:
     return bool(get_settings().deepseek_api_key)
 
 
-async def extract_trip_request(message: str, *, today: date, timeout: float | None = None) -> TripExtraction | None:
+async def call_tool(
+    message: str,
+    *,
+    system_prompt: str,
+    tool_name: str,
+    tool_description: str,
+    input_schema: dict,
+    timeout: float | None = None,
+) -> dict | None:
     settings = get_settings()
     if not settings.deepseek_api_key:
         return None
@@ -55,16 +66,16 @@ async def extract_trip_request(message: str, *, today: date, timeout: float | No
     payload = {
         "model": MODEL,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT.format(today=today.isoformat())},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": message},
         ],
         "tools": [
             {
                 "type": "function",
-                "function": {"name": TOOL_NAME, "description": TOOL_DESCRIPTION, "parameters": INPUT_SCHEMA},
+                "function": {"name": tool_name, "description": tool_description, "parameters": input_schema},
             }
         ],
-        "tool_choice": {"type": "function", "function": {"name": TOOL_NAME}},
+        "tool_choice": {"type": "function", "function": {"name": tool_name}},
         "max_tokens": 2048,
     }
 
@@ -78,17 +89,29 @@ async def extract_trip_request(message: str, *, today: date, timeout: float | No
             response.raise_for_status()
             body = response.json()
     except Exception:
-        logger.warning("DeepSeek trip extraction request failed", exc_info=True)
+        logger.warning("DeepSeek tool-call request failed", exc_info=True)
         return None
 
     try:
         tool_calls = body["choices"][0]["message"]["tool_calls"]
         arguments_json = tool_calls[0]["function"]["arguments"]
-        raw = json.loads(arguments_json)
+        return json.loads(arguments_json)
     except (KeyError, IndexError, TypeError, ValueError):
-        logger.warning("DeepSeek trip extraction response had no usable tool call", exc_info=True)
+        logger.warning("DeepSeek tool-call response had no usable tool call", exc_info=True)
         return None
 
+
+async def extract_trip_request(message: str, *, today: date, timeout: float | None = None) -> TripExtraction | None:
+    raw = await call_tool(
+        message,
+        system_prompt=SYSTEM_PROMPT.format(today=today.isoformat()),
+        tool_name=TOOL_NAME,
+        tool_description=TOOL_DESCRIPTION,
+        input_schema=INPUT_SCHEMA,
+        timeout=timeout,
+    )
+    if raw is None:
+        return None
     try:
         return parse_extraction(raw)
     except Exception:

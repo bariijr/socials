@@ -2398,6 +2398,53 @@ stack via direct API calls matching exactly what the UI sends (reorder, suspend,
 confirmed `dispatcher._candidate_order` picks up the new state immediately, then reverted the test
 values back to the sensible defaults before finishing.
 
+### 7.29 OCR + LLM combination (task #137)
+
+User: "combine ocr with llm's available", after being offered the tradeoff between text-first
+(cheap, reuses existing Tesseract output) and vision-first (send the image straight to a
+vision-capable LLM) — chose text-first.
+
+Generalized the chat-provider layer first: each provider module
+(`ollama_provider.py`/`deepseek_provider.py`/`anthropic_provider.py`/`openai_provider.py`) now
+exposes a generic `call_tool(message, *, system_prompt, tool_name, tool_description, input_schema,
+timeout)` primitive; `extract_trip_request` became a thin wrapper over it using
+`app.core.chat.schema`'s trip-specific contract, so `trip_chat_service`'s call site and every
+existing chat test are untouched. `dispatcher.py` grew a matching generic `call_tool(session, ...)`
+entry point sharing the exact same priority/suspension/workload/timeout failover loop
+(`extract_trip_request` and `call_tool` both call a new shared `_dispatch` helper) — "AI usage
+priority" is one shared setting across every feature that calls an LLM in this codebase, not a
+second copy of the plumbing per feature.
+
+New `app/core/ocr/llm_extractor.py` builds a per-doc_type JSON schema directly from
+`app.core.document_template_registry.DOCUMENT_TEMPLATES_BY_TYPE` (the same source of truth
+`tesseract_provider.py`'s regex guesser already reads), sends Tesseract's already-extracted raw text
+through `dispatcher.call_tool`, and coerces the result back into `dict[str, str]`
+(`Document.extracted_fields`'s real shape) — dropping any key the LLM didn't ask for, dropping
+null/empty guesses, joining list fields into a comma string. `ocr_service.run_document_ocr` merges
+LLM-found fields on top of the regex guess (LLM overrides when it found something, the regex guess
+survives for any field the LLM left null) and records `llm_extraction_used` in `ocr_raw_output` for
+transparency. Still no more authoritative than before — `extracted_fields` stays a best-effort
+suggestion checked at `/verify` time, never something that sets `Document.status` itself, and when no
+provider is configured/available the whole LLM pass is a clean no-op (regex-only, exactly the
+pre-task-#137 behavior).
+
+**Real regression caught before it shipped**: the existing `test_document_ocr.py` positive-path test
+went through real `run_document_ocr` unmocked — after this change that would have started making real
+network calls to whichever LLM providers happen to be configured in `.env` on every test run (against
+this codebase's own "never hit a real API from an automated test" discipline). Mocked
+`extract_fields_via_llm` in that test and added two new ones proving the merge behavior directly
+(LLM overrides regex; regex survives when the LLM has nothing). 12 new tests total
+(`test_ocr_llm_extractor.py` + the two additions), 360 passing overall.
+
+Scope note: this only applies to Person/Party documents (passport, pilot license, medical
+certificate, operator certificate) — `AircraftDocument` (registration, insurance, permits, etc.) has
+no OCR pipeline at all yet, not even the Tesseract regex pass, and has no `expected_fields` schema
+defined anywhere (~70+ distinct aircraft `doc_type` values found on one real aircraft's document set
+in live testing, e.g. `PERMIT_US_CUSTOMS_BOND`, `LTR_VISA_WAIVER_PROGRAM_AGREEMENT` — the frontend's
+`AircraftDocumentType` union is stale/incomplete relative to what's actually stored). Extending this
+feature to aircraft documents is a real follow-up, not done in this session — would need either a
+much larger per-type template registry or an open-ended (no-fixed-schema) extraction approach.
+
 ---
 
 ## 8. Document storage & Excel import/export
