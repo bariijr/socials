@@ -921,6 +921,19 @@ Chrome extension not connected, same limitation as §4.24/§7.17) — the map's 
 was not checked in a live browser, only the endpoints, the TypeScript build, and the backend logic
 under test.
 
+**Client-side search on the five admin list pages (task #122)**: Trips, Countries, Operators,
+Fleet (aircraft-performance types), and Vendors all already fetch their full list in one call
+(`page_size=500`/`200`) and render it through the shared `DataTable`; added a `SearchInput`
+(`frontend/src/components/SearchInput.tsx`) plus a shared `matchesQuery(query, ...fields)`
+case-insensitive substring helper (`frontend/src/lib/search.ts`) rather than a fifth ad-hoc filter
+implementation. Filters client-side against the fields already on-screen or otherwise identifying
+— Trips: id/registration/owner_team/source; Countries: iso3/name/region; Operators: name; Fleet:
+icao_type/manufacturer/model_series; Vendors: name/billing_ref. No new endpoints — this is
+filtering data already in memory, not a server-side search. Trips' existing status filter buttons
+are untouched and compose with the new search box (both apply, search on top of whatever
+status is selected). Frontend build verified clean; live-verified through nginx post-rebuild
+(`GET /countries` 200).
+
 ### 5.2 Engine 2 — Permit ladder (`permits.py`)
 
 For each crossed country: overflight/landing permit requirements, deadlines

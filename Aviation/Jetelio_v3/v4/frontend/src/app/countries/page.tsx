@@ -1,29 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Country, Page } from "@/lib/types";
 import { useRequireAuth } from "@/lib/useRequireAuth";
+import { matchesQuery } from "@/lib/search";
 import { DataTable } from "@/components/DataTable";
+import { SearchInput } from "@/components/SearchInput";
 import { StatusChip } from "@/components/StatusChip";
 
 export default function CountriesPage() {
   useRequireAuth();
+  const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["countries"],
     queryFn: () => api.get<Page<Country>>("/countries?page_size=500"),
   });
 
+  const rows = data?.items.filter((r) => matchesQuery(search, r.iso3, r.name, r.region)) ?? [];
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Countries</h1>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search countries…" />
       {isLoading && <p className="text-fg/60">Loading…</p>}
       {data && (
         <DataTable
           rowKey={(r) => r.iso3}
-          rows={data.items}
+          rows={rows}
           columns={[
             { header: "ISO3", render: (r) => <span className="mono-figures">{r.iso3}</span> },
             {

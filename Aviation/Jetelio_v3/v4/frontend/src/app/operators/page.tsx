@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Operator, Page } from "@/lib/types";
 import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite } from "@/lib/jwt";
+import { matchesQuery } from "@/lib/search";
 import { DataTable } from "@/components/DataTable";
+import { SearchInput } from "@/components/SearchInput";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableSelect } from "@/components/EditableCell";
 
@@ -18,6 +21,7 @@ const OPERATOR_STATUS_OPTIONS = [
 
 export default function OperatorsPage() {
   useRequireAuth();
+  const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   const writable = canWrite(getCurrentUserRole());
 
@@ -25,6 +29,8 @@ export default function OperatorsPage() {
     queryKey: ["operators"],
     queryFn: () => api.get<Page<Operator>>("/operators?page_size=500"),
   });
+
+  const rows = data?.items.filter((r) => matchesQuery(search, r.name)) ?? [];
 
   const patch = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.patch<Operator>(`/operators/${id}`, payload),
@@ -34,11 +40,12 @@ export default function OperatorsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Operators</h1>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search operators…" />
       {isLoading && <p className="text-fg/60">Loading…</p>}
       {data && (
         <DataTable
           rowKey={(r) => r.id}
-          rows={data.items}
+          rows={rows}
           columns={[
             {
               header: "Name",

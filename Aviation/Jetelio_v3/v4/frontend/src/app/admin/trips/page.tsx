@@ -8,7 +8,9 @@ import { Page, Trip, TRIP_STATUSES } from "@/lib/types";
 import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite } from "@/lib/jwt";
 import { formatTripSource, formatUtc } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import { DataTable } from "@/components/DataTable";
+import { SearchInput } from "@/components/SearchInput";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableSelect } from "@/components/EditableCell";
 
@@ -18,6 +20,7 @@ const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: s }));
 export default function TripsListPage() {
   useRequireAuth();
   const [status, setStatus] = useState<string>("");
+  const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   const writable = canWrite(getCurrentUserRole());
 
@@ -25,6 +28,9 @@ export default function TripsListPage() {
     queryKey: ["trips", status],
     queryFn: () => api.get<Page<Trip>>(`/trips?page_size=200${status ? `&status=${status}` : ""}`),
   });
+
+  const rows =
+    data?.items.filter((r) => matchesQuery(search, r.id, r.aircraft_registration, r.owner_team, r.source)) ?? [];
 
   const patch = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.patch<Trip>(`/trips/${id}`, payload),
@@ -60,11 +66,13 @@ export default function TripsListPage() {
         ))}
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search trips…" />
+
       {isLoading && <p className="text-fg/60">Loading…</p>}
       {data && (
         <DataTable
           rowKey={(r) => r.id}
-          rows={data.items}
+          rows={rows}
           columns={[
             {
               header: "Trip",

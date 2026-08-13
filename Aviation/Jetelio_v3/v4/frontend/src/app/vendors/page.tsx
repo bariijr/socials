@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Page, Vendor } from "@/lib/types";
 import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite } from "@/lib/jwt";
+import { matchesQuery } from "@/lib/search";
 import { DataTable } from "@/components/DataTable";
+import { SearchInput } from "@/components/SearchInput";
 import { EditableSelect } from "@/components/EditableCell";
 
 const CAPABILITY_STATUS_OPTIONS = [
@@ -18,6 +21,7 @@ const CAPABILITY_STATUS_OPTIONS = [
 
 export default function VendorsPage() {
   useRequireAuth();
+  const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
   const writable = canWrite(getCurrentUserRole());
 
@@ -25,6 +29,8 @@ export default function VendorsPage() {
     queryKey: ["vendors"],
     queryFn: () => api.get<Page<Vendor>>("/vendors?page_size=500"),
   });
+
+  const rows = data?.items.filter((r) => matchesQuery(search, r.name, r.billing_ref)) ?? [];
 
   const patch = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.patch<Vendor>(`/vendors/${id}`, payload),
@@ -38,11 +44,12 @@ export default function VendorsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Vendors</h1>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search vendors…" />
       {isLoading && <p className="text-fg/60">Loading…</p>}
       {data && (
         <DataTable
           rowKey={(r) => r.id}
-          rows={data.items}
+          rows={rows}
           columns={[
             {
               header: "Name",
