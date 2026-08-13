@@ -44,11 +44,17 @@ export function FeasibilityResultsCard({ result, title }: { result: LegResult; t
         )}
         {avoidIncludeViolated && (
           <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-            {result.permits.state_avoid_include.violated && (
+            {result.permits.state_avoid_include.avoided_transited.length > 0 && (
               <p>Avoided state(s) transited: {result.permits.state_avoid_include.avoided_transited.join(", ")}</p>
             )}
-            {result.permits.fir_avoid_include.violated && (
+            {result.permits.state_avoid_include.required_missed.length > 0 && (
+              <p>Required state(s) not transited: {result.permits.state_avoid_include.required_missed.join(", ")}</p>
+            )}
+            {result.permits.fir_avoid_include.avoided_transited.length > 0 && (
               <p>Avoided FIR(s) transited: {result.permits.fir_avoid_include.avoided_transited.join(", ")}</p>
+            )}
+            {result.permits.fir_avoid_include.required_missed.length > 0 && (
+              <p>Required FIR(s) not transited: {result.permits.fir_avoid_include.required_missed.join(", ")}</p>
             )}
             {result.reroute?.found && (
               <p className="mt-1 text-fg/70">

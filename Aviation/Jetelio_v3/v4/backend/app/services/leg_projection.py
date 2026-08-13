@@ -193,6 +193,7 @@ async def project_leg_result(
                 entry_datetime=p.entry_datetime,
                 exit_datetime=p.exit_datetime,
                 deadline=_deadline_out(p.deadline),
+                service_code=p.service_code,
             )
             for p in result.permits.overflight_permits
         ],
@@ -203,6 +204,7 @@ async def project_leg_result(
                 entry_datetime=p.entry_datetime,
                 exit_datetime=p.exit_datetime,
                 deadline=_deadline_out(p.deadline),
+                service_code=p.service_code,
             )
             for p in result.permits.landing_permits
         ],

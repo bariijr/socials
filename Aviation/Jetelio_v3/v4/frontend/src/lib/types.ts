@@ -255,11 +255,27 @@ export interface FirLookup {
   name: string;
 }
 
-export type PersonRole = "PIC" | "FO" | "FA" | "MECHANIC" | "ENGINEER" | "CREW" | "PAX" | "VIP" | "PRINCIPAL" | "OTHER";
+// A real, admin-editable role code (task #120) — see GET /person-roles —
+// not a fixed union anymore. PIC/SIC/FO/FA/MECHANIC/ENGINEER/
+// MEDICAL_STAFF/CREW/PAX/VIP/PRINCIPAL/OTHER are seeded by default.
+export type PersonRole = string;
+
+export interface PersonRoleDefinition {
+  id: string;
+  code: string;
+  label: string;
+  is_crew: boolean;
+  sort_order: number | null;
+  active: boolean;
+  version: number;
+}
 
 export interface PersonPublicInput {
   role: PersonRole;
   nationality_iso3: string;
+  // Optional — lets a permit/handling-request message name the PIC
+  // instead of a bare headcount. Never fabricated when absent.
+  name?: string | null;
 }
 
 export type TripLegType = "PRIMARY" | "ALTERNATE";
@@ -273,9 +289,10 @@ export interface LegInput {
   dep_icao: string;
   arr_icao: string;
   call_sign?: string | null;
-  // Exactly one of these two must be set — the other is back-calculated
-  // server-side once the route's EET is known. See LegEditor's time-driver
-  // toggle.
+  // reference_datetime (departure) is the real time driver — LegEditor
+  // (task #116) always sets this. required_arrival_datetime is the older
+  // "back-calculate departure from a required landing time" mode; no
+  // current UI sets it, but the backend still accepts it.
   reference_datetime?: string | null;
   required_arrival_datetime?: string | null;
   avoid_states: string[];
@@ -293,7 +310,10 @@ export interface LegInput {
   leg_type?: TripLegType;
   leg_status?: TripLegStatus;
   // Cosmetic override of the computed arrival display only — never fed
-  // back into permit/deadline computation.
+  // back into permit/deadline computation. On the shared base schema as of
+  // task #116 (was admin-only before), so both the public Viability IQ
+  // form and the admin Trip Manager can set it — LegEditor prefills this
+  // from departure + EET, then lets it be edited independently.
   arrival_datetime_override?: string | null;
 }
 
@@ -336,6 +356,7 @@ export interface OverflightPermit {
   entry_datetime: string;
   exit_datetime: string;
   deadline: PermitDeadline;
+  service_code: string | null;
 }
 
 export interface LandingPermit {
@@ -344,6 +365,7 @@ export interface LandingPermit {
   entry_datetime: string;
   exit_datetime: string;
   deadline: PermitDeadline;
+  service_code: string | null;
 }
 
 export interface GroundHandlingOrder {
@@ -491,6 +513,19 @@ export interface GeoJsonGeometry {
   coordinates: unknown;
 }
 
+export interface WorldOutline {
+  countries: Record<string, GeoJsonGeometry>;
+}
+
+export interface ReroutePreview {
+  found: boolean;
+  extra_distance_nm: number | null;
+  extra_time_hours: number | null;
+  track_points: [number, number][];
+  states: StateName[];
+  firs: FirName[];
+}
+
 export interface RoutePreview {
   distance_nm: number;
   eet_hours: number;
@@ -499,6 +534,10 @@ export interface RoutePreview {
   track_points: [number, number][];
   state_geometry: Record<string, GeoJsonGeometry>;
   fir_geometry: Record<string, GeoJsonGeometry>;
+  // Only populated when the caller passed avoid/include constraints AND the
+  // direct route above actually violates one of them.
+  avoid_include_violated: boolean;
+  reroute: ReroutePreview | null;
 }
 
 // --- Trip Manager (admin) ---
@@ -522,6 +561,26 @@ export interface ServiceAssignment {
   // True for a line item an admin added beyond what the engine generated
   // (task #105 "add more sub-services") — e.g. a GH sub-service.
   manual: boolean;
+}
+
+// Overflight/landing permits (task #115) — keyed in service_assignments
+// as "{service_code}:{country_iso3}", same status/vendor/send machinery
+// ServiceAssignment already uses, plus the deadline-ladder fields the
+// Permits tab has always shown.
+export interface PermitAssignment {
+  service_code: string;
+  country_iso3: string;
+  country_name: string;
+  entry_datetime: string;
+  exit_datetime: string;
+  deadline: PermitDeadline;
+  provider: string | null;
+  vendor_id: string | null;
+  notes: string | null;
+  status: ServiceAssignmentStatus;
+  confirmation_number: string | null;
+  granted_at: string | null;
+  valid_until: string | null;
 }
 
 export type ServiceMessageDirection = "OUTBOUND" | "INBOUND" | "MANUAL_NOTE";
@@ -579,7 +638,11 @@ export interface ServiceDeliveryResolved {
     delivery_channels: DeliveryChannel[];
     message_template_id: string | null;
   } | null;
-  matched_scope: "LEG" | "TRIP" | "OPERATOR" | null;
+  matched_scope: "LEG" | "TRIP" | "OPERATOR" | "COUNTRY_COVERAGE" | null;
+  // Only set when matched_scope === "COUNTRY_COVERAGE" (task #115) — a
+  // permit resolved via VendorCoverageCountry rather than a real
+  // ServiceDeliveryConfig row, so `config` stays null.
+  fallback_vendor_id: string | null;
 }
 
 export interface NavFeeLineItem {
@@ -662,6 +725,14 @@ export interface TripLegDetail {
   nav_fees: NavFeesDetail | null;
   permit_fees: PermitFeesDetail | null;
   service_assignments: ServiceAssignment[];
+  permit_assignments: PermitAssignment[];
+  // Raw routing-constraint input sets (task #117) — read from TripLeg.
+  // constraints, not the frozen result.permits.*_avoid_include violation
+  // result. Needed to prefill an edit form without silently dropping them.
+  avoid_states: string[];
+  include_states: string[];
+  avoid_firs: string[];
+  include_firs: string[];
 }
 
 export interface Trip {

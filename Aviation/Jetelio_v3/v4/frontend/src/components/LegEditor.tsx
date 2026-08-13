@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AirportLookup, CountryLookup, FirLookup, LegInput } from "@/lib/types";
 import { AirportPicker } from "@/components/AirportPicker";
 import { MultiCodePicker } from "@/components/MultiCodePicker";
 import { RoutePreviewPanel } from "@/components/RoutePreviewPanel";
 import { formatUtc } from "@/lib/format";
+import { addHours } from "@/lib/time";
 
 interface Props {
   index: number;
@@ -23,18 +24,25 @@ function toDatetimeLocal(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// The native datetime-local input fires onChange with a partial/malformed
-// value while a user is still typing each segment (date filled in, time
-// not yet) — new Date(value).toISOString() throws RangeError on those
-// instead of just meaning "not a complete value yet". Never let that
-// escape as an uncaught crash.
+/** Splits a datetime-local value ("YYYY-MM-DDTHH:MM") into [date, time],
+ * always a real two-element pair — "".split("T") alone would leave the
+ * second slot undefined rather than "", which a controlled <input> can't
+ * take as its value. */
+function splitDatetimeLocal(value: string): [string, string] {
+  const [date, time] = value.split("T");
+  return [date ?? "", time ?? ""];
+}
+
+// The native date/time inputs fire onChange with a partial value while a
+// user is still typing each segment — new Date(value).toISOString() throws
+// RangeError on those instead of just meaning "not a complete value yet".
+// Never let that escape as an uncaught crash (see task #110's LegEditor
+// crash fix).
 function toIsoOrNull(value: string): string | null {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
-type TimeDriver = "departure" | "arrival";
 
 const CONSTRAINT_COUNT = (leg: LegInput) =>
   leg.avoid_states.length + leg.include_states.length + leg.avoid_firs.length + leg.include_firs.length;
@@ -42,54 +50,71 @@ const CONSTRAINT_COUNT = (leg: LegInput) =>
 export function LegEditor({ index, leg, onChange, onRemove, canRemove }: Props) {
   const [dep, setDep] = useState<AirportLookup | null>(leg.dep_icao ? ({ icao: leg.dep_icao, iata: null, name: leg.dep_icao, city: null, country_name: null } as AirportLookup) : null);
   const [arr, setArr] = useState<AirportLookup | null>(leg.arr_icao ? ({ icao: leg.arr_icao, iata: null, name: leg.arr_icao, city: null, country_name: null } as AirportLookup) : null);
-  const [timeDriver, setTimeDriver] = useState<TimeDriver>(leg.required_arrival_datetime ? "arrival" : "departure");
-  const [datetimeLocal, setDatetimeLocal] = useState(
-    toDatetimeLocal(timeDriver === "arrival" ? leg.required_arrival_datetime : leg.reference_datetime)
-  );
-  const [initialDateStr, initialTimeStr] = datetimeLocal ? datetimeLocal.split("T") : ["", ""];
-  // Task #112: date and time are tracked as their own independent inputs
-  // (see below) rather than derived by splitting datetimeLocal on every
-  // render — a user who's filled in the date but not yet the time must
-  // still see their date, even though datetimeLocal itself stays "" (and
-  // so doesn't propagate to the parent) until both are present.
-  const [dateStr, setDateStr] = useState(initialDateStr);
-  const [timeStr, setTimeStr] = useState(initialTimeStr);
+
+  // Task #116: departure and arrival are two always-visible, independently
+  // editable fields — not a single field behind a "which one do you know"
+  // toggle (the old task #112 model). Departure always drives
+  // reference_datetime (the engine's real time driver); arrival is
+  // auto-prefilled from departure + EET once both are known, then stays
+  // fully independent — never recomputed out from under a value the user
+  // (or the prefill itself) already set. Clearing arrival back to empty is
+  // the "reset to computed" gesture: the prefill effect below only ever
+  // fills an empty field.
+  const [depInitialDate, depInitialTime] = splitDatetimeLocal(toDatetimeLocal(leg.reference_datetime));
+  const [depDate, setDepDate] = useState(depInitialDate);
+  const [depTime, setDepTime] = useState(depInitialTime);
+  const [arrInitialDate, arrInitialTime] = splitDatetimeLocal(toDatetimeLocal(leg.arrival_datetime_override));
+  const [arrDate, setArrDate] = useState(arrInitialDate);
+  const [arrTime, setArrTime] = useState(arrInitialTime);
   const [eetHours, setEetHours] = useState<number | null>(null);
 
   function update(patch: Partial<LegInput>) {
     onChange({ ...leg, ...patch });
   }
 
-  function applyDatetime(value: string, driver: TimeDriver) {
-    setDatetimeLocal(value);
-    const iso = toIsoOrNull(value);
-    if (driver === "departure") {
-      update({ reference_datetime: iso, required_arrival_datetime: null });
-    } else {
-      update({ reference_datetime: null, required_arrival_datetime: iso });
-    }
+  function applyDeparture(dateStr: string, timeStr: string) {
+    const iso = dateStr && timeStr ? toIsoOrNull(`${dateStr}T${timeStr}`) : null;
+    // required_arrival_datetime (the old "back-calculate departure from a
+    // required landing time" mode) is superseded by this always-departure-
+    // driven design — an arrival value now only ever means
+    // arrival_datetime_override, a display override, never a driver.
+    update({ reference_datetime: iso, required_arrival_datetime: null });
   }
 
-  // Task #112: two plain, normal-sized date/time inputs instead of one
-  // oversized native datetime-local widget. Each of these is either a
-  // complete valid value or empty — never the partial/malformed string a
-  // single datetime-local control can produce mid-type — so the combined
-  // value only ever propagates to the parent once both are filled in.
-  function applyDatePart(newDate: string) {
-    setDateStr(newDate);
-    applyDatetime(newDate && timeStr ? `${newDate}T${timeStr}` : "", timeDriver);
-  }
-  function applyTimePart(newTime: string) {
-    setTimeStr(newTime);
-    applyDatetime(dateStr && newTime ? `${dateStr}T${newTime}` : "", timeDriver);
+  function applyArrival(dateStr: string, timeStr: string) {
+    const iso = dateStr && timeStr ? toIsoOrNull(`${dateStr}T${timeStr}`) : null;
+    update({ arrival_datetime_override: iso });
   }
 
-  const enteredIso = toIsoOrNull(datetimeLocal);
-  const enteredDate = enteredIso ? new Date(enteredIso) : null;
-  const computedOther =
-    enteredDate && eetHours !== null && !Number.isNaN(enteredDate.getTime())
-      ? new Date(enteredDate.getTime() + (timeDriver === "departure" ? 1 : -1) * eetHours * 3600_000)
-      : null;
+  // Auto-prefill arrival from departure + EET — only while arrival is
+  // still empty, so it never overwrites a value already set (by this same
+  // prefill or by the user typing one in). Re-runs when arrival is cleared
+  // back to empty (the reset gesture) or when departure/EET change while
+  // arrival is still unset.
+  useEffect(() => {
+    if (arrDate || arrTime) return;
+    if (!depDate || !depTime || eetHours === null) return;
+    const depIso = toIsoOrNull(`${depDate}T${depTime}`);
+    if (!depIso) return;
+    const arrIso = addHours(depIso, eetHours);
+    if (!arrIso) return;
+    const [d, t] = splitDatetimeLocal(toDatetimeLocal(arrIso));
+    setArrDate(d);
+    setArrTime(t);
+    update({ arrival_datetime_override: arrIso });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depDate, depTime, eetHours, arrDate, arrTime]);
+
+  function resetArrivalToComputed() {
+    setArrDate("");
+    setArrTime("");
+    update({ arrival_datetime_override: null });
+  }
+
+  const depIso = depDate && depTime ? toIsoOrNull(`${depDate}T${depTime}`) : null;
+  const arrIso = arrDate && arrTime ? toIsoOrNull(`${arrDate}T${arrTime}`) : null;
+  const computedArrIso = depIso && eetHours !== null ? addHours(depIso, eetHours) : null;
+  const arrivalDiffersFromComputed = arrIso !== null && computedArrIso !== null && arrIso !== computedArrIso;
 
   return (
     <div className="space-y-4 rounded-lg border border-fg/10 p-4">
@@ -140,48 +165,77 @@ export function LegEditor({ index, leg, onChange, onRemove, canRemove }: Props) 
         referenceDatetime={leg.reference_datetime ?? undefined}
         onEetHours={setEetHours}
         showMap={false}
+        avoidStates={leg.avoid_states}
+        includeStates={leg.include_states}
+        avoidFirs={leg.avoid_firs}
+        includeFirs={leg.include_firs}
       />
 
-      <div className="rounded-md border border-fg/15 p-3">
-        <label className="mb-2 block text-sm font-medium text-fg/70">Time known as</label>
-        <div className="mb-3 flex overflow-hidden rounded-md border border-fg/20">
-          {(["departure", "arrival"] as TimeDriver[]).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => {
-                setTimeDriver(d);
-                applyDatetime(datetimeLocal, d);
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-md border border-fg/15 p-3">
+          <label className="mb-2 block text-sm font-medium text-fg/70">Departure</label>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="date"
+              required
+              value={depDate}
+              onChange={(e) => {
+                setDepDate(e.target.value);
+                applyDeparture(e.target.value, depTime);
               }}
-              className={`h-11 flex-1 text-sm font-semibold capitalize transition-colors ${
-                timeDriver === d ? "bg-primary text-fg" : "text-fg/60 hover:bg-fg/10"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
+              className="mono-figures h-11 w-40 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
+            />
+            <input
+              type="time"
+              required
+              value={depTime}
+              onChange={(e) => {
+                setDepTime(e.target.value);
+                applyDeparture(depDate, e.target.value);
+              }}
+              className="mono-figures h-11 w-28 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
+            />
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="date"
-            required
-            value={dateStr}
-            onChange={(e) => applyDatePart(e.target.value)}
-            className="mono-figures h-11 w-40 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
-          />
-          <input
-            type="time"
-            required
-            value={timeStr}
-            onChange={(e) => applyTimePart(e.target.value)}
-            className="mono-figures h-11 w-28 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
-          />
+
+        <div className="rounded-md border border-fg/15 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <label className="block text-sm font-medium text-fg/70">
+              Arrival {eetHours !== null && <span className="font-normal text-fg/40">(prefilled — EET {eetHours.toFixed(1)}h)</span>}
+            </label>
+            {arrivalDiffersFromComputed && (
+              <button type="button" onClick={resetArrivalToComputed} className="text-xs text-accent hover:underline">
+                Reset to computed
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="date"
+              value={arrDate}
+              onChange={(e) => {
+                setArrDate(e.target.value);
+                applyArrival(e.target.value, arrTime);
+              }}
+              className="mono-figures h-11 w-40 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
+            />
+            <input
+              type="time"
+              value={arrTime}
+              onChange={(e) => {
+                setArrTime(e.target.value);
+                applyArrival(arrDate, e.target.value);
+              }}
+              className="mono-figures h-11 w-28 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
+            />
+          </div>
+          {/* Editing here always sets arrival_datetime_override — a display
+              value only. Permit/deadline computation always uses the
+              engine's own reference_datetime + EET, never this field. */}
+          {computedArrIso && arrivalDiffersFromComputed && (
+            <p className="mono-figures mt-2 text-xs text-fg/50">Computed from EET: {formatUtc(computedArrIso)}</p>
+          )}
         </div>
-        {computedOther && (
-          <p className="mono-figures mt-2 text-xs text-fg/50">
-            Computed {timeDriver === "departure" ? "arrival" : "departure"}: {formatUtc(computedOther.toISOString())}
-          </p>
-        )}
       </div>
 
       <div>

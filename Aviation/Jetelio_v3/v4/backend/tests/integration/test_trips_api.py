@@ -243,6 +243,49 @@ class TestTripLifecycle:
         assert updated.json()["legs"][0]["result"]["dep_icao"] == trip_leg_fixture["arr_icao"]
 
     @pytest.mark.asyncio
+    async def test_leg_avoid_include_constraints_survive_an_edit(self, client, trip_leg_fixture):
+        """Task #117 — TripLegDetailOut now exposes the raw avoid/include
+        input sets (previously only the violation result was returned).
+        A real edit UI reads these back to prefill a form and resubmits
+        them on save; before this fix there was nothing to read, so an
+        edit that didn't happen to also touch constraints would have
+        silently wiped them (update_leg fully replaces TripLeg.constraints
+        from whatever's in the submitted payload).
+        """
+        leg_payload = _leg_payload(trip_leg_fixture)
+        leg_payload["avoid_states"] = ["ZZZ"]
+        leg_payload["include_firs"] = ["YYYY"]
+        created = (
+            await client.post("/trips", json=_create_payload(trip_leg_fixture, legs=[leg_payload]), headers=_auth_headers())
+        ).json()
+        trip_id = created["id"]
+        leg = created["legs"][0]
+        assert leg["avoid_states"] == ["ZZZ"]
+        assert leg["include_states"] == []
+        assert leg["avoid_firs"] == []
+        assert leg["include_firs"] == ["YYYY"]
+
+        # Simulate the frontend's legDetailToInput: read the constraints
+        # back from the GET-shaped response and resubmit them unchanged
+        # alongside an unrelated field edit (call_sign).
+        resend = {
+            "dep_icao": leg["result"]["dep_icao"],
+            "arr_icao": leg["result"]["arr_icao"],
+            "reference_datetime": leg["reference_datetime"],
+            "call_sign": "TESTCS",
+            "avoid_states": leg["avoid_states"],
+            "include_states": leg["include_states"],
+            "avoid_firs": leg["avoid_firs"],
+            "include_firs": leg["include_firs"],
+        }
+        updated = await client.patch(f"/trips/{trip_id}/legs/{leg['id']}", json=resend, headers=_auth_headers())
+        assert updated.status_code == 200, updated.text
+        updated_leg = updated.json()["legs"][0]
+        assert updated_leg["call_sign"] == "TESTCS"
+        assert updated_leg["avoid_states"] == ["ZZZ"]
+        assert updated_leg["include_firs"] == ["YYYY"]
+
+    @pytest.mark.asyncio
     async def test_service_assignment_round_trip(self, client, trip_leg_fixture):
         created = (await client.post("/trips", json=_create_payload(trip_leg_fixture), headers=_auth_headers())).json()
         trip_id = created["id"]

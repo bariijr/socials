@@ -38,6 +38,11 @@ class Aircraft(Base, StandardMixin):
     home_base_icao: Mapped[str | None] = mapped_column(String(4), nullable=True)
     mtow_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     max_pax: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Task #119 — free-text, admin-entered (e.g. "Private - Non Revenue").
+    # Not an enum: real-world phrasing varies more than a fixed set would
+    # cleanly capture, matching this project's existing convention for
+    # similar display-string fields (e.g. NavFeeProvider.provider_name).
+    classification: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     operator_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("operators.id"), nullable=False)
 

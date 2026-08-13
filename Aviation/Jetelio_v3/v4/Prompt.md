@@ -861,6 +861,66 @@ from the actual great-circle computation, never from parsing that string. This w
 user clarification early in the FIQ redesign — the user considered and rejected geometric parsing
 of filed routes.
 
+**Avoid/include violations now produce a real alternate track, not just a distance delta (task
+#121)**. Three real bugs the user caught on the live estimate/brief: avoided states/FIRs still
+showed as crossed with no visual change; `required_missed` (an include constraint the route never
+actually transits) was computed by the backend (`AvoidIncludeOut.required_missed`) but never
+rendered anywhere in the frontend; and the map never changed at all when a constraint was
+violated, because `RerouteResult` (`app/services/routing_engine_service.py::find_alternate_route`)
+only ever carried `extra_distance_nm`/`extra_time_hours`/`extra_fuel_kg` — the A* search's own
+`result.path` (real corridor-node coordinates) was computed and then discarded. Fixed by mapping
+`result.path` through the corridor's `node_coords` into real `track_points`, plus a states/FIRs
+list for the alternate path (batch-resolved once already, for blocking — just filtered/ordered by
+path traversal, not requeried). `GET /feasibility/route-preview` now accepts optional
+`avoid_states`/`include_states`/`avoid_firs`/`include_firs` query params (repeated-key list style,
+not comma-split — no other GET endpoint in this codebase parses list query params, so this
+establishes the pattern) and returns `avoid_include_violated` + a `reroute` block (found/
+extra_distance_nm/extra_time_hours/track_points/states/firs) when violated. `RouteMap.tsx`'s
+`tracks` prop now takes `{points, variant, label}` objects (`"primary" | "violated" | "alternate"`,
+plain `[lat,lon][]` arrays still accepted for backward compat) — a violated direct track draws
+dashed/danger, the real alternate draws solid/success, both visible on the same map.
+`FeasibilityResultsCard.tsx` and the admin trip Permits tab both now render `required_missed`
+alongside `avoided_transited`, gated on the list being non-empty rather than the parent
+`.violated` flag (a route can violate purely on a missed include with nothing actually avoided).
+
+**Real test-infra bug found while testing this**: `tests/integration/conftest.py`'s
+`geo_region_base_lon` fixture (hands out a fresh non-overlapping longitude band to any test that
+commits `CountryGeometry`, since committed geometry — unlike flushed-and-rolled-back geometry —
+persists for the rest of the session) grew unboundedly (`30.0 + counter * 8.0`), and once enough
+committing fixtures accumulated in one full-suite run it pushed past ±180°. Postgres stores those
+raw coordinates as given, but `sample_great_circle_track`'s spherical bearing math (atan2-based)
+always resolves into -180..180 — so a route's *sampled* points silently wrapped to the other side
+of the world while the committed polygon they were supposed to cross stayed exactly where its raw
+coordinate said, decoupling the two. Order-dependent (only surfaced in the full suite, never in
+isolation), and pre-existing — not introduced by this task, just newly triggered by one more
+committing fixture pushing the counter over the edge. Fixed by cycling the fixture through two
+36-slot bands (`-168..-32`, `24..160`) instead of growing forever, with a 5°+ margin kept clear of
+both ±180 and the `-15..15` band the suite's non-committing fixtures hardcode elsewhere.
+
+**World map redesign (task #121, user's explicit choice — bundled world outline over a tile
+provider)**: `RouteMap.tsx` was a from-scratch equirectangular SVG projection zoomed to the
+route's own bounding box; now it's a fixed whole-world view (lon -180..180, lat -58..78 — cropped
+clear of Antarctica/high Arctic, which nothing in this system's Africa/ME/Europe/India domain ever
+touches) with every country's own real (heavily simplified, `ST_SimplifyPreserveTopology` at a
+coarse world-scale tolerance) Natural Earth polygon as a background layer — no tile provider, no
+API key, no fabricated coastline. New endpoint `GET /feasibility/world-outline`
+(`geo_repository.fetch_world_outline`, `route_preview_service.get_world_outline`) — country
+borders don't move, so the frontend caches it indefinitely (`staleTime`/`gcTime: Infinity`) and
+the response sets `Cache-Control: public, max-age=86400`.
+
+**Tests**: `tests/integration/test_routing_engine_service.py::TestFindAlternateRoute` extended to
+assert the alternate track's real geometry (not just the distance number); new
+`tests/integration/test_route_preview_api.py::TestRoutePreview::
+test_avoided_state_returns_a_real_alternate_track` and `TestWorldOutline`. Full suite: 315 passing,
+zero regressions — verified stable across two consecutive clean full-suite runs (the
+`geo_region_base_lon` fix specifically needed re-verification since its failure mode was
+order-dependent, not caught by a single run). Frontend (`next build`) compiles clean. Live-verified
+through nginx post-rebuild: `GET /api/feasibility/world-outline` and `/api/feasibility/route-preview`
+both 200 with real data. **Browser automation wasn't available in this environment** (Claude in
+Chrome extension not connected, same limitation as §4.24/§7.17) — the map's visual rendering itself
+was not checked in a live browser, only the endpoints, the TypeScript build, and the backend logic
+under test.
+
 ### 5.2 Engine 2 — Permit ladder (`permits.py`)
 
 For each crossed country: overflight/landing permit requirements, deadlines
@@ -999,6 +1059,8 @@ registered before `/trips/{trip_id}` for correct path matching):
 | `operators` | `/operators` | operator CRUD |
 | `aircraft` | `/aircraft`, `/aircraft-performance` | fleet + performance-type CRUD |
 | `aircraft_documents` | `/aircraft/{id}/documents` | upload/list/download/delete |
+| `aircraft_document_types` | `/aircraft-document-types` | admin-editable doc-type reference (§4.25, task #118) |
+| `person_roles` | `/person-roles` | admin-editable crew/pax role reference (§4.27, task #120) |
 | `clients` | `/clients` | bill-to entity CRUD |
 | `vendors` | `/vendors` | vendor CRUD |
 | `service_catalogue` | `/service-catalogue` | service reference |
@@ -1023,7 +1085,8 @@ registered before `/trips/{trip_id}` for correct path matching):
 
 Key `feasibility` endpoints: `POST /feasibility/check` (the public VIQ check),
 `GET /feasibility/route-preview`, `GET /feasibility/airports`, `GET /feasibility/countries`,
-`GET /feasibility/firs`.
+`GET /feasibility/firs`, `GET /feasibility/person-roles` (public mirror of the admin `/person-roles`
+list, rate-limited, no auth — §4.27, task #120).
 
 Key `trips` endpoints: `POST /trips` (create, from either public VIQ hand-off or admin new-trip),
 `GET/PATCH /trips/{id}`, `POST /trips/{id}/legs`, `PATCH /trips/{id}/legs/{leg_id}`,
@@ -1137,6 +1200,220 @@ CPU build specifically for its much smaller footprint.
   `DocumentOut` already exposed `ocr_raw_output`/`extracted_fields`; an OCR-vs-entered verification
   screen was already flagged in `Document`'s own docstring as future work, not this task's scope.
 
+### 4.24 Permit filing — overflight/landing permits become sendable (task #115)
+
+Prompted by the user asking "how do I file permit requests?" — the honest answer until this task
+was that you couldn't. The Permits tab had been a 100%-read-only deadline ladder since it was
+built; the Services tab's full send/status/message-thread system (task #104) only ever generated
+line items for `ServiceCategory.GROUND` catalogue codes — `OVF`/`LDG` (real seeded PERMIT-category
+codes) never entered `service_requirements`, so they never became sendable `service_assignments`
+entries.
+
+- **`service_code` added to permit dicts** (`app/services/permit_engine_service.py`'s
+  `OverflightPermit`/`LandingPermit` dataclasses, threaded through `app/schemas/feasibility.py`'s
+  `OverflightPermitOut`/`LandingPermitOut` and `app/services/leg_projection.py`) — `"OVF"`/`"LDG"`
+  respectively. Added as `str | None = None` on the Pydantic side specifically so an *old*
+  `computed_snapshot` (frozen at leg-compute time, §10.2's forward-compatibility contract) still
+  validates — a historical leg's permit entries just render without a send action, never a 500.
+- **Country-keyed, not ICAO-keyed**: `TripLeg.service_assignments` (existing JSONB column, no
+  migration) is keyed `"{service_code}:{icao}"` everywhere it's used — `update_service_assignment`,
+  `send_service_request`, the `ServiceMessage` endpoints. None of them validate that second half
+  against the `airports` table, so overflight/landing permits use the country's ISO3 there instead
+  (an en-route country isn't an airport — there's no natural ICAO for an overflight permit at all).
+  ICAO codes are always 4 letters and ISO3 codes are always 3, so every place needing to tell them
+  apart (`trip_service._compute_service_valid_until`, `send_service_request`) does a simple,
+  unambiguous `len() == 3` dispatch rather than adding a new parameter.
+- **New `_permit_assignments_out`** (`app/services/trip_service.py`, mirrors
+  `_service_assignments_out` exactly) derives a `permit_assignments` list per leg from
+  `overflight_permits + landing_permits`, looked up against `service_assignments` the same way
+  GROUND items are — same `PENDING` default, same `granted_at`/`valid_until`/`confirmation_number`
+  fields (task #101's machinery, previously GROUND-only in practice, always category-agnostic in
+  code). Kept as a genuinely separate list/schema (`PermitAssignmentOut`) from
+  `ServiceAssignmentOut` rather than merged into it — permits carry `country_name`/entry/exit/
+  deadline fields services don't, and the Services tab's existing GROUND-only `service_requirements`
+  scan stays completely untouched, so nothing needed to change there at all.
+- **`VendorCoverageCountry` fallback** (`app/services/service_delivery_service.py::
+  resolve_service_delivery`, new optional `country_iso3` param) — this table (`vendor_id`,
+  `country_iso3`, `has_caa_direct_account`) already existed, seeded via the importer, but was wired
+  to nothing. An explicit `ServiceDeliveryConfig` (leg/trip/operator-scoped) is still always tried
+  first and wins if present — an admin can override per-leg exactly like GROUND services already
+  allow. Only when nothing explicit matches **and** a `country_iso3` was supplied does it fall back
+  to the coverage table (preferring `has_caa_direct_account=True`). No coverage row either →
+  `config: null`, same honest "nothing configured" result `send_service_request` already produced
+  for GROUND — never a guessed recipient. `ServiceDeliveryResolvedOut` gained `fallback_vendor_id`
+  (only set on this path, `matched_scope: "COUNTRY_COVERAGE"`) rather than fabricating a fake
+  `ServiceDeliveryConfigOut` row (with a synthetic id/timestamps/`delivery_channels`) just to fit
+  the existing shape — `send_service_request` branches on which one is present.
+- **Frontend**: the Permits tab's read-only `<li>` list became `PermitRow` components
+  (`admin/trips/[id]/page.tsx`) that adapt a `PermitAssignment` into a `ServiceAssignment`-shaped
+  object and render the *existing* `ServiceRow` underneath a small deadline-ladder header — full
+  reuse of the status chip, resolved-vendor display, "Format & send" button, and message thread,
+  zero duplication of that logic. `ServiceRow` gained one small additive change: its
+  `service-delivery-configs/resolve` call now always passes `country_iso3=assignment.icao`, which
+  is a guaranteed no-op for every existing GROUND caller (a 4-letter ICAO can never match a
+  `VendorCoverageCountry` row, always exactly 3 letters) and is exactly what a permit row needs. A
+  new `showCheckbox` prop (default `true`) hides the batch-select checkbox for permit rows, since
+  "Send selected" stays a Services-tab-only affordance.
+- **Real bug caught by the test suite, not by inspection**: an existing `test_service_delivery_api.py`
+  test asserted an exact-dict-equals response shape for the "nothing configured" resolve result —
+  broke the moment `fallback_vendor_id` was added as a real (if usually-null) field. Fixed by
+  updating the assertion, not the production code — the new field is correct and intentional, the
+  test was just asserting a shape that predated it.
+- **Verified live against the real dev DB**, not just tests: a real `OMDB → HECA` trip (Dubai to
+  Cairo) produces exactly the overflight/landing permits you'd expect — `OVF` for Saudi Arabia and
+  Jordan (en-route, correctly excluding departure/arrival states), `LDG` for Egypt. Created a real
+  `Vendor` + `VendorContact` (EMAIL) + `VendorCoverageCountry` row for Saudi Arabia with no
+  `ServiceDeliveryConfig` at all, resolved it (`matched_scope: "COUNTRY_COVERAGE"`), sent the `OVF`
+  permit for real, and confirmed via MailHog's own API — subject `OVF request [JTL-...-OVF-SAU]` to
+  `caa-live-test@example.com` — plus the assignment's status transitioning `PENDING → SENT` on a
+  follow-up `GET`. Full backend suite: 313 passing (299 baseline + 9 OCR + 5 new permit tests), zero
+  regressions. Frontend (`next build`) compiles clean. **Browser automation wasn't available in this
+  environment** (Claude in Chrome extension not connected) — the Permits tab UI itself was not
+  visually verified in a live browser, only its backend wiring end-to-end and the TypeScript build;
+  flagging this explicitly rather than claiming a browser check that didn't happen.
+
+### 4.25 Aircraft document taxonomy — 72-code admin-editable reference table (task #118)
+
+Prompted by the user pasting a real 69-file (turned out to be 70 on disk) aircraft document folder
+(`N80TE_DOCUMENTS`, organized by `AC `/`INS `/`LTR `/`PERMIT ` filename prefix) that dwarfed
+`AircraftDocumentType`'s fixed 6-value Python enum (`REGISTRATION`/`COFA`/`INSURANCE`/
+`AIRWORTHINESS`/`NOISE_CERTIFICATE`/`OTHER`, a native Postgres `ENUM` column).
+
+- **New `aircraft_document_types` table** (`app/models/aircraft_document.py::
+  AircraftDocumentTypeDefinition`) — `code` (unique `String(80)`), `label`, `category`
+  (`AircraftDocumentCategory`: `AC`/`INS`/`LTR`/`PERMIT`), `sort_order`, `active`. Full admin CRUD
+  router (`/aircraft-document-types`, `GET`/`POST`/`PATCH`, mirrors `service_catalogue`'s shape).
+  `AircraftDocument.doc_type` changed from `Mapped[AircraftDocumentType]` (enum) to `Mapped[str]`
+  with a real `ForeignKey("aircraft_document_types.code")`.
+- **66 codes derived programmatically** from the real filenames (`AC_AIR_CARRIER_CERTIFICATE`,
+  `INS_UNITED_ARAB_EMIRATES`, `LTR_LETTER_OF_ATTORNEY`, `PERMIT_BAHAMAS_BLANKET`, etc.) **plus the
+  6 legacy enum values kept as-is** — 72 seeded rows total (`app/core/aircraft_document_type_registry.py`).
+  Four filenames map to a *legacy* code instead of a derived one, specifically so no existing
+  `AircraftDocument` row or `_KEYWORD_TO_TYPE` string-match (`app/domain/document_requirements.py`)
+  breaks: `AC REGISTRATION CERTIFICATE.pdf` → `REGISTRATION`, `AC NOISE CERTIFICATE.pdf` →
+  `NOISE_CERTIFICATE`, `AC AIRWORTHINESS CERTIFICATE.pdf` → `AIRWORTHINESS`,
+  `INS CIVIL AIRCRAFT CERTIFICATE OF INSURANCE.pdf` → `INSURANCE`. `COFA` stays seeded but
+  deliberately unused by any real file — same real-world certificate as `AIRWORTHINESS` under a
+  different legacy name, a pre-existing quirk not touched here.
+- **Enum→FK migration, seed-in-migration not seed-on-startup**: converting a live enum column
+  (existing data) to a `ForeignKey` string means the 72 seed rows must be `bulk_insert`ed in the
+  *same* migration, before the FK constraint is added — `ensure_seeded()` (app-startup) runs too
+  late to satisfy the constraint for pre-existing rows. `ALTER COLUMN doc_type TYPE VARCHAR(80)
+  USING doc_type::text`, then `fk_aircraft_documents_doc_type`, then drop the old Postgres enum
+  type. This exact seed-in-migration pattern was reused as-is for §4.27's `person_role_definitions`.
+- **Real bug caught by grep before running tests**: `document_attach_service.py`'s
+  `_aircraft_documents` had `doc_type=d.doc_type.value` — crashed the instant `doc_type` became a
+  plain string (`'str' object has no attribute 'value'`). Found by grepping for `AircraftDocumentType\b`
+  across the whole backend before running anything, not by a failing test.
+- **Validation moved from the type system to the service layer**: `doc_type: str` on the upload
+  schema, with `aircraft_document_type_service.validate_active_code` (raises `ValidationFailedError`
+  for an unknown/inactive code) called from `aircraft_document_service.upload_document` — same
+  "validate against real DB rows, not a fixed Python type" pattern as §4.20's person-role work.
+- **N80TE PDF import**: the real 70-file folder was uploaded for real (`POST
+  /aircraft/{id}/documents`, multipart, real MinIO storage) against the `N80TE` aircraft
+  (Sunset Aviation LLC dba Solairus Aviation) already present in the dev DB — a small one-off
+  Python script (`httpx`, not part of the test suite) matched each filename to its seeded code via
+  the identical prefix/slug derivation the registry itself uses, dry-run-verified (all 70 files
+  matched a real seeded code, zero unmatched) before actually uploading. **70/70 uploaded**,
+  confirmed via `SELECT count(*) FROM aircraft_documents WHERE aircraft_id = ...` and a real
+  `GET .../download` round-trip (234 KB, valid PDF, not a stub) on the `AIRWORTHINESS` document.
+
+### 4.26 Operator/Aircraft real-correspondence fields + category-aware message templates (task #119)
+
+The user pasted three real Universal Weather-style reference messages (a handling-revision notice,
+a handling request with `PENDING CONFIRMATION`/`CANCEL` sections, and a structured A–G overflight
+permit request with attachments) and asked "Format & send" (task #104) to produce output in this
+shape instead of the one generic one-line default it had used since #104 shipped.
+
+- **New `Operator` fields** (`app/models/operator.py`): `address_line1/2`, `city`,
+  `state_province`, `postal_code`, `country_iso3` (FK `countries.iso3`), `contact_fax`,
+  `airline_code_aftn`, `airline_code_sita` — distinct from the pre-existing `icao_designator`/
+  `iata_designator`, since a real permit request's AFTN/SITA reply-address prefix (`UVA (AFTN)
+  UV (SITA/ARINC)` in the sample) is its own code, not an ICAO/IATA operator designator.
+- **New `Aircraft.classification`** — free text (e.g. `"Private - Non Revenue"`), not an enum, per
+  this codebase's existing convention for similar display-string fields (`NavFeeProvider.
+  provider_name`).
+- **`send_service_request` (`app/services/service_message_service.py`) rewritten**: looks up
+  `ServiceCatalogueEntry.category` for the service code being sent and picks between two new
+  renderer functions — `_default_handling_request` (GROUND: `ATTN`/`REF`/itinerary/`PENDING
+  CONFIRMATION`) and `_default_permit_request` (PERMIT: the A–G structure — Operator/Registry/
+  Classification/Itinerary/Route/Purpose/Crew, numbered attachments, CAA name + effective permit
+  validity) — replacing the single hardcoded default. The per-scope `ServiceDeliveryConfig.
+  message_template_id` override (task #86) is completely untouched; this only changes what
+  `_render_template` falls back to when nothing's configured.
+- **Snapshot design meant a fresh lookup, not a join**: `Trip`/`TripLeg` deliberately hold
+  `aircraft_registration`/`operator_airline_name` as plain snapshot strings, never a live FK (by
+  original design, for exact historical reproducibility — see §10.2). Producing a real operator
+  address/AFTN/SITA block meant a new `_resolve_aircraft_and_operator` lookup (registration →
+  `Aircraft` → `Operator`) inside `send_service_request` itself, not a join that doesn't exist.
+- **Multi-leg same-country block, display-only by design**: the user's sample showed one message
+  with `LEG1`/`LEG2` itinerary lines when the aircraft overflies/lands in the same country twice on
+  one trip. Rather than restructuring the per-(leg, service_code, country) send/status-tracking
+  model, `_other_legs_same_country` scans the trip's other legs' `computed_snapshot.permits` for the
+  same country and renders them as extra `LEGn:` lines — but the send action itself still targets
+  and advances only the one line item actually being sent (task #104's each-item-independent design
+  untouched). Confirmed working **live**, not just in tests — see below.
+- **Crew summary, never a fabricated name**: `_crew_summary` renders `"CAPTAIN <NAME> PLUS N CREW
+  AND M PAX"` only when a named PIC is on file (from §4.27's new `PersonPublicIn.name`), otherwise
+  falls back to a pure headcount (`"N CREW AND M PAX"`) — matches the sample's format without ever
+  inventing a name that isn't real data.
+- **Tests**: `test_service_send_api.py::test_default_template_is_handling_request_shape_for_ground_category`
+  and `test_permit_send_api.py::test_default_template_is_structured_permit_request_shape` — both
+  assert on real MailHog-captured bodies (section markers: `ATTN:`, `PENDING CONFIRMATION`,
+  `A. OPERATOR:`, `D. ITINERARY:`, `G. CREW:`), not just the API response. The permit test needed a
+  `_ensure_ldg_catalogue_entry` check-then-insert helper — `session` fixture rollback (conftest.py)
+  only undoes *uncommitted* work between tests, so a second test in the same file committing the
+  same `ServiceCatalogueEntry(code="LDG")` row hit a real `UniqueViolationError` against the first
+  test's already-committed row, caught by rebuilding the `api-test` image and rerunning (see §10 —
+  `docker compose run --rm api-test` silently reuses a stale image otherwise). Full suite: 313
+  passing (311 baseline after §4.27's bucketing rewrite dropped 4 tests + 2 new).
+- **Verified live against the real dev DB**: a real GROUND send (`FUL` at `HECA`) and a real PERMIT
+  send (`OVF` at `SAU`) against two existing non-deleted trips, both captured by MailHog. The
+  permit body's `D. ITINERARY:` section came back as a real `LEG1:` block (not the flat single-leg
+  form) — this trip's other leg genuinely also transits Saudi airspace, so the multi-leg detection
+  fired for real, not just in a constructed test fixture.
+
+### 4.27 Person role reference table replaces the fixed CREW/PAX vocabulary (task #120)
+
+Same message-sample request also asked for admin-configurable person roles ("crew (can be PIC, SIC,
+FA, Mechanic, Engineer, Medical Staff, Other), Pax, VIP, Principal etc — allow adding more
+categories in settings") — the old `PersonPublicIn.role` was a fixed Pydantic regex, and crew/pax
+bucketing (souls-on-board counts feeding Engine 3's oxygen/credentials checks) was two hardcoded
+`frozenset`s (`CREW_ROLES`/`PAX_ROLES` in `app/domain/credentials.py`).
+
+- **New `person_role_definitions` table** (`app/models/person_role.py::PersonRoleDefinition`) —
+  `code`, `label`, `is_crew: bool`, `sort_order`, `active`. 12 seeded rows: `PIC`/`SIC`/`FO`/`FA`/
+  `MECHANIC`/`ENGINEER`/`MEDICAL_STAFF`/`CREW` (`is_crew=True`), `PAX`/`VIP`/`PRINCIPAL`/`OTHER`
+  (`is_crew=False`) — `FO` kept alongside the requested `SIC` (same real position, different
+  naming; JSONB-stored historical role strings can't be migrated, so neither name can be dropped).
+  Admin CRUD router `/person-roles`; new **public**, rate-limited `/feasibility/person-roles` (no
+  auth) for the same `PersonsEditor` component used on the unauthenticated VIQ form.
+- **Bucketing became data-driven, fetched once per computation**: `app/domain/credentials.py` lost
+  the frozensets/`is_crew_role`/`is_pax_role` functions entirely (kept that module free of
+  role-vocabulary knowledge). `compute_leg_credentials` gained a `role_is_crew: dict[str, bool]`
+  parameter; `leg_feasibility_service.compute_leg_feasibility` (the single shared entry point for
+  both public and admin paths) fetches it once via `person_role_service.get_crew_bucket_map` —
+  mirrors the existing `settings_map` fetch-once-thread-down pattern, not a DB query per person.
+  `PersonPublicIn.role` lost its regex (now `Field(max_length=30)`); an unrecognized code raises
+  `ValidationFailedError` from `leg_feasibility_service` instead of failing Pydantic validation.
+- **Real auth-mismatch bug caught before finishing the frontend change**: the first
+  `PersonsEditor.tsx` draft took a `roles` prop, expecting the parent page to fetch via the
+  admin-authenticated `GET /person-roles` — but `PersonsEditor` is also used on the **public**,
+  unauthenticated VIQ page, which would 401. Caught by checking whether `app/page.tsx` had any
+  existing page-level query pattern to piggyback on (it didn't) and how the other public/admin
+  shared component (`AircraftTypePicker`) handles this (self-fetches) — fixed by adding the public
+  `/feasibility/person-roles` endpoint above and making `PersonsEditor` self-fetch via its own
+  `useQuery`, matching `AircraftTypePicker`'s established pattern rather than page-level prop-drill.
+  `PersonsEditor` also gained a `name` text input (optional — feeds §4.26's crew-summary naming).
+- **Test count intentionally dropped by 4**: `test_credentials.py::TestRoleBucketing` (4 tests
+  against the old fixed frozensets) was deleted, not left broken — bucketing correctness moved to
+  service/API-layer tests instead, since the vocabulary itself is no longer fixed at the domain
+  layer. Full suite went 315 → 311 from this alone (see §4.26 for where it went back up to 313).
+- **Verified live**: `GET /person-roles` returns the real 12 seeded rows with correct `is_crew`
+  bucketing; `GET /aircraft-document-types` returns the real 72 rows (§4.25); the public
+  `/feasibility/person-roles` endpoint is reachable unauthenticated (confirmed rate-limited on
+  repeated calls, as designed).
+
 ---
 
 ## 7. Frontend
@@ -1202,7 +1479,10 @@ persisted data and every call site for zero functional gain. **If you're greppin
   live-sync without a duplicate query). Takes `showStats`/`showMap` booleans (default both `true`)
   so callers can split the two — see §7.5.
 - **`RouteMap`** — the actual Leaflet-style map graphic (track line + state/FIR polygon overlays).
-- **`PersonsEditor`** — crew/pax list with role + nationality.
+- **`PersonsEditor`** — crew/pax list with role + nationality + optional name (task #120, §4.27).
+  Self-fetches `/feasibility/person-roles` (its own `useQuery`, matching `AircraftTypePicker`'s
+  pattern) rather than taking a `roles` prop, since it's shared between the public VIQ form (no
+  page-level query to piggyback on) and the authenticated Trip Manager.
 - **`AdminNav`** — global back/forward + cross-section admin nav, self-hides on public `/` and
   `/login`.
 - **`StatusChip`** — color-codes any status string by keyword (VERIFIED→ok, BLOCKED/EXCEEDS→danger,
@@ -1577,6 +1857,120 @@ stacked under every leg — replaced with one shared map for the whole trip.
   Stage 4 result — confirming the merge, dedup, and downstream submit flow all still work together
   end to end. Console clean of app errors.
 
+### 7.17 Two always-visible departure/arrival fields (task #116)
+
+`LegEditor.tsx`'s "Time known as: Departure/Arrival" toggle (task #112) — one field pair, whichever
+side isn't selected shown as read-only computed text — replaced per explicit user spec: two
+always-visible, independently editable date/time field pairs. Departure is the sole real time
+driver (`reference_datetime`); arrival auto-prefills from departure + EET once both are known, then
+stays fully independent — edited manually or by the prefill, it's never silently recomputed out
+from under the user on a later departure edit. Clearing arrival back to empty is the "reset to
+computed" gesture (a small "Reset to computed" link does the same thing explicitly once arrival
+differs from what EET would currently produce).
+
+- **The backend mechanism already existed — just admin-only and unwired.** `TripLegIn.
+  arrival_datetime_override` (task #101-adjacent, predates this task) was already exactly "cosmetic
+  display override, never fed back into permit/deadline computation," with
+  `trip_service._compute_and_build_leg` already doing `arrival_datetime = leg_in.
+  arrival_datetime_override or computed_arrival`. `LegEditor.tsx` simply never wired an input to it.
+  **Moved from admin-only `TripLegIn` up to the shared base `LegCheckIn`** (`app/schemas/
+  feasibility.py`) so the public Viability IQ form gets it too, per the user's explicit "on admin
+  and VIQ" — `TripLegIn` no longer redeclares it, inherited from the base.
+- **Scope decision, made explicitly rather than silently**: the old arrival-driven mode
+  (`required_arrival_datetime` — "a dispatcher who knows 'must land by X' rather than 'departing at
+  Y'") is no longer reachable from either UI now that departure is unconditionally required and
+  entered first. The backend still accepts it (nothing removed there), but no current caller sends
+  it. `legTimeValid` in both `app/page.tsx` and `app/admin/trips/new/page.tsx` simplified from
+  "exactly one of departure/required-arrival" to just "departure present."
+- **Public path needed real plumbing, not just a schema move** — `POST /feasibility/check` doesn't
+  write to the DB at all; it caches a hand-built dict in Redis (`feasibility_iq_service.
+  check_trip_feasibility`, keyed `feasibility:check:{check_id}`), and `POST /feasibility/
+  request-quote` reads that cache to build the real `TripLeg` row. `arrival_datetime_override`
+  needed to be explicitly threaded into `cache_payload["legs"][...]["arrival_datetime"]`
+  (`leg_in.arrival_datetime_override or leg_out.arrival_datetime`, mirroring the admin pattern
+  exactly) — arriving on the schema alone would have done nothing, since `/request-quote` never
+  re-reads the original request body.
+- **Real bug caught by hand-testing the live API response, not by the test suite** (the test as
+  first written only checked the eventual `TripLeg` row, which already worked): the immediate
+  `/feasibility/check` response — what the user's results screen actually shows — did **not**
+  reflect the override at all, only the plain engine-computed arrival. `leg_outs` (built by
+  `project_leg_result`) is also what gets frozen into the cache's `snapshot` field for
+  reproducibility, so overriding it in place would have leaked the override into
+  `TripLeg.computed_snapshot` too — the same "frozen snapshot must stay the pure engine output"
+  contract §10.2 documents for a different bug. Fixed by keeping `leg_outs` pristine (feeds the
+  snapshot) and building a separate `response_legs` list (`leg_out.model_copy(update={"arrival_datetime":
+  override})`) for what's actually returned to the caller — mirrors the admin path's own existing
+  split between the override-aware top-level `TripLegDetailOut.arrival_datetime` (real column) and
+  the always-computed nested `result.arrival_datetime` (frozen snapshot), which was already the
+  established (if previously undocumented) design.
+- **New `frontend/src/lib/time.ts`**: `addHours(iso, hours)` factors out the `date.getTime() + hours
+  * 3600_000` arithmetic that was duplicated inline in both `RoutePreviewPanel.tsx` and (now, twice
+  over) `LegEditor.tsx`.
+- **Tests**: `tests/integration/test_feasibility_api.py::test_arrival_datetime_override_persists_on_the_public_path`
+  — asserts the override shows up in the immediate check response (parsed as datetimes, not raw
+  strings, since Pydantic serializes UTC as `Z` while Python's `.isoformat()` uses `+00:00`),
+  survives to the real `TripLeg.arrival_datetime` column after `/request-quote`, leaves
+  `reference_datetime` (departure) untouched, and — critically — that `TripLeg.computed_snapshot`
+  stays un-overridden. Full suite: 314 passing (313 + 1 new), zero regressions from moving the
+  schema field.
+- **Verified live against the real dev API**, not just tests: a real `OMDB → HECA` check with
+  `arrival_datetime_override` set ~10h past the computed EET-based arrival came back with that exact
+  override in the response (confirmed via direct `curl`, not the browser — the Claude in Chrome
+  extension wasn't connected in this environment, same limitation noted in §4.24). Converted to a
+  real trip via `/request-quote` and fetched it back: `reference_datetime` unchanged,
+  `arrival_datetime` (top-level) exactly the override, `result.arrival_datetime` (nested snapshot)
+  the pure computed value — all three exactly as designed.
+
+### 7.18 Add/Edit/Remove leg wired into the Route tab (task #117)
+
+Fourth item from the same user report: "Legs do not have a way to add/remove/edit... or change leg
+info." The Services tab already had full add/remove/edit for service line items (task #105); what
+was actually missing was the leg's *own* fields — the backend already had complete CRUD
+(`POST/PATCH/DELETE /trips/{id}/legs[/{leg_id}]`, wired to `trip_service.add_leg`/`update_leg`/
+`remove_leg` since early in this build), but nothing on `admin/trips/[id]/page.tsx`'s Route tab
+called any of it — 100% read-only, and `LegEditor` (just redesigned in task #116) was only ever
+instantiated during trip *creation*.
+
+- **Real data-loss bug caught while planning, before any code was written**: `TripLegDetailOut`
+  didn't expose a leg's `avoid_states`/`include_states`/`avoid_firs`/`include_firs` anywhere — only
+  the *violation result* (`result.permits.state_avoid_include.avoided_transited`) was returned,
+  never the original input sets. `update_leg` fully replaces `TripLeg.constraints` from whatever's
+  in the submitted payload — an edit form built without these fields would have silently wiped a
+  leg's existing routing constraints the instant it was saved, since it would have had nothing to
+  resubmit but empty arrays. Fixed *before* building the edit UI: `TripLegDetailOut` gained
+  `avoid_states`/`include_states`/`avoid_firs`/`include_firs`, populated in `trip_service._leg_out`
+  straight from the real `TripLeg.constraints` column (not the frozen `computed_snapshot`).
+- **`legDetailToInput`** (`admin/trips/[id]/page.tsx`) converts a GET-returned leg back into the
+  `LegInput` shape `LegEditor` needs. `client_id`/`registration`/`leg_type`/`leg_status` have no
+  `LegEditor` input at all (true at creation time too) — seeding them here and never touching them
+  in `LegEditor`'s `{...leg, ...patch}` merge is what makes them round-trip unchanged through an
+  edit, the same way they already did implicitly during creation.
+- **UI**: per-leg `writable`-gated "Edit" (swaps that card's body for `LegEditor` + Save/Cancel,
+  `canRemove={false}` since removal is a separate explicit action on the card, not `LegEditor`'s
+  internal array-remove button) and `canDelete`-gated "Remove" (no confirm dialog — matches this
+  page's existing convention, e.g. `ServiceRow`'s manual-service Remove and `MessageThread`'s
+  delete). "Add leg" at the bottom of the tab mirrors `admin/trips/new/page.tsx`'s own continuity
+  default (new leg's departure defaults to the previous leg's arrival). Only one leg editable (or
+  the one new leg being added) at a time — a single `editingLegId`/`addingLeg` pair, not per-row
+  local state.
+- **Known pre-existing gap, not introduced here, left alone**: `validate_primary_leg_ordering`
+  (chronological-order enforcement for PRIMARY legs) is only called from `create_trip`, not
+  `add_leg`/`update_leg` — the backend already allowed an out-of-order add/edit via the API before
+  this task. Noted so it isn't mistaken for a regression; fixing it is separate scope.
+- **Tests**: `tests/integration/test_trips_api.py::
+  test_leg_avoid_include_constraints_survive_an_edit` — creates a leg with real
+  `avoid_states`/`include_firs`, confirms they're present in the create response's new fields,
+  resubmits them unchanged (exactly what `legDetailToInput` does) alongside an unrelated
+  `call_sign` edit, and confirms both the edit and the constraints survive. Full suite: 315 passing
+  (314 + 1 new), zero regressions.
+- **Verified live against the real dev API**: created a real `OMDB → HECA` trip with
+  `avoid_states: ["JOR"]` (correctly produces `NOT FEASIBLE AS ROUTED`, matching the real
+  Jordan-overflight requirement seen in §4.24's live verification), `PATCH`ed it changing only
+  `call_sign` while resubmitting the same constraint — both landed correctly and the constraint
+  survived. Then `POST`ed a second leg (`HECA → OMDB`, leg count 1 → 2) and `DELETE`d it back down
+  to 1. Browser UI itself not visually checked — the Claude in Chrome extension still wasn't
+  connected in this environment, same limitation as §4.24/§7.17.
+
 ---
 
 ## 8. Document storage & Excel import/export
@@ -1643,6 +2037,11 @@ sheet column; User `operator_scope` NULL-vs-"ALL" is ambiguous in the sheet's ow
   management (per-airport FBO/contact details, per-country CAA-account flags) is a genuinely
   separate editor — comparable in size to Operators' Fleet/AircraftForm section — not pulled into
   this pass.
+- **Structured trip reference numbers (`YYMMNNN`)** — raised by the user alongside the four items
+  that led to §4.24/§7.17/§7.18/§4.26–4.27, then explicitly deferred ("not quite accurate, I will
+  come back to it") once the conversation moved to permit filing. Not started; `Trip` currently has
+  no such field, and `build_reference_tag`'s `[JTL-{trip_id}-{leg_id}-...]` format is unrelated and
+  unaffected either way.
 
 ### 9.2 The #95–114 backlog (permit validity, admin ops buildout, VIQ redesign)
 
@@ -1695,10 +2094,12 @@ make test                      # domain unit tests (no DB needed) + integration 
 Integration tests need a real PostgreSQL + PostGIS database (geometry columns have no SQLite
 equivalent) and a reachable MinIO (aircraft document tests upload/download for real, no mock) —
 `docker compose --profile test run --rm api-test pytest -q` is the exact command used throughout
-this build to verify every change. **308 tests passing** as of the most recent full-suite run
-(task #109 completion — 299 + 9 new OCR tests, §4.23; count previously dropped from 309 to 299 at
-task #110 as captcha-specific tests were deleted along with the feature, see §4.22), zero known
-failures. Note: `api-test` builds from its own Dockerfile
+this build to verify every change. **315 tests passing** as of the most recent full-suite run
+(task #121 completion — 313 (task #120) + 3 new (§5.1's reroute-track/world-outline coverage) − 1
+(§4.27's `TestRoleBucketing` count already folded into the 313 baseline); count previously dropped
+from 309 to 299 at task #110 as captcha-specific tests were deleted along with the feature, see
+§4.22), zero known failures. Note:
+`api-test` builds from its own Dockerfile
 `target: test` — rebuilding `api`/`web` does not rebuild it; always `docker compose build api-test`
 too, or a stale image will silently run old test files without erroring (see §4.20).
 

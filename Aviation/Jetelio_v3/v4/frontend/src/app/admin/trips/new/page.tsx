@@ -48,10 +48,12 @@ function emptyLeg(depIcao = ""): LegInput {
   };
 }
 
+// Task #116: LegEditor is always departure-driven now (two always-visible
+// fields, arrival auto-prefilled but independently editable) — the old
+// "exactly one of departure/required-arrival" toggle model is gone, so
+// this just needs a real departure time.
 function legTimeValid(l: LegInput): boolean {
-  const hasDep = Boolean(l.reference_datetime);
-  const hasArr = Boolean(l.required_arrival_datetime);
-  return hasDep !== hasArr;
+  return Boolean(l.reference_datetime);
 }
 
 export default function NewTripPage() {
@@ -467,7 +469,15 @@ export default function NewTripPage() {
                     <p className="text-xs text-fg/50">
                       Leg {i + 1}: {leg.dep_icao} → {leg.arr_icao}
                     </p>
-                    <RoutePreviewPanel depIcao={leg.dep_icao} arrIcao={leg.arr_icao} showStats={false} />
+                    <RoutePreviewPanel
+                      depIcao={leg.dep_icao}
+                      arrIcao={leg.arr_icao}
+                      showStats={false}
+                      avoidStates={leg.avoid_states}
+                      includeStates={leg.include_states}
+                      avoidFirs={leg.avoid_firs}
+                      includeFirs={leg.include_firs}
+                    />
                   </div>
                 )
             )}

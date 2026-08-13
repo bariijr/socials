@@ -33,6 +33,7 @@ from app.schemas.trip import (
     CustomServiceAssignmentIn,
     NavFeeLineItemOut,
     NavFeesDetailOut,
+    PermitAssignmentOut,
     PermitFeeLineItemOut,
     PermitFeesDetailOut,
     ServiceAssignmentIn,
@@ -130,18 +131,64 @@ def _service_assignments_out(leg: TripLeg) -> list[ServiceAssignmentOut]:
     return out
 
 
-async def _compute_service_valid_until(session: AsyncSession, icao: str, granted_at: datetime) -> datetime | None:
+def _permit_assignments_out(leg: TripLeg, refreshed_snapshot: dict) -> list[PermitAssignmentOut]:
+    """Overflight/landing permits, mirroring _service_assignments_out's
+    pattern exactly (task #115) — reads from refreshed_snapshot (not
+    leg.computed_snapshot directly) so deadline_status reflects
+    _refresh_snapshot_deadlines' live recompute, same as the Permits tab
+    already relies on via `result.permits`.
+    """
+    permits = refreshed_snapshot.get("permits", {})
+    out = []
+    for item in permits.get("overflight_permits", []) + permits.get("landing_permits", []):
+        service_code = item.get("service_code")
+        if not service_code:
+            # Forward-compat: a snapshot computed before task #115 has no
+            # service_code on its permit entries — nothing to key a send
+            # action off, so it just renders without one (§10.2 pattern).
+            continue
+        key = f"{service_code}:{item['country_iso3']}"
+        assignment = leg.service_assignments.get(key, {})
+        out.append(
+            PermitAssignmentOut(
+                service_code=service_code,
+                country_iso3=item["country_iso3"],
+                country_name=item["country_name"],
+                entry_datetime=item["entry_datetime"],
+                exit_datetime=item["exit_datetime"],
+                deadline=item["deadline"],
+                provider=assignment.get("provider", "JETELIO"),
+                vendor_id=assignment.get("vendor_id"),
+                notes=assignment.get("notes"),
+                status=assignment.get("status", ServiceAssignmentStatus.PENDING.value),
+                confirmation_number=assignment.get("confirmation_number"),
+                granted_at=assignment.get("granted_at"),
+                valid_until=assignment.get("valid_until"),
+            )
+        )
+    return out
+
+
+async def _compute_service_valid_until(session: AsyncSession, location_code: str, granted_at: datetime) -> datetime | None:
     """Forward mirror of the file_by/lead-time computation (§5.9's
     resolve_service_delivery, task #95's compute_valid_until) — resolves
-    the icao's country, applies the same verified-or-fallback pattern as
-    every other reference-data lookup in this system, and returns None
+    location_code's country, applies the same verified-or-fallback pattern
+    as every other reference-data lookup in this system, and returns None
     (never a guessed date) only when the airport/country can't be
     resolved at all.
+
+    location_code is the second half of a service_assignments key
+    ("{service_code}:{location_code}") — an ICAO (4 letters) for GROUND
+    services, or a country ISO3 (3 letters) for OVF/LDG permits (task
+    #115, which have no natural airport). ICAO and ISO3 codes are always
+    exactly 4 and 3 letters respectively, so the length is a reliable,
+    unambiguous dispatch with no new parameter needed.
     """
-    airport = await session.get(Airport, icao)
-    if airport is None or airport.country_iso3 is None:
-        return None
-    country = await session.get(Country, airport.country_iso3)
+    if len(location_code) == 3:
+        country = await session.get(Country, location_code)
+    else:
+        airport = await session.get(Airport, location_code)
+        country = await session.get(Country, airport.country_iso3) if airport and airport.country_iso3 else None
     if country is None:
         return None
     settings_map = await settings_service.get_typed_settings_map(session)
@@ -260,6 +307,11 @@ def _leg_out(leg: TripLeg, now: datetime, clients_by_id: dict[UUID, Client]) -> 
         nav_fees=NavFeesDetailOut.model_validate(nav_fees_detail_raw) if nav_fees_detail_raw else None,
         permit_fees=PermitFeesDetailOut.model_validate(permit_fees_detail_raw) if permit_fees_detail_raw else None,
         service_assignments=_service_assignments_out(leg),
+        permit_assignments=_permit_assignments_out(leg, refreshed),
+        avoid_states=leg.constraints.get("avoid_states", []),
+        include_states=leg.constraints.get("include_states", []),
+        avoid_firs=leg.constraints.get("avoid_firs", []),
+        include_firs=leg.constraints.get("include_firs", []),
     )
 
 
@@ -432,7 +484,7 @@ async def _compute_and_build_leg(
         client_id=UUID(leg_in.client_id) if leg_in.client_id else None,
         updated_by=actor_id,
         filed_route=leg_in.filed_route,
-        persons=[{"role": p.role, "nationality_iso3": p.nationality_iso3} for p in persons],
+        persons=[{"role": p.role, "nationality_iso3": p.nationality_iso3, "name": p.name} for p in persons],
         constraints={
             "avoid_states": leg_in.avoid_states,
             "include_states": leg_in.include_states,

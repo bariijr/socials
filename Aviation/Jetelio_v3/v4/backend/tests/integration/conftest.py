@@ -23,7 +23,7 @@ from app.core import storage
 from app.database import Base, get_db
 from app.main import app as fastapi_app
 from app.models.country import Country
-from app.services import document_template_service, settings_service
+from app.services import aircraft_document_type_service, document_template_service, person_role_service, settings_service
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://jetelio:devpass@localhost:15432/jetelio_v4_test"
@@ -42,6 +42,8 @@ async def engine():
     async with session_factory() as s:
         await settings_service.ensure_seeded(s)
         await document_template_service.ensure_seeded(s)
+        await aircraft_document_type_service.ensure_seeded(s)
+        await person_role_service.ensure_seeded(s)
         await s.commit()
     # The ASGITransport client fixture below never triggers app.main's
     # lifespan (no on-startup hook runs under it), so the document-storage
@@ -125,5 +127,22 @@ def geo_region_base_lon():
     other test whose track happens to cross the same square. 8-degree
     spacing keeps each caller's few-degree-wide polygons clear of its
     neighbors' and of the -15..15 range fixed test fixtures elsewhere use.
+
+    Cycled through two disjoint bands rather than growing unbounded —
+    real bug hit building the reroute-track map preview: once enough
+    committing fixtures accumulate in one test session the raw counter
+    pushes past ±180°, and sample_great_circle_track's spherical bearing
+    math (atan2-based, always resolves into -180..180) silently wraps a
+    route's *sampled* points into that range while the committed
+    polygon/airport coordinates stay exactly as given — decoupling the
+    track from the geometry meant to be under it. Both bands also keep a
+    5°+ margin clear of the -15..15 range fixed (non-committing) test
+    fixtures use elsewhere, and of ±180 itself. 36 slots is far beyond
+    this suite's actual committing-fixture count per run, so the cycle
+    should never actually repeat a slot in practice — it just keeps the
+    *ceiling* safe as more committing fixtures get added over time.
     """
-    return 30.0 + next(_geo_region_counter) * 8.0
+    n = next(_geo_region_counter) % 36
+    if n < 18:
+        return -168.0 + n * 8.0
+    return 24.0 + (n - 18) * 8.0

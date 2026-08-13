@@ -6,7 +6,9 @@ import { useMutation, useQuery, useQueryClient, UseMutationResult } from "@tanst
 import { api, ApiError } from "@/lib/api";
 import {
   CustomServiceAssignmentRequest,
+  LegInput,
   Page,
+  PermitAssignment,
   ServiceAssignment,
   ServiceAssignmentRequest,
   ServiceCatalogueEntry,
@@ -25,6 +27,7 @@ import { formatTripSource, formatUtc } from "@/lib/format";
 import { StatusChip } from "@/components/StatusChip";
 import { RoutePreviewPanel } from "@/components/RoutePreviewPanel";
 import { LegSummaryTable } from "@/components/LegSummaryTable";
+import { LegEditor } from "@/components/LegEditor";
 import { CountryName } from "@/components/CountryPicker";
 import { EditableText } from "@/components/EditableCell";
 
@@ -37,6 +40,51 @@ const NOT_BUILT_TABS: Partial<Record<Tab, string>> = {
   Messages: "Templated dispatch to handlers/CAAs lands in Phase 6.",
 };
 
+// Task #117 — maps a GET-returned leg back into the LegInput shape
+// LegEditor needs for editing. client_id/registration/leg_type/leg_status
+// have no LegEditor input (true at creation time too) — seeding them here
+// and never touching them in LegEditor's {...leg, ...patch} merge is what
+// makes them round-trip unchanged through an edit.
+function legDetailToInput(leg: TripDetail["legs"][number]): LegInput {
+  return {
+    dep_icao: leg.result.dep_icao,
+    arr_icao: leg.result.arr_icao,
+    call_sign: leg.call_sign,
+    reference_datetime: leg.reference_datetime,
+    required_arrival_datetime: null, // editing is always departure-driven (task #116)
+    arrival_datetime_override: leg.arrival_datetime,
+    avoid_states: leg.avoid_states,
+    include_states: leg.include_states,
+    avoid_firs: leg.avoid_firs,
+    include_firs: leg.include_firs,
+    filed_route: leg.result.filed_route,
+    client_id: leg.client?.id ?? null,
+    registration: leg.registration,
+    leg_type: leg.leg_type,
+    leg_status: leg.leg_status,
+  };
+}
+
+function emptyLegInput(depIcao = ""): LegInput {
+  return {
+    dep_icao: depIcao,
+    arr_icao: "",
+    call_sign: null,
+    reference_datetime: null,
+    required_arrival_datetime: null,
+    arrival_datetime_override: null,
+    avoid_states: [],
+    include_states: [],
+    avoid_firs: [],
+    include_firs: [],
+    filed_route: null,
+    client_id: null,
+    registration: null,
+    leg_type: "PRIMARY",
+    leg_status: "PENDING",
+  };
+}
+
 export default function TripDetailPage() {
   useRequireAuth();
   const params = useParams<{ id: string }>();
@@ -48,6 +96,12 @@ export default function TripDetailPage() {
   const [tab, setTab] = useState<Tab>("Overview");
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Task #117 — only one leg editable (or one new leg being added) at a
+  // time, avoiding per-row local-state duplication.
+  const [editingLegId, setEditingLegId] = useState<string | null>(null);
+  const [draftLeg, setDraftLeg] = useState<LegInput | null>(null);
+  const [addingLeg, setAddingLeg] = useState(false);
+  const [newLeg, setNewLeg] = useState<LegInput | null>(null);
   const [downloadingPnr, setDownloadingPnr] = useState(false);
 
   const { data: trip, isLoading } = useQuery({
@@ -107,6 +161,31 @@ export default function TripDetailPage() {
     mutationFn: ({ legId, items }: { legId: string; items: { service_code: string; icao: string }[] }) =>
       api.post<SendServiceRequestOut[]>(`/trips/${tripId}/legs/${legId}/services/send`, { items }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trip", tripId] }),
+  });
+
+  // Task #117 — leg add/edit/remove, wired to endpoints that already
+  // existed (add_leg/update_leg/remove_leg) but nothing on this page
+  // called before now.
+  const addLeg = useMutation({
+    mutationFn: (payload: LegInput) => api.post<TripDetail>(`/trips/${tripId}/legs`, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["trip", tripId], updated);
+      setAddingLeg(false);
+    },
+  });
+
+  const updateLeg = useMutation({
+    mutationFn: ({ legId, payload }: { legId: string; payload: LegInput }) =>
+      api.patch<TripDetail>(`/trips/${tripId}/legs/${legId}`, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["trip", tripId], updated);
+      setEditingLegId(null);
+    },
+  });
+
+  const removeLeg = useMutation({
+    mutationFn: (legId: string) => api.del<TripDetail>(`/trips/${tripId}/legs/${legId}`),
+    onSuccess: (updated) => queryClient.setQueryData(["trip", tripId], updated),
   });
 
   async function downloadPnr() {
@@ -260,41 +339,153 @@ export default function TripDetailPage() {
         </section>
       )}
 
-      {tab === "Route" &&
-        trip.legs.map((leg) => (
-          <section key={leg.id} className="space-y-3 rounded-lg border border-fg/10 p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-semibold">
-                Leg {leg.leg_index + 1}: {leg.result.dep_icao} → {leg.result.arr_icao}
-              </h2>
-              <StatusChip status={leg.result.verdict} />
-              {leg.call_sign && <span className="mono-figures text-xs text-fg/50">Call sign: {leg.call_sign}</span>}
-              {leg.client && <span className="text-xs text-fg/50">Bill-to: {leg.client.bill_to_legal_name}</span>}
-            </div>
-            <p className="mono-figures text-xs text-fg/50">
-              {formatUtc(leg.result.reference_datetime)} → {formatUtc(leg.result.arrival_datetime)}
-            </p>
-            {leg.result.reasons.length > 0 && (
-              <ul className="space-y-1 rounded-md border border-fg/10 bg-fg/5 p-3 text-sm text-fg/80">
-                {leg.result.reasons.map((reason, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-fg/40">—</span>
-                    <span>{reason}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <RoutePreviewPanel depIcao={leg.result.dep_icao} arrIcao={leg.result.arr_icao} referenceDatetime={leg.reference_datetime} />
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <StatusChip status={leg.result.capability.planning_status} />
-              {leg.result.capability.exceeds !== null && (
-                <span className={leg.result.capability.exceeds ? "text-danger" : "text-fg/60"}>
-                  {leg.result.capability.exceeds ? "Exceeds practical range" : "Within practical range"}
-                </span>
+      {tab === "Route" && (
+        <div className="space-y-4">
+          {trip.legs.map((leg) =>
+            editingLegId === leg.id && draftLeg ? (
+              <section key={leg.id} className="space-y-3 rounded-lg border border-accent/40 p-4">
+                <h2 className="font-semibold">Editing leg {leg.leg_index + 1}</h2>
+                <LegEditor index={0} leg={draftLeg} onChange={setDraftLeg} onRemove={() => {}} canRemove={false} />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={updateLeg.isPending}
+                    onClick={() => updateLeg.mutate({ legId: leg.id, payload: draftLeg })}
+                    className="h-11 rounded-md bg-primary px-4 text-sm font-semibold text-fg disabled:opacity-50"
+                  >
+                    {updateLeg.isPending ? "Saving…" : "Save leg"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingLegId(null);
+                      setDraftLeg(null);
+                    }}
+                    className="h-11 rounded-md border border-fg/20 px-4 text-sm text-fg/70 hover:border-fg/40"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {updateLeg.isError && (
+                  <p className="text-sm text-danger">
+                    {updateLeg.error instanceof ApiError ? "Could not save — check the leg's fields." : "Could not reach the API."}
+                  </p>
+                )}
+              </section>
+            ) : (
+              <section key={leg.id} className="space-y-3 rounded-lg border border-fg/10 p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="font-semibold">
+                    Leg {leg.leg_index + 1}: {leg.result.dep_icao} → {leg.result.arr_icao}
+                  </h2>
+                  <StatusChip status={leg.result.verdict} />
+                  {leg.call_sign && <span className="mono-figures text-xs text-fg/50">Call sign: {leg.call_sign}</span>}
+                  {leg.client && <span className="text-xs text-fg/50">Bill-to: {leg.client.bill_to_legal_name}</span>}
+                  {writable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLegId(leg.id);
+                        setDraftLeg(legDetailToInput(leg));
+                        setAddingLeg(false);
+                      }}
+                      className="ml-auto h-9 rounded-md border border-fg/20 px-3 text-sm text-fg/70 hover:border-fg/40"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {canDelete(role) && trip.legs.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeLeg.mutate(leg.id)}
+                      className="h-9 rounded-md border border-danger/40 px-3 text-sm text-danger hover:border-danger"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="mono-figures text-xs text-fg/50">
+                  {formatUtc(leg.result.reference_datetime)} → {formatUtc(leg.result.arrival_datetime)}
+                </p>
+                {leg.result.reasons.length > 0 && (
+                  <ul className="space-y-1 rounded-md border border-fg/10 bg-fg/5 p-3 text-sm text-fg/80">
+                    {leg.result.reasons.map((reason, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-fg/40">—</span>
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <RoutePreviewPanel
+                  depIcao={leg.result.dep_icao}
+                  arrIcao={leg.result.arr_icao}
+                  referenceDatetime={leg.reference_datetime}
+                  avoidStates={leg.avoid_states}
+                  includeStates={leg.include_states}
+                  avoidFirs={leg.avoid_firs}
+                  includeFirs={leg.include_firs}
+                />
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <StatusChip status={leg.result.capability.planning_status} />
+                  {leg.result.capability.exceeds !== null && (
+                    <span className={leg.result.capability.exceeds ? "text-danger" : "text-fg/60"}>
+                      {leg.result.capability.exceeds ? "Exceeds practical range" : "Within practical range"}
+                    </span>
+                  )}
+                </div>
+              </section>
+            ),
+          )}
+
+          {writable && !addingLeg && (
+            <button
+              type="button"
+              onClick={() => {
+                const last = trip.legs[trip.legs.length - 1];
+                setNewLeg(emptyLegInput(last?.result.arr_icao ?? ""));
+                setAddingLeg(true);
+                setEditingLegId(null);
+              }}
+              className="h-11 rounded-md border border-fg/20 px-4 text-sm text-fg/70 hover:border-fg/40"
+            >
+              Add leg
+            </button>
+          )}
+
+          {addingLeg && newLeg && (
+            <section className="space-y-3 rounded-lg border border-accent/40 p-4">
+              <h2 className="font-semibold">New leg</h2>
+              <LegEditor index={0} leg={newLeg} onChange={setNewLeg} onRemove={() => {}} canRemove={false} />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={addLeg.isPending}
+                  onClick={() => addLeg.mutate(newLeg)}
+                  className="h-11 rounded-md bg-primary px-4 text-sm font-semibold text-fg disabled:opacity-50"
+                >
+                  {addLeg.isPending ? "Adding…" : "Add leg"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingLeg(false);
+                    setNewLeg(null);
+                  }}
+                  className="h-11 rounded-md border border-fg/20 px-4 text-sm text-fg/70 hover:border-fg/40"
+                >
+                  Cancel
+                </button>
+              </div>
+              {addLeg.isError && (
+                <p className="text-sm text-danger">
+                  {addLeg.error instanceof ApiError ? "Could not add — check the leg's fields." : "Could not reach the API."}
+                </p>
               )}
-            </div>
-          </section>
-        ))}
+            </section>
+          )}
+        </div>
+      )}
 
       {tab === "Permits" &&
         trip.legs.map((leg) => (
@@ -307,44 +498,46 @@ export default function TripDetailPage() {
                 Filed route: {leg.result.filed_route}
               </p>
             )}
-            <ul className="space-y-1 text-sm">
-              {leg.result.permits.overflight_permits.map((p) => (
-                <li key={`ovf-${p.country_iso3}`} className="flex flex-wrap items-center justify-between gap-2">
-                  <span>
-                    Overflight — {p.country_name}
-                    <span className="ml-2 text-xs text-fg/50">
-                      {formatUtc(p.entry_datetime)} → {formatUtc(p.exit_datetime)}
-                    </span>
-                  </span>
-                  <StatusChip status={p.deadline.deadline_status} />
-                </li>
+            <div className="space-y-2">
+              {leg.permit_assignments.map((p) => (
+                <PermitRow
+                  key={`${p.service_code}-${p.country_iso3}`}
+                  tripId={tripId}
+                  legId={leg.id}
+                  permit={p}
+                  writable={writable}
+                  canDeleteAccess={canDelete(role)}
+                  vendorNames={vendorNames}
+                  updateServiceAssignment={updateServiceAssignment}
+                  removeCustomService={removeCustomService}
+                  sendServices={sendServices}
+                />
               ))}
-              {leg.result.permits.landing_permits.map((p) => (
-                <li key={`ldg-${p.country_iso3}`} className="flex flex-wrap items-center justify-between gap-2">
-                  <span>
-                    Landing — {p.country_name}
-                    <span className="ml-2 text-xs text-fg/50">{formatUtc(p.entry_datetime)}</span>
-                  </span>
-                  <StatusChip status={p.deadline.deadline_status} />
-                </li>
-              ))}
-              {leg.result.permits.ground_handling_orders.map((g) => (
-                <li key={`gh-${g.country_iso3}`} className="flex items-center justify-between gap-2">
-                  <span>Ground handling — {g.country_name}</span>
-                  <StatusChip status={g.deadline.deadline_status} />
-                </li>
-              ))}
-              {leg.result.permits.overflight_permits.length === 0 &&
-                leg.result.permits.landing_permits.length === 0 &&
-                leg.result.permits.ground_handling_orders.length === 0 && <p className="text-fg/50">No permits required.</p>}
-            </ul>
+              <ul className="space-y-1 text-sm">
+                {leg.result.permits.ground_handling_orders.map((g) => (
+                  <li key={`gh-${g.country_iso3}`} className="flex items-center justify-between gap-2">
+                    <span>Ground handling — {g.country_name}</span>
+                    <StatusChip status={g.deadline.deadline_status} />
+                  </li>
+                ))}
+              </ul>
+              {leg.permit_assignments.length === 0 && leg.result.permits.ground_handling_orders.length === 0 && (
+                <p className="text-sm text-fg/50">No permits required.</p>
+              )}
+            </div>
             {(leg.result.permits.state_avoid_include.violated || leg.result.permits.fir_avoid_include.violated) && (
               <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-                {leg.result.permits.state_avoid_include.violated && (
+                {leg.result.permits.state_avoid_include.avoided_transited.length > 0 && (
                   <p>Avoided state(s) transited: {leg.result.permits.state_avoid_include.avoided_transited.join(", ")}</p>
                 )}
-                {leg.result.permits.fir_avoid_include.violated && (
+                {leg.result.permits.state_avoid_include.required_missed.length > 0 && (
+                  <p>Required state(s) not transited: {leg.result.permits.state_avoid_include.required_missed.join(", ")}</p>
+                )}
+                {leg.result.permits.fir_avoid_include.avoided_transited.length > 0 && (
                   <p>Avoided FIR(s) transited: {leg.result.permits.fir_avoid_include.avoided_transited.join(", ")}</p>
+                )}
+                {leg.result.permits.fir_avoid_include.required_missed.length > 0 && (
+                  <p>Required FIR(s) not transited: {leg.result.permits.fir_avoid_include.required_missed.join(", ")}</p>
                 )}
               </div>
             )}
@@ -717,6 +910,7 @@ function ServiceRow({
   vendorNames,
   selected,
   onToggleSelected,
+  showCheckbox = true,
   updateServiceAssignment,
   removeCustomService,
   sendServices,
@@ -729,27 +923,34 @@ function ServiceRow({
   vendorNames: Record<string, string>;
   selected: boolean;
   onToggleSelected: () => void;
+  showCheckbox?: boolean;
   updateServiceAssignment: UpdateServiceAssignmentMutation;
   removeCustomService: RemoveCustomServiceMutation;
   sendServices: SendServicesMutation;
 }) {
   const [threadOpen, setThreadOpen] = useState(false);
 
+  // country_iso3 is only meaningful when assignment.icao is really a
+  // 3-letter country code (task #115 permits) — passed unconditionally
+  // here since a 4-letter GROUND icao can never match a
+  // VendorCoverageCountry row anyway (always exactly 3 letters), so this
+  // is a no-op fallback for every existing GROUND caller.
   const { data: resolved } = useQuery({
     queryKey: ["service-delivery-resolve", legId, assignment.service_code, assignment.icao],
     queryFn: () =>
       api.get<ServiceDeliveryResolved>(
-        `/service-delivery-configs/resolve?leg_id=${legId}&service_code=${assignment.service_code}`,
+        `/service-delivery-configs/resolve?leg_id=${legId}&service_code=${assignment.service_code}&country_iso3=${assignment.icao}`,
       ),
   });
-  const vendorName = resolved?.config ? vendorNames[resolved.config.vendor_id] ?? resolved.config.vendor_id : null;
+  const resolvedVendorId = resolved?.config?.vendor_id ?? resolved?.fallback_vendor_id ?? null;
+  const vendorName = resolvedVendorId ? vendorNames[resolvedVendorId] ?? resolvedVendorId : null;
 
   const sendResult = sendServices.data?.find((r) => r.service_code === assignment.service_code && r.icao === assignment.icao);
 
   return (
     <div className="rounded-md border border-fg/10 p-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {writable && <input type="checkbox" checked={selected} onChange={onToggleSelected} className="h-4 w-4 accent-primary" />}
+        {writable && showCheckbox && <input type="checkbox" checked={selected} onChange={onToggleSelected} className="h-4 w-4 accent-primary" />}
         <span className="mono-figures w-16">{assignment.icao}</span>
         <span className="flex-1">
           {assignment.service_name ?? assignment.service_code}
@@ -826,6 +1027,77 @@ function ServiceRow({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Permits tab (task #115) ---
+// Overflight/landing permits reuse ServiceRow's status/vendor/send/message
+// machinery wholesale (same service_assignments column, same send/message
+// endpoints — see backend/app/services/trip_service.py's
+// _permit_assignments_out and Prompt.md's writeup for why country_iso3
+// fills the icao slot for these). PermitRow just adapts a PermitAssignment
+// into a ServiceAssignment-shaped object and adds the deadline-ladder
+// header ServiceRow doesn't know about; the checkbox/batch-select bar
+// stays Services-tab-only (hidden here via showCheckbox={false}).
+function PermitRow({
+  tripId,
+  legId,
+  permit,
+  writable,
+  canDeleteAccess,
+  vendorNames,
+  updateServiceAssignment,
+  removeCustomService,
+  sendServices,
+}: {
+  tripId: string;
+  legId: string;
+  permit: PermitAssignment;
+  writable: boolean;
+  canDeleteAccess: boolean;
+  vendorNames: Record<string, string>;
+  updateServiceAssignment: UpdateServiceAssignmentMutation;
+  removeCustomService: RemoveCustomServiceMutation;
+  sendServices: SendServicesMutation;
+}) {
+  const assignment: ServiceAssignment = {
+    service_code: permit.service_code,
+    icao: permit.country_iso3,
+    service_name: `${permit.country_name} — ${permit.service_code === "OVF" ? "Overflight" : "Landing"} permit`,
+    provider: permit.provider,
+    vendor_id: permit.vendor_id,
+    notes: permit.notes,
+    status: permit.status,
+    confirmation_number: permit.confirmation_number,
+    granted_at: permit.granted_at,
+    valid_until: permit.valid_until,
+    manual: false,
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg/50">
+        <span className="mono-figures">
+          {formatUtc(permit.entry_datetime)}
+          {permit.service_code === "OVF" ? ` → ${formatUtc(permit.exit_datetime)}` : ""}
+        </span>
+        <StatusChip status={permit.deadline.deadline_status} />
+      </div>
+      <ServiceRow
+        tripId={tripId}
+        legId={legId}
+        assignment={assignment}
+        writable={writable}
+        canDeleteAccess={canDeleteAccess}
+        vendorNames={vendorNames}
+        selected={false}
+        onToggleSelected={() => {}}
+        showCheckbox={false}
+        updateServiceAssignment={updateServiceAssignment}
+        removeCustomService={removeCustomService}
+        sendServices={sendServices}
+      />
     </div>
   );
 }

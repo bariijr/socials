@@ -200,6 +200,10 @@ class TestFindAlternateRoute:
         assert result.extra_distance_nm is not None and result.extra_distance_nm > 0
         assert result.extra_time_hours == pytest.approx(result.extra_distance_nm / 470, rel=1e-6)
         assert result.extra_fuel_kg == pytest.approx(result.extra_time_hours * 250.0, rel=1e-6)
+        # The alternate track's own geometry — not just the extra-distance
+        # number — is what the map actually draws.
+        assert result.track_points is not None and len(result.track_points) >= 2
+        assert result.states is not None and g["iso_c"] not in result.states
 
     @pytest.mark.asyncio
     async def test_destination_inside_avoided_state_is_unreachable(self, session, two_country_route):
@@ -219,6 +223,7 @@ class TestFindAlternateRoute:
         # The destination itself sits inside the avoided state — no
         # corridor detour can fix that, so this must fail honestly.
         assert result.found is False
+        assert result.track_points is None
 
     @pytest.mark.asyncio
     async def test_avoided_fir_forces_a_lateral_detour(self, session, corridor_with_fir_obstacle):

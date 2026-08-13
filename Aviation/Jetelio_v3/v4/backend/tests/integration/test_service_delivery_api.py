@@ -90,7 +90,10 @@ class TestServiceDeliveryConfigResolve:
             params={"leg_id": leg_id, "service_code": trip_leg_fixture["service_code"]},
         )
         assert resolved.status_code == 200
-        assert resolved.json() == {"config": None, "matched_scope": None}
+        # fallback_vendor_id (task #115) is a real field now too — no
+        # VendorCoverageCountry row exists for this fixture's country
+        # either, so it stays null, same honest "nothing resolved" result.
+        assert resolved.json() == {"config": None, "matched_scope": None, "fallback_vendor_id": None}
 
     @pytest.mark.asyncio
     async def test_leg_scoped_config_beats_operator_scoped_config(self, client, trip_leg_fixture, vendor_and_operator):

@@ -50,6 +50,11 @@ class OverflightPermit:
     entry_datetime: datetime
     exit_datetime: datetime
     deadline: PermitDeadline
+    # Identifies this line item in TripLeg.service_assignments as
+    # "OVF:{country_iso3}" (task #115) — overflight permits have no
+    # natural ICAO (an en-route country isn't an airport), so the country
+    # ISO3 fills the location slot that key otherwise uses.
+    service_code: str = "OVF"
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,7 @@ class LandingPermit:
     entry_datetime: datetime
     exit_datetime: datetime
     deadline: PermitDeadline
+    service_code: str = "LDG"
 
 
 @dataclass(frozen=True)

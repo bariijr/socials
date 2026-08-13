@@ -3,13 +3,13 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.aircraft_document import AircraftDocumentType
-
 
 class AircraftDocumentOut(BaseModel):
     id: UUID
     aircraft_id: UUID
-    doc_type: AircraftDocumentType
+    # str, not the old AircraftDocumentType enum (task #118) — validated
+    # against real aircraft_document_types rows at the service layer.
+    doc_type: str
     filename: str
     content_type: str | None
     file_size_bytes: int | None

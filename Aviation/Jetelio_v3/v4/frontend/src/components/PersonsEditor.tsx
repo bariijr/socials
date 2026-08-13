@@ -1,6 +1,8 @@
 "use client";
 
-import type { PersonPublicInput } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import type { PersonPublicInput, PersonRoleDefinition } from "@/lib/types";
 import { CountryPicker } from "@/components/CountryPicker";
 
 interface Props {
@@ -9,12 +11,24 @@ interface Props {
 }
 
 export function PersonsEditor({ persons, onChange }: Props) {
+  // Task #120 — self-contained fetch, same pattern as AircraftTypePicker/
+  // CountryPicker (this component is used on both the public Viability IQ
+  // form and the admin Trip Manager, and the public page has no other
+  // page-level query to piggyback on). Public endpoint
+  // (/feasibility/person-roles), not the admin-authenticated CRUD router.
+  const { data: roles } = useQuery({
+    queryKey: ["person-roles"],
+    queryFn: () => api.get<PersonRoleDefinition[]>("/feasibility/person-roles"),
+  });
+  const crewRoles = (roles ?? []).filter((r) => r.is_crew);
+  const paxRoles = (roles ?? []).filter((r) => !r.is_crew);
+
   function updatePerson(index: number, patch: Partial<PersonPublicInput>) {
     onChange(persons.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   }
 
   function addPerson() {
-    onChange([...persons, { role: "PAX", nationality_iso3: "" }]);
+    onChange([...persons, { role: paxRoles[0]?.code ?? "PAX", nationality_iso3: "" }]);
   }
 
   function removePerson(index: number) {
@@ -29,24 +43,31 @@ export function PersonsEditor({ persons, onChange }: Props) {
           <div key={i} className="flex items-center gap-2">
             <select
               value={p.role}
-              onChange={(e) => updatePerson(i, { role: e.target.value as PersonPublicInput["role"] })}
+              onChange={(e) => updatePerson(i, { role: e.target.value })}
               className="h-11 rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
             >
               <optgroup label="Crew" className="bg-base">
-                <option value="PIC" className="bg-base">Pilot in Command</option>
-                <option value="FO" className="bg-base">First Officer</option>
-                <option value="FA" className="bg-base">Flight Attendant</option>
-                <option value="MECHANIC" className="bg-base">Mechanic</option>
-                <option value="ENGINEER" className="bg-base">Engineer</option>
-                <option value="CREW" className="bg-base">Crew (other)</option>
+                {crewRoles.map((r) => (
+                  <option key={r.code} value={r.code} className="bg-base">
+                    {r.label}
+                  </option>
+                ))}
               </optgroup>
               <optgroup label="Passengers" className="bg-base">
-                <option value="PAX" className="bg-base">Pax</option>
-                <option value="VIP" className="bg-base">VIP</option>
-                <option value="PRINCIPAL" className="bg-base">Principal</option>
-                <option value="OTHER" className="bg-base">Other</option>
+                {paxRoles.map((r) => (
+                  <option key={r.code} value={r.code} className="bg-base">
+                    {r.label}
+                  </option>
+                ))}
               </optgroup>
             </select>
+            <input
+              type="text"
+              value={p.name ?? ""}
+              onChange={(e) => updatePerson(i, { name: e.target.value || null })}
+              placeholder="Name (optional)"
+              className="h-11 w-40 rounded-md border border-fg/20 bg-transparent px-3 text-sm text-fg"
+            />
             <div className="w-56">
               <CountryPicker
                 value={p.nationality_iso3}

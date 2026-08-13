@@ -13,8 +13,6 @@ from app.domain.credentials import (
     PersonRollupStatus,
     SoulsOnBoardResult,
     check_souls_on_board,
-    is_crew_role,
-    is_pax_role,
     resolve_passport_status,
     resolve_person_rollup_status,
 )
@@ -26,7 +24,9 @@ from app.services import settings_service
 @dataclass(frozen=True)
 class PersonInput:
     person_id: str
-    role: str  # CREW | PAX
+    # A real, admin-defined role code (task #120) — see
+    # app.services.person_role_service, not a fixed CREW|PAX enum.
+    role: str
     nationality_iso3: str
     passport_expiry: date | None
 
@@ -111,6 +111,7 @@ async def compute_leg_credentials(
     arrival_icao: str,
     trip_end_date: date,
     max_pax: int | None,
+    role_is_crew: dict[str, bool],
 ) -> LegCredentialsResult:
     settings_map = await settings_service.get_typed_settings_map(session)
     buffer_days = settings_map["passport_validity_buffer_days"]
@@ -130,8 +131,14 @@ async def compute_leg_credentials(
             )
         )
 
-    crew_count = sum(1 for p in persons if is_crew_role(p.role))
-    pax_count = sum(1 for p in persons if is_pax_role(p.role))
+    # Task #120: role_is_crew is fetched once per leg computation and
+    # passed in (app.services.person_role_service.get_crew_bucket_map),
+    # not queried per person — mirrors settings_map's fetch-once pattern.
+    # An unrecognized role defaults to non-crew (pax) — same
+    # erring-toward-the-safer-interpretation stance the old fixed
+    # CREW_ROLES/PAX_ROLES frozensets used for OTHER.
+    crew_count = sum(1 for p in persons if role_is_crew.get(p.role, False))
+    pax_count = len(persons) - crew_count
     souls_on_board = check_souls_on_board(crew_count, pax_count, max_pax)
     any_action_required = any(r.rollup_status == PersonRollupStatus.ACTION_REQUIRED for r in results)
 

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import (
     aircraft,
+    aircraft_document_types,
     aircraft_documents,
     airports,
     auth,
@@ -23,6 +24,7 @@ from app.api.routers import (
     operators,
     parties,
     permit_fee_providers,
+    person_roles,
     persons,
     readiness,
     service_catalogue,
@@ -40,7 +42,7 @@ from app.config import get_settings
 from app.core import storage
 from app.core.exception_handlers import register_exception_handlers
 from app.database import AsyncSessionLocal
-from app.services import document_template_service, settings_service
+from app.services import aircraft_document_type_service, document_template_service, person_role_service, settings_service
 
 settings = get_settings()
 
@@ -54,6 +56,8 @@ async def lifespan(_app: FastAPI):
     async with AsyncSessionLocal() as session:
         await settings_service.ensure_seeded(session)
         await document_template_service.ensure_seeded(session)
+        await aircraft_document_type_service.ensure_seeded(session)
+        await person_role_service.ensure_seeded(session)
         await session.commit()
     await storage.ensure_bucket_exists()
     yield
@@ -86,6 +90,8 @@ app.include_router(airports.router)
 app.include_router(operators.router)
 app.include_router(aircraft.router)
 app.include_router(aircraft_documents.router)
+app.include_router(aircraft_document_types.router)
+app.include_router(person_roles.router)
 app.include_router(clients.router)
 app.include_router(vendors.router)
 app.include_router(service_catalogue.router)

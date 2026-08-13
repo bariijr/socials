@@ -30,12 +30,19 @@ class FirLookupOut(BaseModel):
 
 
 class PersonPublicIn(BaseModel):
-    # Task #107: widened from CREW|PAX to real-world positions. CREW/PAX
-    # remain valid as generic fallbacks (existing stored data, quick entry);
-    # see app.domain.credentials.CREW_ROLES/PAX_ROLES for how each buckets
-    # into the souls-on-board crew/pax split.
-    role: str = Field(pattern="^(PIC|FO|FA|MECHANIC|ENGINEER|CREW|PAX|VIP|PRINCIPAL|OTHER)$")
+    # Task #120: role is validated against real, admin-editable
+    # person_role_definitions rows at the service layer (see
+    # app.services.person_role_service.validate_active_code /
+    # get_crew_bucket_map) rather than a fixed Pydantic regex — an admin
+    # can add a new role (e.g. "Loadmaster") without a code change. Was
+    # "^(PIC|FO|FA|MECHANIC|ENGINEER|CREW|PAX|VIP|PRINCIPAL|OTHER)$" (task
+    # #107) before this.
+    role: str = Field(max_length=30)
     nationality_iso3: str = Field(min_length=3, max_length=3)
+    # Optional — when given, lets a permit/handling-request message name
+    # the PIC ("CAPTAIN NICHOLAS FREEMAN") instead of a bare headcount.
+    # Never fabricated when absent.
+    name: str | None = None
 
 
 class LegCheckIn(BaseModel):
@@ -49,6 +56,13 @@ class LegCheckIn(BaseModel):
     # dispatcher who knows "must land by X" rather than "departing at Y".
     reference_datetime: datetime | None = None
     required_arrival_datetime: datetime | None = None
+    # Cosmetic only (task #116) — never fed back into permit/deadline
+    # computation, which always uses the engine-computed arrival
+    # (reference_datetime + EET). Lets a dispatcher/crew pad or adjust the
+    # displayed arrival after the fact, on both the public Viability IQ
+    # form and the admin Trip Manager (this field lives on the shared base
+    # so both get it identically — was admin-only before task #116).
+    arrival_datetime_override: datetime | None = None
     avoid_states: list[str] = Field(default_factory=list)
     include_states: list[str] = Field(default_factory=list)
     avoid_firs: list[str] = Field(default_factory=list)
@@ -97,6 +111,19 @@ class RouteOut(BaseModel):
     firs: list[FirOut]
 
 
+class ReroutePreviewOut(BaseModel):
+    found: bool
+    extra_distance_nm: float | None
+    extra_time_hours: float | None
+    track_points: list[tuple[float, float]]
+    states: list[StateOut]
+    firs: list[FirOut]
+
+
+class WorldOutlineOut(BaseModel):
+    countries: dict[str, dict]
+
+
 class RoutePreviewOut(BaseModel):
     distance_nm: float
     eet_hours: float
@@ -105,6 +132,13 @@ class RoutePreviewOut(BaseModel):
     track_points: list[tuple[float, float]]
     state_geometry: dict[str, dict]
     fir_geometry: dict[str, dict]
+    # Only populated when the caller supplied avoid/include constraints AND
+    # the direct route above actually violates one of them — the map's
+    # "does the trajectory change" question, answered with a real alternate
+    # track rather than just a distance/time delta (see RerouteOut in this
+    # same module, which stays delta-only for the frozen trip snapshot).
+    avoid_include_violated: bool = False
+    reroute: ReroutePreviewOut | None = None
 
 
 class PermitDeadlineOut(BaseModel):
@@ -120,6 +154,11 @@ class OverflightPermitOut(BaseModel):
     entry_datetime: datetime
     exit_datetime: datetime
     deadline: PermitDeadlineOut
+    # Added task #115 (permit filing). Default None, not required — old
+    # computed_snapshot rows predating this field must still validate (see
+    # Prompt.md §10.2's forward-compatibility pattern); a historical leg
+    # just won't show a send action for this permit line.
+    service_code: str | None = None
 
 
 class LandingPermitOut(BaseModel):
@@ -128,6 +167,7 @@ class LandingPermitOut(BaseModel):
     entry_datetime: datetime
     exit_datetime: datetime
     deadline: PermitDeadlineOut
+    service_code: str | None = None
 
 
 class GroundHandlingOrderOut(BaseModel):

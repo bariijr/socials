@@ -24,13 +24,42 @@ interface Props {
   // these same dep/arr pairs.
   showStats?: boolean;
   showMap?: boolean;
+  /** When given and the direct route above actually crosses an avoided
+   * state/FIR (or misses a required one), the map draws the direct track
+   * dashed/danger and overlays the real alternate route that avoids it. */
+  avoidStates?: string[];
+  includeStates?: string[];
+  avoidFirs?: string[];
+  includeFirs?: string[];
 }
 
-export function RoutePreviewPanel({ depIcao, arrIcao, referenceDatetime, onEetHours, showStats = true, showMap = true }: Props) {
+function buildQuery(depIcao: string, arrIcao: string, avoidStates: string[], includeStates: string[], avoidFirs: string[], includeFirs: string[]) {
+  const params = new URLSearchParams();
+  params.set("dep_icao", depIcao);
+  params.set("arr_icao", arrIcao);
+  for (const s of avoidStates) params.append("avoid_states", s);
+  for (const s of includeStates) params.append("include_states", s);
+  for (const f of avoidFirs) params.append("avoid_firs", f);
+  for (const f of includeFirs) params.append("include_firs", f);
+  return params.toString();
+}
+
+export function RoutePreviewPanel({
+  depIcao,
+  arrIcao,
+  referenceDatetime,
+  onEetHours,
+  showStats = true,
+  showMap = true,
+  avoidStates = [],
+  includeStates = [],
+  avoidFirs = [],
+  includeFirs = [],
+}: Props) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["route-preview", depIcao, arrIcao],
+    queryKey: ["route-preview", depIcao, arrIcao, avoidStates, includeStates, avoidFirs, includeFirs],
     queryFn: () =>
-      api.get<RoutePreview>(`/feasibility/route-preview?dep_icao=${encodeURIComponent(depIcao)}&arr_icao=${encodeURIComponent(arrIcao)}`),
+      api.get<RoutePreview>(`/feasibility/route-preview?${buildQuery(depIcao, arrIcao, avoidStates, includeStates, avoidFirs, includeFirs)}`),
     enabled: Boolean(depIcao && arrIcao),
   });
 
@@ -64,7 +93,33 @@ export function RoutePreviewPanel({ depIcao, arrIcao, referenceDatetime, onEetHo
           )}
         </>
       )}
-      {showMap && <RouteMap tracks={[data.track_points]} stateGeometry={data.state_geometry} firGeometry={data.fir_geometry} />}
+      {data.avoid_include_violated && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
+          {data.reroute?.found ? (
+            <>
+              This route crosses an avoided state/FIR (or misses a required one) — shown dashed below. The
+              alternate route avoiding it adds ~{data.reroute.extra_distance_nm?.toFixed(0)} NM
+              {data.reroute.extra_time_hours && ` (+${data.reroute.extra_time_hours.toFixed(1)} h)`}.
+            </>
+          ) : (
+            <>This route crosses an avoided state/FIR (or misses a required one) — no viable alternate route found.</>
+          )}
+        </div>
+      )}
+      {showMap && (
+        <RouteMap
+          tracks={
+            data.avoid_include_violated
+              ? [
+                  { points: data.track_points, variant: data.reroute?.found ? "violated" : "primary" },
+                  ...(data.reroute?.found ? [{ points: data.reroute.track_points, variant: "alternate" as const }] : []),
+                ]
+              : [data.track_points]
+          }
+          stateGeometry={data.state_geometry}
+          firGeometry={data.fir_geometry}
+        />
+      )}
     </div>
   );
 }

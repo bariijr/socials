@@ -28,6 +28,7 @@ function emptyLeg(depIcao = ""): LegInput {
     arr_icao: "",
     reference_datetime: null,
     required_arrival_datetime: null,
+    arrival_datetime_override: null,
     avoid_states: [],
     include_states: [],
     avoid_firs: [],
@@ -35,10 +36,12 @@ function emptyLeg(depIcao = ""): LegInput {
   };
 }
 
+// Task #116: LegEditor is always departure-driven now (two always-visible
+// fields, arrival auto-prefilled but independently editable) — the old
+// "exactly one of departure/required-arrival" toggle model is gone, so
+// this just needs a real departure time.
 function legTimeValid(l: LegInput): boolean {
-  const hasDep = Boolean(l.reference_datetime);
-  const hasArr = Boolean(l.required_arrival_datetime);
-  return hasDep !== hasArr; // exactly one
+  return Boolean(l.reference_datetime);
 }
 
 export default function FeasibilityIQPage() {
@@ -226,7 +229,16 @@ export default function FeasibilityIQPage() {
               {legs.some((l) => l.dep_icao && l.arr_icao) && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-fg/70">Route map</h3>
-                  <CombinedRouteMap legs={legs.map((l) => ({ depIcao: l.dep_icao, arrIcao: l.arr_icao }))} />
+                  <CombinedRouteMap
+                    legs={legs.map((l) => ({
+                      depIcao: l.dep_icao,
+                      arrIcao: l.arr_icao,
+                      avoidStates: l.avoid_states,
+                      includeStates: l.include_states,
+                      avoidFirs: l.avoid_firs,
+                      includeFirs: l.include_firs,
+                    }))}
+                  />
                   {legs.length > 1 && (
                     <p className="mono-figures flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg/50">
                       {legs.map(

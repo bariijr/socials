@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_current_user, require_delete_access, require_write_access
 from app.core.errors import ValidationFailedError
 from app.database import get_db
-from app.models.aircraft_document import AircraftDocumentType
 from app.schemas.aircraft_document import AircraftDocumentOut
 from app.services import aircraft_document_service
 
@@ -28,7 +27,7 @@ async def list_documents(
 @router.post("", response_model=AircraftDocumentOut, status_code=201)
 async def upload_document(
     aircraft_id: UUID,
-    doc_type: AircraftDocumentType = Form(...),
+    doc_type: str = Form(...),
     expiry_date: date | None = Form(default=None),
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_db),

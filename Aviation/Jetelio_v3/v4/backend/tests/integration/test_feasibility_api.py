@@ -230,6 +230,56 @@ class TestRequestQuote:
         assert legs[0].verdict == "FEASIBLE"
 
     @pytest.mark.asyncio
+    async def test_arrival_datetime_override_persists_on_the_public_path(self, client, session, public_leg_fixture):
+        """Task #116 — arrival_datetime_override moved from admin-only
+        TripLegIn up to the shared base LegCheckIn, so the public Viability
+        IQ form's LegEditor can prefill-then-let-you-edit arrival too. Must
+        show up immediately in the /feasibility/check response (what the
+        user actually sees on the results screen), survive the Redis cache
+        round trip through /request-quote into a real TripLeg, and must
+        never change what verdict/permits got computed (still purely
+        cosmetic — see leg_feasibility_service; the engine's own
+        computed_snapshot stays un-overridden, same reproducibility
+        contract as everywhere else in this system).
+        """
+        leg = _leg(public_leg_fixture)
+        override = (datetime.now(timezone.utc) + timedelta(hours=210)).isoformat()  # well past the computed EET-based arrival
+        leg["arrival_datetime_override"] = override
+
+        check_resp = await client.post(
+            "/feasibility/check", json=_check_payload(public_leg_fixture, legs=[leg]), headers=_ip_headers()
+        )
+        assert check_resp.status_code == 200, check_resp.text
+        check_body = check_resp.json()
+        # The check response the user actually sees reflects the override
+        # immediately, not just the eventually-created trip. (Pydantic
+        # serializes UTC as "Z"; datetime.isoformat() uses "+00:00" — parse
+        # both back to compare the actual instant, not the string.)
+        assert datetime.fromisoformat(check_body["legs"][0]["arrival_datetime"]) == datetime.fromisoformat(override)
+        assert check_body["legs"][0]["verdict"] == "FEASIBLE"  # override never affects the computed verdict
+
+        quote_resp = await client.post(
+            "/feasibility/request-quote",
+            json={"check_id": check_body["check_id"], "contact_name": "Override Test", "contact_email": "override@example.com"},
+            headers=_ip_headers(),
+        )
+        assert quote_resp.status_code == 200, quote_resp.text
+        trip_id = uuid.UUID(quote_resp.json()["trip_id"])
+
+        saved_leg = (
+            await session.execute(select(TripLeg).where(TripLeg.trip_id == trip_id))
+        ).scalars().one()
+        assert saved_leg.arrival_datetime == datetime.fromisoformat(override)
+        # The engine's own reference_datetime (departure) is untouched by
+        # the override — permits/deadlines still key off this, not arrival.
+        assert saved_leg.reference_datetime == datetime.fromisoformat(leg["reference_datetime"])
+        # computed_snapshot stays the pure, un-overridden engine output —
+        # same reproducibility contract §10.2 documents elsewhere. Only the
+        # real TripLeg.arrival_datetime column (asserted above) carries the
+        # override; the frozen snapshot must never silently absorb it.
+        assert saved_leg.computed_snapshot["arrival_datetime"] != override
+
+    @pytest.mark.asyncio
     async def test_multi_leg_quote_creates_one_trip_leg_per_leg(self, client, session, public_leg_fixture):
         legs = [_leg(public_leg_fixture), _leg(public_leg_fixture, reverse=True)]
         check_resp = await client.post(

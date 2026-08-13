@@ -10,14 +10,15 @@ from app.models.trip import (
     TripOpsType,
     TripStatus,
 )
-from app.schemas.feasibility import LegCheckIn, LegResultOut, PersonPublicIn
+from app.schemas.feasibility import LegCheckIn, LegResultOut, PermitDeadlineOut, PersonPublicIn
 
 
 class TripLegIn(LegCheckIn):
     """LegCheckIn plus admin-only fields never exposed on the public
     Feasibility IQ door: client_id (which of an operator's billing
-    entities this leg is for), a per-leg registration override, leg
-    type/status, and an arrival-time display override.
+    entities this leg is for), a per-leg registration override, and leg
+    type/status. arrival_datetime_override lives on the shared base
+    (LegCheckIn) as of task #116 — both this and the public form get it.
     """
 
     client_id: str | None = None
@@ -26,11 +27,6 @@ class TripLegIn(LegCheckIn):
     registration: str | None = None
     leg_type: TripLegType = TripLegType.PRIMARY
     leg_status: TripLegStatus = TripLegStatus.PENDING
-    # Cosmetic only — never fed back into permit/deadline computation,
-    # which always uses the engine-computed arrival. Lets crew pad/adjust
-    # the displayed arrival after the fact. Defaults to the computed value
-    # when not given.
-    arrival_datetime_override: datetime | None = None
 
 
 class TripCreateIn(BaseModel):
@@ -186,6 +182,32 @@ class CustomServiceAssignmentIn(BaseModel):
     icao: str
 
 
+class PermitAssignmentOut(BaseModel):
+    """Overflight/landing permits (task #115), keyed in
+    TripLeg.service_assignments as "{service_code}:{country_iso3}" — the
+    same JSONB column and status/vendor/send machinery ServiceAssignmentOut
+    already uses, just keyed by country instead of ICAO (overflight permits
+    have no natural airport). Deliberately a separate schema from
+    ServiceAssignmentOut rather than a shared one — permits carry
+    country_name/entry/exit/deadline fields services don't, and services
+    carry icao/manual fields permits don't.
+    """
+
+    service_code: str
+    country_iso3: str
+    country_name: str
+    entry_datetime: datetime
+    exit_datetime: datetime
+    deadline: PermitDeadlineOut
+    provider: str | None
+    vendor_id: str | None
+    notes: str | None
+    status: str
+    confirmation_number: str | None
+    granted_at: datetime | None
+    valid_until: datetime | None
+
+
 class TripLegDetailOut(BaseModel):
     id: str
     leg_index: int
@@ -202,6 +224,17 @@ class TripLegDetailOut(BaseModel):
     nav_fees: NavFeesDetailOut | None
     permit_fees: PermitFeesDetailOut | None
     service_assignments: list[ServiceAssignmentOut]
+    permit_assignments: list[PermitAssignmentOut]
+    # The raw routing-constraint input sets (task #117) — read straight from
+    # TripLeg.constraints, not the frozen computed_snapshot. Only the
+    # *violation result* (LegResultOut.permits.state_avoid_include) was
+    # exposed before; an edit form needs the original sets too, or saving
+    # an edit would silently wipe them (update_leg fully replaces
+    # constraints from whatever the submitted payload contains).
+    avoid_states: list[str]
+    include_states: list[str]
+    avoid_firs: list[str]
+    include_firs: list[str]
 
 
 class TripOut(BaseModel):

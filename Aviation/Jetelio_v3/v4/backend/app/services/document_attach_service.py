@@ -83,7 +83,9 @@ async def _aircraft_documents(session: AsyncSession, registration: str | None) -
     ).scalars().all()
     return [
         AvailableDocument(
-            doc_type=d.doc_type.value, document_id=str(d.id), filename=d.filename, content_type=d.content_type,
+            # d.doc_type is a plain str now, not an AircraftDocumentType
+            # enum member (task #118) — no .value to unwrap.
+            doc_type=d.doc_type, document_id=str(d.id), filename=d.filename, content_type=d.content_type,
             expiry_date=d.expiry_date, source="AIRCRAFT",
         )
         for d in rows

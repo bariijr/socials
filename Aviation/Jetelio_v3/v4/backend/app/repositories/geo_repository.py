@@ -84,6 +84,26 @@ async def fetch_simplified_country_geometry(
     )
 
 
+_ALL_COUNTRY_OUTLINE_SQL = """
+    SELECT iso3 AS code, ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, :tolerance)) AS geojson
+    FROM country_geometry
+"""
+
+
+async def fetch_world_outline(session: AsyncSession, *, tolerance: float = 1.5) -> dict[str, dict]:
+    """Every country's own Natural Earth 10m polygon (the same real
+    dataset resolve_leg_route's ST_Contains uses), simplified hard for a
+    world-scale background layer — real geography, not a fabricated or
+    bundled outline, just heavily coarsened since a whole-world SVG has no
+    use for coastline detail a few hundred pixels can't render anyway.
+    Cheap enough for the frontend to fetch once and cache indefinitely:
+    country borders don't move between requests.
+    """
+    stmt = text(_ALL_COUNTRY_OUTLINE_SQL)
+    result = await session.execute(stmt, {"tolerance": tolerance})
+    return {row.code: _json.loads(row.geojson) for row in result if row.geojson}
+
+
 async def fetch_simplified_fir_geometry(
     session: AsyncSession, fir_codes: list[str], *, tolerance: float = 0.3
 ) -> dict[str, dict]:

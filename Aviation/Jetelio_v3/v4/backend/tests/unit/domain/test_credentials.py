@@ -4,8 +4,6 @@ from app.domain.credentials import (
     PassportStatus,
     PersonRollupStatus,
     check_souls_on_board,
-    is_crew_role,
-    is_pax_role,
     resolve_passport_status,
     resolve_person_rollup_status,
 )
@@ -88,21 +86,8 @@ class TestCheckSoulsOnBoard:
         assert result.exceeds is False
 
 
-class TestRoleBucketing:
-    def test_generic_crew_and_pax_still_bucket(self):
-        assert is_crew_role("CREW") is True
-        assert is_pax_role("PAX") is True
-
-    def test_crew_sub_roles_bucket_as_crew(self):
-        for role in ("PIC", "FO", "FA", "MECHANIC", "ENGINEER"):
-            assert is_crew_role(role) is True
-            assert is_pax_role(role) is False
-
-    def test_pax_sub_roles_bucket_as_pax(self):
-        for role in ("VIP", "PRINCIPAL"):
-            assert is_pax_role(role) is True
-            assert is_crew_role(role) is False
-
-    def test_other_buckets_as_pax_not_crew(self):
-        assert is_pax_role("OTHER") is True
-        assert is_crew_role("OTHER") is False
+# Role-vocabulary bucketing (is_crew) moved out of this pure-domain module
+# in task #120 — it's now a real, admin-editable DB table
+# (person_role_definitions), so it's tested at the service/API layer
+# (tests/integration/test_feasibility_api.py) against real rows instead of
+# a fixed frozenset here.

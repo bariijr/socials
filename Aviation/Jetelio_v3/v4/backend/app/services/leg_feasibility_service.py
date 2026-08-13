@@ -19,6 +19,7 @@ from app.services import (
     nav_fee_service,
     permit_engine_service,
     permit_fee_service,
+    person_role_service,
     routing_engine_service,
     settings_service,
 )
@@ -91,6 +92,10 @@ async def compute_leg_feasibility(
         raise ValidationFailedError("arr_icao", f"{arr_icao} has no resolved country — cannot plan a leg to it")
 
     settings_map = await settings_service.get_typed_settings_map(session)
+    role_is_crew = await person_role_service.get_crew_bucket_map(session)
+    for person in persons:
+        if person.role not in role_is_crew:
+            raise ValidationFailedError("persons.role", f"Unknown or inactive role '{person.role}' — see /person-roles for valid codes")
     perf = await session.get(AircraftPerformance, aircraft_icao_type)
 
     route = await routing_engine_service.resolve_leg_route(session, dep_icao, arr_icao)
@@ -150,6 +155,7 @@ async def compute_leg_feasibility(
         arrival_icao=arr_icao,
         trip_end_date=trip_end.date(),
         max_pax=perf.max_pax if perf else None,
+        role_is_crew=role_is_crew,
     )
 
     reroute: RerouteResult | None = None

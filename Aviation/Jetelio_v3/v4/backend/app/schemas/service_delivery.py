@@ -84,7 +84,13 @@ class ServiceDeliveryResolvedOut(BaseModel):
     (never a guessed default)."""
 
     config: ServiceDeliveryConfigOut | None
-    matched_scope: str | None  # "LEG" / "TRIP" / "OPERATOR" / None
+    matched_scope: str | None  # "LEG" / "TRIP" / "OPERATOR" / "COUNTRY_COVERAGE" / None
+    # Only set when matched_scope == "COUNTRY_COVERAGE" (task #115) — a
+    # permit (OVF/LDG) resolved via VendorCoverageCountry rather than an
+    # explicit ServiceDeliveryConfig row. config stays honestly None in
+    # this case (no real config row exists to describe) rather than
+    # fabricating one just to fit the same shape.
+    fallback_vendor_id: UUID | None = None
 
 
 class ConfirmationRoutingConfigBase(BaseModel):

@@ -37,14 +37,16 @@ async def resolve_service_delivery_config(
     leg_id: UUID,
     service_code: str,
     operator_id: UUID | None = None,
+    country_iso3: str | None = None,
     session: AsyncSession = Depends(get_db),
     _user: CurrentUser = Depends(get_current_user),
 ) -> ServiceDeliveryResolvedOut:
     """Which vendor + channels should this service request be sent through,
     for this leg? Never guesses — returns `config: null` when nothing
-    scoped to this leg/trip/operator matches."""
+    scoped to this leg/trip/operator matches (unless country_iso3 falls
+    back to a VendorCoverageCountry match — task #115, permits)."""
     return await service_delivery_service.resolve_service_delivery(
-        session, leg_id=leg_id, service_code=service_code, operator_id=operator_id
+        session, leg_id=leg_id, service_code=service_code, operator_id=operator_id, country_iso3=country_iso3
     )
 
 

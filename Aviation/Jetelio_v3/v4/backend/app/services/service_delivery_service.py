@@ -20,6 +20,7 @@ from app.domain.service_delivery import (
 )
 from app.models.service_delivery import ConfirmationRoutingConfig, ConfirmationTargetRole, ServiceDeliveryConfig
 from app.models.trip import TripLeg
+from app.models.vendor import VendorCoverageCountry
 from app.repositories.audit import write_audit_log
 from app.repositories.base import Repository
 from app.schemas.service_delivery import (
@@ -100,7 +101,7 @@ async def delete_service_delivery_config(session: AsyncSession, config_id: UUID,
 
 
 async def resolve_service_delivery(
-    session: AsyncSession, *, leg_id: UUID, service_code: str, operator_id: UUID | None
+    session: AsyncSession, *, leg_id: UUID, service_code: str, operator_id: UUID | None, country_iso3: str | None = None
 ) -> ServiceDeliveryResolvedOut:
     _leg, trip_id = await _leg_and_trip_id(session, leg_id)
 
@@ -124,10 +125,29 @@ async def resolve_service_delivery(
         for r in rows
     ]
     best = resolve_service_delivery_config(candidates, requested_service_code=service_code)
-    if best is None:
-        return ServiceDeliveryResolvedOut(config=None, matched_scope=None)
-    matched_row = next(r for r in rows if str(r.id) == best.id)
-    return ServiceDeliveryResolvedOut(config=ServiceDeliveryConfigOut.model_validate(matched_row), matched_scope=_matched_scope(matched_row))
+    if best is not None:
+        matched_row = next(r for r in rows if str(r.id) == best.id)
+        return ServiceDeliveryResolvedOut(config=ServiceDeliveryConfigOut.model_validate(matched_row), matched_scope=_matched_scope(matched_row))
+
+    # No explicit ServiceDeliveryConfig matched — fall back to
+    # VendorCoverageCountry for country-keyed requests (task #115,
+    # overflight/landing permits with no natural leg/trip/operator-scoped
+    # config). An admin can still override this by creating a real
+    # ServiceDeliveryConfig, which is always tried first, above. No
+    # VendorCoverageCountry row either → honestly nothing resolved, same
+    # as the existing "nothing configured" path.
+    if country_iso3 is not None:
+        coverage_rows = (
+            await session.execute(
+                select(VendorCoverageCountry)
+                .where(VendorCoverageCountry.country_iso3 == country_iso3, VendorCoverageCountry.deleted_at.is_(None))
+                .order_by(VendorCoverageCountry.has_caa_direct_account.desc())
+            )
+        ).scalars().all()
+        if coverage_rows:
+            return ServiceDeliveryResolvedOut(config=None, matched_scope="COUNTRY_COVERAGE", fallback_vendor_id=coverage_rows[0].vendor_id)
+
+    return ServiceDeliveryResolvedOut(config=None, matched_scope=None)
 
 
 # --- ConfirmationRoutingConfig --------------------------------------------

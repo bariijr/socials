@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import storage
 from app.core.errors import NotFoundError
 from app.models.aircraft import Aircraft
-from app.models.aircraft_document import AircraftDocument, AircraftDocumentType
+from app.models.aircraft_document import AircraftDocument
 from app.repositories.audit import write_audit_log
 from app.schemas.aircraft_document import AircraftDocumentOut
+from app.services import aircraft_document_type_service
 
 
 def _to_out(doc: AircraftDocument) -> AircraftDocumentOut:
@@ -53,7 +54,7 @@ async def upload_document(
     session: AsyncSession,
     aircraft_id: UUID,
     *,
-    doc_type: AircraftDocumentType,
+    doc_type: str,
     filename: str,
     content: bytes,
     content_type: str | None,
@@ -62,6 +63,7 @@ async def upload_document(
     actor_email: str,
 ) -> AircraftDocumentOut:
     await _get_aircraft_or_404(session, aircraft_id)
+    await aircraft_document_type_service.validate_active_code(session, doc_type)
 
     key = storage.build_key(aircraft_id=str(aircraft_id), filename=filename)
     await storage.upload_file(key, content, content_type)
@@ -86,7 +88,7 @@ async def upload_document(
         action="CREATE",
         entity_type="AircraftDocument",
         entity_id=str(doc.id),
-        to_value={"aircraft_id": str(aircraft_id), "doc_type": doc_type.value, "filename": filename},
+        to_value={"aircraft_id": str(aircraft_id), "doc_type": doc_type, "filename": filename},
     )
     return _to_out(doc)
 

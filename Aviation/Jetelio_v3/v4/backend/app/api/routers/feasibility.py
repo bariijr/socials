@@ -3,7 +3,7 @@ vendor data anywhere in this router; see app.services.feasibility_iq_service
 for the public-safe projection of the internal engine output.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import logging
@@ -21,10 +21,13 @@ from app.schemas.feasibility import (
     FirOut,
     RequestQuoteIn,
     RequestQuoteOut,
+    ReroutePreviewOut,
     RoutePreviewOut,
     StateOut,
+    WorldOutlineOut,
 )
-from app.services import feasibility_iq_service, notification_service, pnr_pdf_service, route_preview_service, trip_service
+from app.schemas.person_role import PersonRoleOut
+from app.services import feasibility_iq_service, notification_service, person_role_service, pnr_pdf_service, route_preview_service, trip_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,16 @@ async def airports_lookup(
     q: str = Query(min_length=2, max_length=100), session: AsyncSession = Depends(get_db)
 ) -> list[AirportLookupOut]:
     return await feasibility_iq_service.search_airports(session, q)
+
+
+@router.get("/person-roles", response_model=list[PersonRoleOut], dependencies=[Depends(rate_limit("lookup"))])
+async def person_roles_lookup(session: AsyncSession = Depends(get_db)) -> list[PersonRoleOut]:
+    """Task #120 — the full active role list (small, no query param needed
+    unlike the search-style lookups above) for the public Crew & Pax
+    picker. Public, not the admin-authenticated /person-roles CRUD
+    router — same public-lookup pattern as /countries, /firs,
+    /aircraft-types above."""
+    return [r for r in await person_role_service.list_roles(session) if r.active]
 
 
 @router.get("/aircraft-types", response_model=list[AircraftTypeLookupOut], dependencies=[Depends(rate_limit("lookup"))])
@@ -59,10 +72,26 @@ async def firs_lookup(
     return await feasibility_iq_service.search_firs(session, q)
 
 
+@router.get("/world-outline", response_model=WorldOutlineOut, dependencies=[Depends(rate_limit("lookup"))])
+async def world_outline(response: Response, session: AsyncSession = Depends(get_db)) -> WorldOutlineOut:
+    """Every country's own real (heavily simplified) Natural Earth polygon
+    — the route map's world-scale background layer. Country borders don't
+    move between requests, so this is safe for the frontend to cache
+    indefinitely rather than refetch per page.
+    """
+    countries = await route_preview_service.get_world_outline(session)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return WorldOutlineOut(countries=countries)
+
+
 @router.get("/route-preview", response_model=RoutePreviewOut, dependencies=[Depends(rate_limit("lookup"))])
 async def route_preview(
     dep_icao: str = Query(min_length=3, max_length=4),
     arr_icao: str = Query(min_length=3, max_length=4),
+    avoid_states: list[str] = Query(default=[]),
+    include_states: list[str] = Query(default=[]),
+    avoid_firs: list[str] = Query(default=[]),
+    include_firs: list[str] = Query(default=[]),
     session: AsyncSession = Depends(get_db),
 ) -> RoutePreviewOut:
     """Engine 1 only — real distance/EET/states/FIRs and simplified real
@@ -70,8 +99,22 @@ async def route_preview(
     vendor data) so the leg builder can call this live as soon as both
     airports are picked, on both Feasibility IQ and the authenticated
     admin trip builder (route geometry itself isn't sensitive).
+
+    avoid/include params are optional — when given and the direct route
+    above actually violates one of them, the response's `reroute` carries
+    the real alternate track (not just a distance delta), so the map can
+    show a trajectory that actually changes instead of always drawing the
+    unconstrained direct route.
     """
-    preview = await route_preview_service.preview_route(session, dep_icao.upper(), arr_icao.upper())
+    preview = await route_preview_service.preview_route(
+        session,
+        dep_icao.upper(),
+        arr_icao.upper(),
+        avoid_states={s.upper() for s in avoid_states},
+        include_states={s.upper() for s in include_states},
+        avoid_firs={f.upper() for f in avoid_firs},
+        include_firs={f.upper() for f in include_firs},
+    )
     await session.commit()
     return RoutePreviewOut(
         distance_nm=preview.distance_nm,
@@ -81,6 +124,19 @@ async def route_preview(
         track_points=preview.track_points,
         state_geometry=preview.state_geometry,
         fir_geometry=preview.fir_geometry,
+        avoid_include_violated=preview.avoid_include_violated,
+        reroute=(
+            ReroutePreviewOut(
+                found=preview.reroute.found,
+                extra_distance_nm=preview.reroute.extra_distance_nm,
+                extra_time_hours=preview.reroute.extra_time_hours,
+                track_points=preview.reroute.track_points,
+                states=[StateOut(iso3=iso3, name=name) for iso3, name in preview.reroute.states],
+                firs=[FirOut(icao_fir_code=code, name=name) for code, name in preview.reroute.firs],
+            )
+            if preview.reroute is not None
+            else None
+        ),
     )
 
 

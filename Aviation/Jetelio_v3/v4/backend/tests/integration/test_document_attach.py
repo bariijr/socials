@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from app.models.aircraft import Aircraft
-from app.models.aircraft_document import AircraftDocument, AircraftDocumentType
+from app.models.aircraft_document import AircraftDocument
 from app.models.country_requirements import CountryRequirement
 from app.models.operator import Operator
 from tests.integration.test_service_send_api import _create_vendor_with_contact
@@ -30,7 +30,7 @@ async def test_document_check_reports_attached_when_a_valid_document_is_on_file(
     await session.flush()
     session.add(
         AircraftDocument(
-            aircraft_id=aircraft.id, doc_type=AircraftDocumentType.INSURANCE, filename="insurance.pdf",
+            aircraft_id=aircraft.id, doc_type="INSURANCE", filename="insurance.pdf",
             s3_key=f"test/{uuid.uuid4().hex}.pdf", content_type="application/pdf", expiry_date=date(2030, 1, 1),
         )
     )

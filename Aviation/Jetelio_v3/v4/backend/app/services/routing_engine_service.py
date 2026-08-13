@@ -146,6 +146,13 @@ class RerouteResult:
     extra_distance_nm: float | None
     extra_time_hours: float | None
     extra_fuel_kg: float | None
+    # The actual alternate path's coordinates and the states/FIRs it
+    # crosses — None when found=False. Lets a caller (route_preview_service)
+    # draw the route that actually avoids the avoided state/FIR, instead of
+    # only reporting the extra distance/time/fuel it costs.
+    track_points: list[tuple[float, float]] | None = None
+    states: list[str] | None = None
+    firs: list[tuple[str, str | None]] | None = None
 
 
 async def find_alternate_route(
@@ -189,14 +196,20 @@ async def find_alternate_route(
             node_coords[(col_idx, lane_idx)] = (lat, lon)
 
     node_order = list(node_coords.keys())
+    node_index = {n: i for i, n in enumerate(node_order)}
     lats = [node_coords[n][0] for n in node_order]
     lons = [node_coords[n][1] for n in node_order]
     country_hits = await geo_repository.resolve_country_hits(session, lats, lons)
+    # FIRs are always resolved (not just when avoid_firs is set) so the
+    # alternate path's own crossed-FIR list/geometry can be reported below —
+    # not just used to block nodes.
+    fir_hits = await geo_repository.resolve_fir_hits(session, lats, lons)
     blocked_point_indices = {h.point_index for h in country_hits if h.code in avoid_states}
     if avoid_firs:
-        fir_hits = await geo_repository.resolve_fir_hits(session, lats, lons)
         blocked_point_indices |= {h.point_index for h in fir_hits if h.code in avoid_firs}
     blocked_nodes = {node_order[i] for i in blocked_point_indices}
+    country_hit_by_point = {h.point_index: h for h in country_hits}
+    fir_hit_by_point = {h.point_index: h for h in fir_hits}
 
     center_lane = lane_count // 2
     start_node = (0, center_lane)
@@ -229,6 +242,31 @@ async def find_alternate_route(
     extra_distance = max(result.total_cost - direct_distance_nm, 0.0)
     extra_time = extra_distance / block_speed_kts
     extra_fuel = extra_time * fuel_burn_kg_per_hr if fuel_burn_kg_per_hr else None
+
+    # result.path is monotonic in col_idx (the graph only links col_idx ->
+    # col_idx+1), and node_order enumerates col_idx before lane_idx, so
+    # walking the path in order visits point_index in increasing order too —
+    # first_entry_ordered-equivalent dedup can just take first occurrence.
+    track_points = [node_coords[n] for n in result.path]
+    path_point_indices = [node_index[n] for n in result.path]
+
+    seen_states: dict[str, None] = {}
+    for i in path_point_indices:
+        hit = country_hit_by_point.get(i)
+        if hit is not None:
+            seen_states.setdefault(hit.code, None)
+    seen_firs: dict[str, str | None] = {}
+    for i in path_point_indices:
+        hit = fir_hit_by_point.get(i)
+        if hit is not None and hit.code not in seen_firs:
+            seen_firs[hit.code] = hit.name
+
     return RerouteResult(
-        found=True, extra_distance_nm=extra_distance, extra_time_hours=extra_time, extra_fuel_kg=extra_fuel
+        found=True,
+        extra_distance_nm=extra_distance,
+        extra_time_hours=extra_time,
+        extra_fuel_kg=extra_fuel,
+        track_points=track_points,
+        states=list(seen_states.keys()),
+        firs=list(seen_firs.items()),
     )

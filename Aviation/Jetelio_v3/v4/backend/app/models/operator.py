@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import ARRAY, Enum, String
+from sqlalchemy import ARRAY, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -37,6 +37,24 @@ class Operator(Base, StandardMixin):
 
     contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Task #119 — structured address for real correspondence (permit
+    # request letterhead etc.), never modeled before this. Free-text
+    # line1/2 (e.g. "C/O UNIVERSAL AVIATION HOUSTON" / street) rather than
+    # a rigid single-purpose schema, since real operator addresses vary in
+    # shape more than a strict street/unit split would cleanly capture.
+    address_line1: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    state_province: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    country_iso3: Mapped[str | None] = mapped_column(String(3), ForeignKey("countries.iso3"), nullable=True)
+    contact_fax: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Distinct from icao_designator/iata_designator above — this is the
+    # operator's own AFTN/SITA-ARINC reply-address prefix code (e.g.
+    # "UVA (AFTN) UV (SITA/ARINC)" in a real overflight permit request),
+    # not an ICAO/IATA operator designator.
+    airline_code_aftn: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    airline_code_sita: Mapped[str | None] = mapped_column(String(20), nullable=True)
     occ_email: Mapped[str | None] = mapped_column(String(300), nullable=True)
     billing_email: Mapped[str | None] = mapped_column(String(300), nullable=True)
 

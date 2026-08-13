@@ -21,6 +21,7 @@ class AircraftBase(BaseModel):
     home_base_icao: str | None = None
     mtow_kg: float | None = None
     max_pax: int | None = None
+    classification: str | None = None
     operator_id: UUID
     cofa_expiry: date | None = None
     insurance_expiry: date | None = None
@@ -47,6 +48,7 @@ class AircraftUpdate(BaseModel):
     home_base_icao: str | None = None
     mtow_kg: float | None = None
     max_pax: int | None = None
+    classification: str | None = None
     operator_id: UUID | None = None
     cofa_expiry: date | None = None
     insurance_expiry: date | None = None

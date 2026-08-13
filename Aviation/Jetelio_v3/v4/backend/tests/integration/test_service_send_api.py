@@ -140,6 +140,40 @@ class TestSendServiceRequest:
         assert f"Request for {service_code} at {icao}" in _decoded_subject(matches[0])
 
     @pytest.mark.asyncio
+    async def test_default_template_is_handling_request_shape_for_ground_category(self, client, trip_leg_fixture):
+        """Task #119 — with no MessageTemplate configured, a GROUND-category
+        send falls back to the ATTN/REF/PENDING CONFIRMATION shape (real
+        Universal Weather-style sample), not the old one-line default."""
+        headers = _auth_headers()
+        trip_id, leg_id, service_code, icao = await _create_trip_with_service(client, trip_leg_fixture, headers)
+        vendor = await _create_vendor_with_contact(client, headers, "EMAIL", "ground@vendor.example")
+
+        config = await client.post(
+            "/service-delivery-configs",
+            headers=headers,
+            json={"leg_id": leg_id, "service_code": service_code, "vendor_id": vendor["id"], "delivery_channels": ["EMAIL"]},
+        )
+        assert config.status_code == 201, config.text
+
+        resp = await client.post(
+            f"/trips/{trip_id}/legs/{leg_id}/services/send",
+            headers=headers,
+            json={"items": [{"service_code": service_code, "icao": icao}]},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()[0]["sent"] is True, resp.json()
+
+        marker = f"{trip_id}-{leg_id}-{service_code}-{icao}"
+        matches = await _latest_messages(marker)
+        assert len(matches) == 1, matches
+        body = matches[0]["Content"]["Body"]
+        assert "ATTN:" in body
+        assert "PENDING CONFIRMATION" in body
+        assert "ITINERARY:" in body
+        assert "1 CREW AND 0 PAX" in body  # trip_leg_fixture's single CREW person, no name on file
+        assert f"{service_code} REQUEST" in _decoded_subject(matches[0])
+
+    @pytest.mark.asyncio
     async def test_send_without_config_reports_error_not_exception(self, client, trip_leg_fixture):
         headers = _auth_headers()
         trip_id, leg_id, service_code, icao = await _create_trip_with_service(client, trip_leg_fixture, headers)

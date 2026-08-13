@@ -142,7 +142,19 @@ async def check_trip_feasibility(
         for i, p in enumerate(persons)
     ]
 
+    # leg_outs stays the pristine engine output — this is what gets frozen
+    # into the cache's "snapshot" below (and, on request-quote, into
+    # TripLeg.computed_snapshot), so it must never reflect
+    # arrival_datetime_override (task #116) any more than
+    # trip_service.add_leg's admin-path snapshot does — same
+    # reproducibility contract as everywhere else in this system.
+    # response_legs is what actually goes back to the caller, with the
+    # override applied to arrival_datetime only (a display value, same as
+    # the admin Trip Manager's top-level TripLegDetailOut.arrival_datetime,
+    # which already reads from the override-aware TripLeg.arrival_datetime
+    # column rather than the nested, always-computed result.arrival_datetime).
     leg_outs: list[LegResultOut] = []
+    response_legs: list[LegResultOut] = []
     for leg_index, leg_in in enumerate(legs):
         result = await leg_feasibility_service.compute_leg_feasibility(
             session,
@@ -159,10 +171,14 @@ async def check_trip_feasibility(
             avoid_firs=set(leg_in.avoid_firs),
             include_firs=set(leg_in.include_firs),
         )
-        leg_outs.append(
-            await project_leg_result(
-                session, leg_in.dep_icao.upper(), leg_in.arr_icao.upper(), persons, result, call_sign=leg_in.call_sign
-            )
+        leg_out = await project_leg_result(
+            session, leg_in.dep_icao.upper(), leg_in.arr_icao.upper(), persons, result, call_sign=leg_in.call_sign
+        )
+        leg_outs.append(leg_out)
+        response_legs.append(
+            leg_out.model_copy(update={"arrival_datetime": leg_in.arrival_datetime_override})
+            if leg_in.arrival_datetime_override
+            else leg_out
         )
 
     overall_verdict = aggregate_trip_verdict([leg.verdict for leg in leg_outs])
@@ -174,7 +190,7 @@ async def check_trip_feasibility(
         "aircraft_registration": aircraft_registration,
         "entered_mtow_kg": entered_mtow_kg,
         "operator_airline_name": operator_airline_name,
-        "persons": [{"role": p.role, "nationality_iso3": p.nationality_iso3} for p in persons],
+        "persons": [{"role": p.role, "nationality_iso3": p.nationality_iso3, "name": p.name} for p in persons],
         "legs": [
             {
                 "dep_icao": leg_in.dep_icao.upper(),
@@ -182,7 +198,12 @@ async def check_trip_feasibility(
                 # The resolved instant, not the raw input — leg_in's own
                 # reference_datetime is None when the leg was arrival-driven.
                 "reference_datetime": leg_out.reference_datetime.isoformat(),
-                "arrival_datetime": leg_out.arrival_datetime.isoformat(),
+                # arrival_datetime_override (task #116) only changes what's
+                # cached/displayed here — permits/deadlines were already
+                # computed above from the engine's own resolved arrival,
+                # never this override, mirroring
+                # trip_service._compute_and_build_leg's identical pattern.
+                "arrival_datetime": (leg_in.arrival_datetime_override or leg_out.arrival_datetime).isoformat(),
                 "call_sign": leg_in.call_sign,
                 "filed_route": leg_in.filed_route,
                 "avoid_states": leg_in.avoid_states,
@@ -205,7 +226,7 @@ async def check_trip_feasibility(
         f"{CHECK_CACHE_PREFIX}{check_id}", json.dumps(cache_payload), ex=settings_map["feasibility_quote_ttl_seconds"]
     )
 
-    return FeasibilityCheckOut(check_id=check_id, legs=leg_outs, overall_verdict=overall_verdict)
+    return FeasibilityCheckOut(check_id=check_id, legs=response_legs, overall_verdict=overall_verdict)
 
 
 async def create_enquiry_trip(

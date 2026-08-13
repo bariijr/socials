@@ -61,24 +61,6 @@ def resolve_person_rollup_status(passport_status: str, visa_requirement: str) ->
     return PersonRollupStatus.OK
 
 
-# Task #107: the public/trip-level `role` field (PersonPublicIn.role) holds
-# a specific position, not just a crew/pax split — but souls-on-board still
-# needs the coarse split. OTHER buckets as pax: an unclassified person is
-# operationally closer to "someone occupying a seat" than to a certified
-# crew position, matching this codebase's pattern of erring toward the
-# stricter/safer interpretation when data is ambiguous.
-CREW_ROLES = frozenset({"CREW", "PIC", "FO", "FA", "MECHANIC", "ENGINEER"})
-PAX_ROLES = frozenset({"PAX", "VIP", "PRINCIPAL", "OTHER"})
-
-
-def is_crew_role(role: str) -> bool:
-    return role in CREW_ROLES
-
-
-def is_pax_role(role: str) -> bool:
-    return role in PAX_ROLES
-
-
 @dataclass(frozen=True)
 class SoulsOnBoardResult:
     crew_count: int
