@@ -66,6 +66,9 @@ def _build_input_schema(template: DocumentTemplateDefinition) -> dict:
     return {"type": "object", "properties": properties, "required": []}
 
 
+_NULL_LIKE_STRINGS = {"null", "none", "n/a", "na", "nil"}
+
+
 def _coerce_fields(raw: dict, template: DocumentTemplateDefinition) -> dict[str, str]:
     """Only keeps keys the template actually defines (an LLM adding an
     unrequested key is ignored, not trusted), stringifies list values
@@ -73,11 +76,20 @@ def _coerce_fields(raw: dict, template: DocumentTemplateDefinition) -> dict[str,
     guesser's shape), and drops null/empty guesses — a field the LLM
     isn't confident about simply doesn't appear, same as the regex path
     never populating a key it couldn't guess.
+
+    Real failure mode found live-testing against actual scanned aircraft
+    documents (task #137): a model sometimes emits the literal text
+    "null" (or "N/A"/"none") as a JSON string value instead of the real
+    JSON null token when it means "no value" — a plain `value is None`
+    check doesn't catch that, and would otherwise store the word "null"
+    as if it were a real extracted field.
     """
     out: dict[str, str] = {}
     for f in template.expected_fields:
         value = raw.get(f["key"])
         if value is None or value == "" or value == []:
+            continue
+        if isinstance(value, str) and value.strip().lower() in _NULL_LIKE_STRINGS:
             continue
         out[f["key"]] = ", ".join(str(v) for v in value) if isinstance(value, list) else str(value)
     return out

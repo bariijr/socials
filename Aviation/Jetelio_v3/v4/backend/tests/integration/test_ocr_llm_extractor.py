@@ -73,6 +73,15 @@ class TestCoerceFields:
         out = llm_extractor._coerce_fields(raw, template)
         assert "ratings" not in out
 
+    def test_literal_null_like_strings_are_dropped(self):
+        # Real failure mode found live-testing against a real scanned
+        # document (task #137): a model emitted the text "null" as a
+        # JSON string value instead of the real null token.
+        template = DOCUMENT_TEMPLATES_BY_TYPE["PASSPORT"]
+        raw = {"passport_number": "P1234567", "issuing_country_iso3": "null", "issued_on": "N/A"}
+        out = llm_extractor._coerce_fields(raw, template)
+        assert out == {"passport_number": "P1234567"}
+
 
 class TestExtractFieldsViaLlm:
     @pytest.mark.asyncio
