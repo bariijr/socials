@@ -37,11 +37,14 @@ from app.core.chat.schema import (
 
 logger = logging.getLogger(__name__)
 
-# Live-measured: a real llama3.2:1b tool-call on CPU took ~41s with the
-# container able to actually hold the model in memory (task #131 finding —
-# under a tighter memory limit it thrashes to disk and takes far longer).
-# 60s was cutting that margin close; give real headroom above the
-# measured baseline rather than a round-number guess.
+# Fallback only — app.core.chat.dispatcher normally passes the live
+# chat_timeout_ollama_seconds named setting (task #132, admin-editable
+# without a deploy) as the `timeout` kwarg below. This constant only
+# matters when extract_trip_request is called directly without one (e.g.
+# a script). Live-measured: a real llama3.2:1b tool-call on CPU took ~41s
+# with the container able to actually hold the model in memory (task #131
+# — under a tighter memory limit it thrashes to disk and takes far
+# longer), so 60s was cutting that margin close.
 REQUEST_TIMEOUT_SECONDS = 120.0
 
 
@@ -49,10 +52,11 @@ def is_configured() -> bool:
     return bool(get_settings().ollama_base_url)
 
 
-async def extract_trip_request(message: str, *, today: date) -> TripExtraction | None:
+async def extract_trip_request(message: str, *, today: date, timeout: float | None = None) -> TripExtraction | None:
     settings = get_settings()
     if not settings.ollama_base_url:
         return None
+    request_timeout = timeout if timeout is not None else REQUEST_TIMEOUT_SECONDS
 
     payload = {
         "model": settings.ollama_model,
@@ -71,7 +75,7 @@ async def extract_trip_request(message: str, *, today: date) -> TripExtraction |
     }
 
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
             response = await client.post(
                 f"{settings.ollama_base_url.rstrip('/')}/v1/chat/completions",
                 json=payload,

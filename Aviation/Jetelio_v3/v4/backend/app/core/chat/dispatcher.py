@@ -22,10 +22,16 @@ one actually handles a given request:
   concurrently": multiple requests can be in flight across different
   providers at the same time, rather than serializing behind whichever
   one happens to be first in priority.
+- **Per-provider timeout**: `chat_timeout_<provider>_seconds` (task
+  #132, admin-editable) is passed into that provider's own
+  `extract_trip_request(..., timeout=...)`, overriding its module-level
+  fallback constant. Ollama's default is much higher than the hosted
+  providers' — local CPU inference is slower (task #131's live
+  measurement: ~41s for a llama3.2:1b tool-call with adequate memory).
 - **Failover on failure**: a configured-and-available provider that
   returns None (bad key, API outage, malformed tool-call, a small local
-  model that fumbled the extraction) also falls through to the next
-  candidate, not just an unconfigured/suspended/busy one.
+  model that fumbled the extraction, or a timeout) also falls through to
+  the next candidate, not just an unconfigured/suspended/busy one.
 
 Only returns None once every candidate has been tried/skipped — same
 NO_PROVIDER_CONFIGURED-style honesty as every other optional integration
@@ -59,8 +65,7 @@ def _parse_csv_names(raw: object) -> list[str]:
     return [p.strip().lower() for p in str(raw or "").split(",") if p.strip()]
 
 
-async def _candidate_order(session: AsyncSession) -> list[str]:
-    settings_map = await settings_service.get_typed_settings_map(session)
+def _candidate_order_from_map(settings_map: dict[str, object]) -> list[str]:
     priority = [p for p in _parse_csv_names(settings_map.get("chat_provider_priority")) if p in PROVIDERS]
     for name in DEFAULT_PRIORITY:
         if name not in priority:
@@ -69,10 +74,14 @@ async def _candidate_order(session: AsyncSession) -> list[str]:
     return [name for name in priority if name not in suspended]
 
 
-async def _max_concurrent(session: AsyncSession) -> int:
+def _timeout_from_map(settings_map: dict[str, object], name: str) -> float | None:
+    value = settings_map.get(f"chat_timeout_{name}_seconds")
+    return float(value) if value else None
+
+
+async def _candidate_order(session: AsyncSession) -> list[str]:
     settings_map = await settings_service.get_typed_settings_map(session)
-    value = settings_map.get("chat_provider_max_concurrent")
-    return int(value) if value else DEFAULT_MAX_CONCURRENT
+    return _candidate_order_from_map(settings_map)
 
 
 async def is_any_provider_available(session: AsyncSession) -> bool:
@@ -87,8 +96,10 @@ async def is_any_provider_available(session: AsyncSession) -> bool:
 
 
 async def extract_trip_request(session: AsyncSession, message: str, *, today: date) -> TripExtraction | None:
-    candidates = await _candidate_order(session)
-    max_concurrent = await _max_concurrent(session)
+    settings_map = await settings_service.get_typed_settings_map(session)
+    candidates = _candidate_order_from_map(settings_map)
+    max_concurrent_value = settings_map.get("chat_provider_max_concurrent")
+    max_concurrent = int(max_concurrent_value) if max_concurrent_value else DEFAULT_MAX_CONCURRENT
 
     for name in candidates:
         provider = PROVIDERS[name]
@@ -98,8 +109,9 @@ async def extract_trip_request(session: AsyncSession, message: str, *, today: da
             logger.info("chat provider %s busy (>=%s in flight) — trying next candidate", name, max_concurrent)
             continue
 
+        timeout = _timeout_from_map(settings_map, name)
         async with workload.track_inflight(name):
-            result = await provider.extract_trip_request(message, today=today)
+            result = await provider.extract_trip_request(message, today=today, timeout=timeout)
         if result is not None:
             return result
         logger.info("chat provider %s failed to extract — trying next candidate", name)

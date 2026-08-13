@@ -2377,6 +2377,27 @@ imports cleanly afterward. `backend/app/importer/loaders/uaa_coordinator.py` (§
 touched — that file was already rewritten into real, tested, working code and committed on its own
 merit, independent of whether the rest of the Coordinator feature survives.
 
+### 7.28 Chat provider admin panel (task #136)
+
+User asked how to change the priority list, then clarified they expected a real admin-panel control
+for priority *and* per-provider delay/timeout, not a curl command each time. Two backend gaps closed
+first: per-provider timeouts were hardcoded module constants (`REQUEST_TIMEOUT_SECONDS` in each of
+`ollama_provider.py`/`deepseek_provider.py`/`anthropic_provider.py`/`openai_provider.py`), not
+settings-driven like priority/suspension/concurrency already were. Added four new named settings
+(`chat_timeout_<provider>_seconds`, FLOAT, defaulting to each provider's previous hardcoded value —
+120s for Ollama given the task #131 measurement, 30s for the three hosted ones); each
+`extract_trip_request` now takes an optional `timeout` kwarg that overrides its module constant, and
+`dispatcher.py` resolves+passes the live setting value per call.
+
+New `/admin/settings` page (SUPER_ADMIN-only edit, matching the backend's `require_admin` gate on
+`PATCH /settings/{key}`; read-only for other roles) — reorder priority with up/down buttons, a
+suspend checkbox and a timeout-seconds input per provider, one shared max-concurrent input, single
+"Save changes" button that only PATCHes whichever settings actually changed (skips a needless
+version bump on unchanged ones). Live-verified the full save round-trip against the real running
+stack via direct API calls matching exactly what the UI sends (reorder, suspend, change a timeout),
+confirmed `dispatcher._candidate_order` picks up the new state immediately, then reverted the test
+values back to the sensible defaults before finishing.
+
 ---
 
 ## 8. Document storage & Excel import/export

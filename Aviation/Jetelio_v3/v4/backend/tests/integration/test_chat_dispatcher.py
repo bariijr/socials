@@ -57,11 +57,11 @@ class TestPriorityOrder:
     async def test_first_configured_candidate_in_priority_order_wins(self, session, monkeypatch):
         calls: list[str] = []
 
-        async def _ollama_extract(message, *, today):
+        async def _ollama_extract(message, *, today, timeout=None):
             calls.append("ollama")
             return _extraction("from-ollama")
 
-        async def _deepseek_extract(message, *, today):
+        async def _deepseek_extract(message, *, today, timeout=None):
             calls.append("deepseek")
             return _extraction("from-deepseek")
 
@@ -81,7 +81,7 @@ class TestPriorityOrder:
 
     @pytest.mark.asyncio
     async def test_unconfigured_candidate_is_skipped(self, session, monkeypatch):
-        async def _deepseek_extract(message, *, today):
+        async def _deepseek_extract(message, *, today, timeout=None):
             return _extraction("from-deepseek")
 
         _set_all_configured(monkeypatch, configured={"deepseek": True})  # ollama NOT configured
@@ -101,7 +101,7 @@ class TestPriorityOrder:
         # Priority list only names two of the four — openai isn't one of
         # them, but is still configured and should be appended at the end
         # rather than becoming permanently unreachable.
-        async def _openai_extract(message, *, today):
+        async def _openai_extract(message, *, today, timeout=None):
             return _extraction("from-openai")
 
         _set_all_configured(monkeypatch, configured={"openai": True})
@@ -122,11 +122,11 @@ class TestSuspension:
     async def test_suspended_provider_is_skipped_even_if_first_in_priority(self, session, monkeypatch):
         calls: list[str] = []
 
-        async def _ollama_extract(message, *, today):
+        async def _ollama_extract(message, *, today, timeout=None):
             calls.append("ollama")
             return _extraction("from-ollama")
 
-        async def _deepseek_extract(message, *, today):
+        async def _deepseek_extract(message, *, today, timeout=None):
             calls.append("deepseek")
             return _extraction("from-deepseek")
 
@@ -157,10 +157,10 @@ class TestSuspension:
 class TestFailoverOnFailure:
     @pytest.mark.asyncio
     async def test_configured_provider_returning_none_falls_through_to_next(self, session, monkeypatch):
-        async def _ollama_extract(message, *, today):
+        async def _ollama_extract(message, *, today, timeout=None):
             return None  # e.g. small local model fumbled the extraction
 
-        async def _deepseek_extract(message, *, today):
+        async def _deepseek_extract(message, *, today, timeout=None):
             return _extraction("from-deepseek")
 
         _set_all_configured(monkeypatch, configured={"ollama": True, "deepseek": True})
@@ -178,7 +178,7 @@ class TestFailoverOnFailure:
 
     @pytest.mark.asyncio
     async def test_every_candidate_failing_returns_none(self, session, monkeypatch):
-        async def _always_none(message, *, today):
+        async def _always_none(message, *, today, timeout=None):
             return None
 
         _set_all_configured(monkeypatch, configured={"ollama": True, "deepseek": True})
@@ -194,11 +194,11 @@ class TestWorkloadFailover:
     async def test_busy_provider_is_skipped_in_favor_of_next(self, session, monkeypatch):
         calls: list[str] = []
 
-        async def _ollama_extract(message, *, today):
+        async def _ollama_extract(message, *, today, timeout=None):
             calls.append("ollama")
             return _extraction("from-ollama")
 
-        async def _deepseek_extract(message, *, today):
+        async def _deepseek_extract(message, *, today, timeout=None):
             calls.append("deepseek")
             return _extraction("from-deepseek")
 

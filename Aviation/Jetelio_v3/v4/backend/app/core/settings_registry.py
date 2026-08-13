@@ -202,6 +202,35 @@ NAMED_SETTINGS: list[SettingDefinition] = [
         ),
     ),
     SettingDefinition(
+        key="chat_timeout_ollama_seconds",
+        value_type=SettingValueType.FLOAT,
+        default_value="120",
+        description=(
+            "Per-request timeout for the Ollama chat provider before the dispatcher gives up on it "
+            "and falls through to the next candidate. Higher than the hosted providers' default by "
+            "design — local CPU inference is slower (task #131 live measurement: ~41s for a "
+            "llama3.2:1b tool-call with adequate memory)."
+        ),
+    ),
+    SettingDefinition(
+        key="chat_timeout_deepseek_seconds",
+        value_type=SettingValueType.FLOAT,
+        default_value="30",
+        description="Per-request timeout for the DeepSeek chat provider before falling through to the next candidate.",
+    ),
+    SettingDefinition(
+        key="chat_timeout_anthropic_seconds",
+        value_type=SettingValueType.FLOAT,
+        default_value="30",
+        description="Per-request timeout for the Anthropic chat provider before falling through to the next candidate.",
+    ),
+    SettingDefinition(
+        key="chat_timeout_openai_seconds",
+        value_type=SettingValueType.FLOAT,
+        default_value="30",
+        description="Per-request timeout for the OpenAI chat provider before falling through to the next candidate.",
+    ),
+    SettingDefinition(
         key="ocr_enabled",
         value_type=SettingValueType.BOOLEAN,
         default_value="YES",

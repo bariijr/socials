@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 MODEL = "claude-sonnet-5"
+# Fallback only — app.core.chat.dispatcher normally passes the live
+# chat_timeout_anthropic_seconds named setting (task #132) as `timeout`.
 REQUEST_TIMEOUT_SECONDS = 30.0
 
 
@@ -44,10 +46,11 @@ def is_configured() -> bool:
     return bool(get_settings().anthropic_api_key)
 
 
-async def extract_trip_request(message: str, *, today: date) -> TripExtraction | None:
+async def extract_trip_request(message: str, *, today: date, timeout: float | None = None) -> TripExtraction | None:
     settings = get_settings()
     if not settings.anthropic_api_key:
         return None
+    request_timeout = timeout if timeout is not None else REQUEST_TIMEOUT_SECONDS
 
     payload = {
         "model": MODEL,
@@ -59,7 +62,7 @@ async def extract_trip_request(message: str, *, today: date) -> TripExtraction |
     }
 
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
             response = await client.post(
                 API_URL,
                 headers={

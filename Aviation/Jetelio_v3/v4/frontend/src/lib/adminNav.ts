@@ -18,4 +18,5 @@ export const ADMIN_NAV_LINKS: AdminNavLink[] = [
   { href: "/admin/persons", label: "Persons" },
   { href: "/admin/parties", label: "Parties" },
   { href: "/admin/data", label: "Data Import" },
+  { href: "/admin/settings", label: "Settings" },
 ];

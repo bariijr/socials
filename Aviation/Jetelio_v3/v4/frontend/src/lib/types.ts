@@ -5,6 +5,16 @@ export interface Page<T> {
   page_size: number;
 }
 
+export interface Setting {
+  key: string;
+  value: string;
+  value_type: "INTEGER" | "FLOAT" | "BOOLEAN" | "INT_LIST" | "STRING";
+  description: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GateStatus {
   key: string;
   label: string;
