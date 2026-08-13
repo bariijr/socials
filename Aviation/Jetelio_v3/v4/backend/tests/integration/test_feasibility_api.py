@@ -173,12 +173,12 @@ class TestPublicAircraftLookup:
 class TestChatParse:
     @pytest.mark.asyncio
     async def test_returns_503_when_not_configured(self, client, monkeypatch):
-        import app.api.routers.feasibility as feasibility_router
+        from app.core.chat import dispatcher as chat_dispatcher
 
-        class _FakeSettings:
-            deepseek_api_key = ""
+        async def _fake_not_configured(session):
+            return False
 
-        monkeypatch.setattr(feasibility_router, "get_settings", lambda: _FakeSettings())
+        monkeypatch.setattr(chat_dispatcher, "is_any_provider_available", _fake_not_configured)
 
         resp = await client.post("/feasibility/chat-parse", json={"message": "test"})
         assert resp.status_code == 503
@@ -223,7 +223,7 @@ class TestChatParse:
             ],
         )
 
-        async def _fake_extract(message: str, *, today):
+        async def _fake_extract(session, message: str, *, today):
             return extraction
 
         monkeypatch.setattr(trip_chat_service_module, "extract_trip_request", _fake_extract)

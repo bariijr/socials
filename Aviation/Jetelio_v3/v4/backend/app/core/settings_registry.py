@@ -168,6 +168,40 @@ NAMED_SETTINGS: list[SettingDefinition] = [
         description="Flat JTL service fee added per permit line item (overflight/landing/ground handling) in the cost summary.",
     ),
     SettingDefinition(
+        key="chat_provider_priority",
+        value_type=SettingValueType.STRING,
+        default_value="ollama,deepseek,anthropic,openai",
+        description=(
+            "Comma-separated try-order for trip-builder chat extraction across the four wired "
+            "providers (ollama/deepseek/anthropic/openai). The dispatcher tries each in order, "
+            "skipping any that are suspended (chat_provider_suspended), unconfigured (no "
+            "credential set, see app/config.py), or currently at chat_provider_max_concurrent "
+            "capacity, and falls through to the next on failure — first real success wins. Any "
+            "provider missing from this list still gets a chance, appended at the end."
+        ),
+    ),
+    SettingDefinition(
+        key="chat_provider_suspended",
+        value_type=SettingValueType.STRING,
+        default_value="",
+        description=(
+            "Comma-separated provider names to skip entirely regardless of priority order — for "
+            "taking a provider offline deliberately (maintenance, cost control) without losing "
+            "its place in chat_provider_priority."
+        ),
+    ),
+    SettingDefinition(
+        key="chat_provider_max_concurrent",
+        value_type=SettingValueType.INTEGER,
+        default_value="2",
+        description=(
+            "Max concurrent in-flight trip-builder chat extraction requests allowed per provider "
+            "before the dispatcher treats it as busy and fails over to the next one in "
+            "chat_provider_priority — protects a resource-constrained provider (e.g. Ollama on a "
+            "small VPS) from being piled onto, while letting the others keep working concurrently."
+        ),
+    ),
+    SettingDefinition(
         key="ocr_enabled",
         value_type=SettingValueType.BOOLEAN,
         default_value="YES",

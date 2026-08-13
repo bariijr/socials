@@ -29,10 +29,29 @@ import { RoutePreviewPanel } from "@/components/RoutePreviewPanel";
 import { LegSummaryTable } from "@/components/LegSummaryTable";
 import { LegEditor } from "@/components/LegEditor";
 import { CountryName } from "@/components/CountryPicker";
-import { EditableText } from "@/components/EditableCell";
+import { EditableText, EditableInfoField, EditableInfoSelect } from "@/components/EditableCell";
 
 const TABS = ["Overview", "Route", "Permits", "Services", "Crew & Pax", "Documents", "Billing", "Messages"] as const;
 type Tab = (typeof TABS)[number];
+
+const OPS_TYPE_OPTIONS = [
+  { value: "", label: "(not set)" },
+  { value: "PRIVATE", label: "Private" },
+  { value: "MILITARY", label: "Military" },
+  { value: "CHARTER", label: "Charter" },
+  { value: "CARGO", label: "Cargo" },
+  { value: "MEDEVAC", label: "Medevac" },
+  { value: "OTHER", label: "Other" },
+];
+
+const FLIGHT_PURPOSE_OPTIONS = [
+  { value: "", label: "(not set)" },
+  { value: "BUSINESS", label: "Business" },
+  { value: "TOURISM", label: "Tourism" },
+  { value: "FERRY", label: "Ferry" },
+  { value: "REPOSITION", label: "Reposition" },
+  { value: "OTHER", label: "Other" },
+];
 
 const NOT_BUILT_TABS: Partial<Record<Tab, string>> = {
   Documents: "Document upload, OCR extraction and expiry tracking land in Phase 5.",
@@ -244,15 +263,6 @@ export default function TripDetailPage() {
                 ))}
               </select>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-fg/60">Owner:Team:</label>
-              <EditableText
-                writable
-                value={trip.owner_team ?? ""}
-                placeholder="Unassigned"
-                onSave={(v) => updateTrip.mutateAsync({ version: trip.version, owner_team: v || null })}
-              />
-            </div>
           </div>
         )}
       </header>
@@ -271,35 +281,116 @@ export default function TripDetailPage() {
       </nav>
 
       {tab === "Overview" && (
-        <section className="space-y-4 rounded-lg border border-fg/10 p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-fg/50">Source</div>
-              <div>{formatTripSource(trip.source)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-fg/50">Registration</div>
-              <div className="mono-figures">{trip.aircraft_registration ?? "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-fg/50">MTOW</div>
-              <div className="mono-figures">{trip.entered_mtow_kg ? `${trip.entered_mtow_kg.toLocaleString()} kg` : "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-fg/50">Requested by</div>
-              <div>{trip.requested_by_name ?? "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-fg/50">Contact email</div>
-              <div>{trip.requested_by_email ?? "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-fg/50">Contact phone</div>
-              <div>{trip.requested_by_phone ?? "—"}</div>
-            </div>
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <section className="space-y-3 rounded-lg border border-fg/10 p-4">
+              <h2 className="text-sm font-semibold text-fg/70">Flight details</h2>
+              <div className="grid gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-fg/50">Source</div>
+                  <div className="text-sm text-fg">{formatTripSource(trip.source)}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-fg/50">Aircraft type</div>
+                  <div className="mono-figures text-sm text-fg">{trip.legs[0]?.aircraft_icao_type ?? "—"}</div>
+                </div>
+                <EditableInfoField
+                  label="Registration"
+                  value={trip.aircraft_registration}
+                  writable={writable}
+                  mono
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, aircraft_registration: v || null })}
+                />
+                <EditableInfoField
+                  label="MTOW"
+                  value={trip.entered_mtow_kg != null ? String(trip.entered_mtow_kg) : null}
+                  writable={writable}
+                  mono
+                  type="number"
+                  suffix="kg"
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, entered_mtow_kg: v === "" ? null : Number(v) })}
+                />
+                <EditableInfoField
+                  label="Serial number"
+                  value={trip.serial_number}
+                  writable={writable}
+                  mono
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, serial_number: v || null })}
+                />
+                <EditableInfoField
+                  label="Colors"
+                  value={trip.colors}
+                  writable={writable}
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, colors: v || null })}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-3 rounded-lg border border-fg/10 p-4">
+              <h2 className="text-sm font-semibold text-fg/70">Operator &amp; purpose</h2>
+              <div className="grid gap-3">
+                <EditableInfoField
+                  label="Operator / airline"
+                  value={trip.operator_airline_name}
+                  writable={writable}
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, operator_airline_name: v || null })}
+                />
+                <EditableInfoSelect
+                  label="Ops type"
+                  value={trip.ops_type ?? ""}
+                  options={OPS_TYPE_OPTIONS}
+                  writable={writable}
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, ops_type: (v || null) as TripDetail["ops_type"] })}
+                />
+                <EditableInfoSelect
+                  label="Flight purpose"
+                  value={trip.flight_purpose ?? ""}
+                  options={FLIGHT_PURPOSE_OPTIONS}
+                  writable={writable}
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, flight_purpose: (v || null) as TripDetail["flight_purpose"] })}
+                />
+                <EditableInfoField
+                  label="Owner team"
+                  value={trip.owner_team}
+                  writable={writable}
+                  placeholder="Unassigned"
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, owner_team: v || null })}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-3 rounded-lg border border-fg/10 p-4">
+              <h2 className="text-sm font-semibold text-fg/70">Requester contact</h2>
+              <div className="grid gap-3">
+                <EditableInfoField
+                  label="Requested by"
+                  value={trip.requested_by_name}
+                  writable={writable}
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, requested_by_name: v || undefined })}
+                />
+                <EditableInfoField
+                  label="Contact email"
+                  value={trip.requested_by_email}
+                  writable={writable}
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, requested_by_email: v || undefined })}
+                />
+                <EditableInfoField
+                  label="Contact phone"
+                  value={trip.requested_by_phone}
+                  writable={writable}
+                  mono
+                  onSave={(v) => updateTrip.mutateAsync({ version: trip.version, requested_by_phone: v || undefined })}
+                />
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-fg/50">On file since</div>
+                  <div className="mono-figures text-sm text-fg">{formatUtc(trip.created_at)}</div>
+                </div>
+              </div>
+            </section>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-fg/50">Notes</label>
+
+          <section className="space-y-2 rounded-lg border border-fg/10 p-4">
+            <h2 className="text-sm font-semibold text-fg/70">Notes</h2>
             <textarea
               value={notesDraft ?? trip.notes ?? ""}
               onChange={(e) => setNotesDraft(e.target.value)}
@@ -314,29 +405,32 @@ export default function TripDetailPage() {
                   updateTrip.mutate({ version: trip.version, notes: notesDraft });
                   setNotesDraft(null);
                 }}
-                className="mt-2 h-9 rounded-md border border-fg/20 px-3 text-sm hover:border-fg/40"
+                className="h-9 rounded-md border border-fg/20 px-3 text-sm hover:border-fg/40"
               >
                 Save notes
               </button>
             )}
-          </div>
-          <p className="text-xs text-fg/50">{trip.legs.length} leg(s) — created {formatUtc(trip.created_at)}</p>
-          <LegSummaryTable
-            aircraftIcaoType={trip.legs[0]?.aircraft_icao_type ?? null}
-            mtowKg={trip.entered_mtow_kg}
-            rows={trip.legs.map((leg, i) => ({
-              legIndex: i,
-              depIcao: leg.result.dep_icao,
-              fromDate: leg.reference_datetime,
-              arrIcao: leg.result.arr_icao,
-              toDate: leg.arrival_datetime,
-              callSign: leg.call_sign,
-              registration: leg.registration ?? trip.aircraft_registration,
-              distanceNm: leg.result.route.distance_nm,
-              eetHours: leg.result.route.eet_hours,
-            }))}
-          />
-        </section>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold text-fg/70">All legs for this trip</h2>
+            <LegSummaryTable
+              aircraftIcaoType={trip.legs[0]?.aircraft_icao_type ?? null}
+              mtowKg={trip.entered_mtow_kg}
+              rows={trip.legs.map((leg, i) => ({
+                legIndex: i,
+                depIcao: leg.result.dep_icao,
+                fromDate: leg.reference_datetime,
+                arrIcao: leg.result.arr_icao,
+                toDate: leg.arrival_datetime,
+                callSign: leg.call_sign,
+                registration: leg.registration ?? trip.aircraft_registration,
+                distanceNm: leg.result.route.distance_nm,
+                eetHours: leg.result.route.eet_hours,
+              }))}
+            />
+          </section>
+        </div>
       )}
 
       {tab === "Route" && (

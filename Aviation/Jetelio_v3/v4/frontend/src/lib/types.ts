@@ -98,6 +98,13 @@ export interface Operator {
   version: number;
 }
 
+export interface OperatorMergeResult {
+  kept: OperatorDetail;
+  duplicate_id: string;
+  reassigned: Record<string, number>;
+  fields_backfilled: string[];
+}
+
 export interface OperatorDetail extends Operator {
   aoc_number: string | null;
   icao_designator: string | null;

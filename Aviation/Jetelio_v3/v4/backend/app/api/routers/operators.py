@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_current_user, require_delete_access, require_write_access
 from app.database import get_db
 from app.schemas.common import Page
-from app.schemas.operator import OperatorCreate, OperatorOut, OperatorUpdate
+from app.schemas.operator import OperatorCreate, OperatorMergeIn, OperatorMergeOut, OperatorOut, OperatorUpdate
 from app.services import operator_service
 
 router = APIRouter(prefix="/operators", tags=["reference-data"])
@@ -60,3 +60,21 @@ async def delete_operator(
 ) -> None:
     await operator_service.delete_operator(session, operator_id, version, actor_id=user.id, actor_email=user.email)
     await session.commit()
+
+
+@router.post("/{operator_id}/merge", response_model=OperatorMergeOut)
+async def merge_operators(
+    operator_id: UUID,
+    payload: OperatorMergeIn,
+    session: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(require_delete_access),
+) -> OperatorMergeOut:
+    """Folds a duplicate operator (e.g. "XYZ Aviation Inc" / "XYZ aviatio,
+    Inc") into `operator_id` — every fleet/client/service-config/user/party
+    reference moves onto the survivor, real data the survivor was missing
+    gets backfilled from the duplicate, and the duplicate is soft-deleted.
+    Same access level as a plain delete: this is at least as consequential.
+    """
+    result = await operator_service.merge_operators(session, operator_id, payload, actor_id=user.id, actor_email=user.email)
+    await session.commit()
+    return result

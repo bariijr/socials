@@ -199,6 +199,41 @@ class TestTripLifecycle:
         assert ok.json()["status"] == "ACTIVE"
 
     @pytest.mark.asyncio
+    async def test_explicit_null_clears_a_nullable_field(self, client, trip_leg_fixture):
+        # update_trip used to apply every field with "if payload.X is not
+        # None", which could never distinguish "the client omitted this
+        # field" from "the client explicitly wants it cleared" — a
+        # nullable field could be set but never unset via this endpoint.
+        created = (await client.post("/trips", json=_create_payload(trip_leg_fixture), headers=_auth_headers())).json()
+        trip_id = created["id"]
+
+        set_resp = await client.patch(
+            f"/trips/{trip_id}", json={"version": created["version"], "serial_number": "SN-001", "ops_type": "CHARTER"},
+            headers=_auth_headers(),
+        )
+        assert set_resp.status_code == 200, set_resp.text
+        assert set_resp.json()["serial_number"] == "SN-001"
+        assert set_resp.json()["ops_type"] == "CHARTER"
+
+        clear_resp = await client.patch(
+            f"/trips/{trip_id}", json={"version": set_resp.json()["version"], "serial_number": None, "ops_type": None},
+            headers=_auth_headers(),
+        )
+        assert clear_resp.status_code == 200, clear_resp.text
+        assert clear_resp.json()["serial_number"] is None
+        assert clear_resp.json()["ops_type"] is None
+
+        # A field genuinely omitted from the request body must still be
+        # left untouched — exclude_unset, not "always apply whatever's in
+        # the model, defaulted or not".
+        untouched_resp = await client.patch(
+            f"/trips/{trip_id}", json={"version": clear_resp.json()["version"], "notes": "just notes"}, headers=_auth_headers()
+        )
+        assert untouched_resp.status_code == 200, untouched_resp.text
+        assert untouched_resp.json()["notes"] == "just notes"
+        assert untouched_resp.json()["status"] == created["status"]
+
+    @pytest.mark.asyncio
     async def test_stale_version_conflicts(self, client, trip_leg_fixture):
         created = (await client.post("/trips", json=_create_payload(trip_leg_fixture), headers=_auth_headers())).json()
         trip_id = created["id"]

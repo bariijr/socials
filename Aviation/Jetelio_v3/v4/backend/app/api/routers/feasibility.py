@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from app.config import get_settings
+from app.core.chat import dispatcher as chat_dispatcher
 from app.core.email_client import send_email
 from app.core.errors import NotFoundError
 from app.core.rate_limit import rate_limit
@@ -100,14 +101,15 @@ async def aircraft_lookup(
 )
 async def chat_parse(payload: ChatParseIn, session: AsyncSession = Depends(get_db)) -> ChatTripDraftOut:
     """Parses a free-text or structured permit-request message into a
-    pre-fillable trip/leg draft (task #125, DeepSeek since task #127) — used
-    to pre-fill the existing trip/leg builder form on both VIQ and admin,
-    never to submit anything directly. Public (no cost/vendor data involved,
-    same rationale as the rest of this router) but on its own, much
-    stricter rate-limit bucket since each call is a real, paid LLM API
-    request.
+    pre-fillable trip/leg draft (task #125; ollama/deepseek/anthropic/
+    openai all wired at once and tried in priority order with workload-
+    based failover since task #131) — used to pre-fill the existing
+    trip/leg builder form on both VIQ and admin, never to submit anything
+    directly. Public (no cost/vendor data involved, same rationale as the
+    rest of this router) but on its own, much stricter rate-limit bucket
+    since each call is a real LLM inference request.
     """
-    if not get_settings().deepseek_api_key:
+    if not await chat_dispatcher.is_any_provider_available(session):
         raise HTTPException(status_code=503, detail="Trip-builder chat isn't configured on this deployment yet.")
 
     draft = await trip_chat_service.parse_trip_message(session, payload.message, today=date.today())

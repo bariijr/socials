@@ -12,7 +12,9 @@ import type {
   AircraftRecord,
   AircraftStatus,
   AircraftUpdateRequest,
+  Operator,
   OperatorDetail,
+  OperatorMergeResult,
   Page as ApiPage,
 } from "@/lib/types";
 import { useRequireAuth } from "@/lib/useRequireAuth";
@@ -21,6 +23,8 @@ import { formatUtcDate } from "@/lib/format";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableText, InfoField, EditableInfoField } from "@/components/EditableCell";
 import { CountryName, CountryPicker } from "@/components/CountryPicker";
+import { SearchInput } from "@/components/SearchInput";
+import { matchesQuery } from "@/lib/search";
 
 const AIRCRAFT_STATUSES: AircraftStatus[] = ["ACTIVE", "GROUNDED", "ARCHIVED"];
 const DOC_TYPES: AircraftDocumentType[] = ["REGISTRATION", "COFA", "INSURANCE", "AIRWORTHINESS", "NOISE_CERTIFICATE", "OTHER"];
@@ -59,6 +63,7 @@ export default function OperatorDetailPage() {
   const writable = canWrite(role);
 
   const [addingAircraft, setAddingAircraft] = useState(false);
+  const [fleetSearch, setFleetSearch] = useState("");
 
   const { data: operator, isLoading: operatorLoading } = useQuery({
     queryKey: ["operator", operatorId],
@@ -90,6 +95,9 @@ export default function OperatorDetailPage() {
 
   if (operatorLoading) return <p className="text-fg/60">Loading…</p>;
   if (!operator) return <p className="text-danger">Operator not found.</p>;
+
+  const filteredFleet =
+    fleet?.items.filter((ac) => matchesQuery(fleetSearch, ac.registration, ac.icao_type, ac.manufacturer, ac.model_series, ac.default_callsign)) ?? [];
 
   return (
     <div className="space-y-6">
@@ -169,7 +177,7 @@ export default function OperatorDetailPage() {
       </section>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Fleet</h2>
           {writable && (
             <button
@@ -196,13 +204,160 @@ export default function OperatorDetailPage() {
         {fleet && fleet.items.length === 0 && !addingAircraft && (
           <p className="text-sm text-fg/50">No aircraft on file for this operator yet.</p>
         )}
+        {fleet && fleet.items.length > 0 && (
+          <SearchInput value={fleetSearch} onChange={setFleetSearch} placeholder="Search fleet…" />
+        )}
         <div className="space-y-3">
-          {fleet?.items.map((ac) => (
+          {filteredFleet.map((ac) => (
             <AircraftCard key={ac.id} aircraft={ac} operatorId={operatorId} writable={writable} canDeleteDocs={canDelete(role)} />
           ))}
+          {fleet && fleet.items.length > 0 && filteredFleet.length === 0 && (
+            <p className="text-sm text-fg/50">No aircraft match &quot;{fleetSearch}&quot;.</p>
+          )}
         </div>
       </section>
+
+      {canDelete(role) && <MergeOperatorSection operator={operator} />}
     </div>
+  );
+}
+
+function MergeOperatorSection({ operator }: { operator: OperatorDetail }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [candidate, setCandidate] = useState<Operator | null>(null);
+  const [result, setResult] = useState<OperatorMergeResult | null>(null);
+
+  const { data: allOperators } = useQuery({
+    queryKey: ["operators", "all-for-merge"],
+    queryFn: () => api.get<ApiPage<Operator>>("/operators?page_size=500"),
+    enabled: open,
+  });
+
+  const candidates = allOperators?.items.filter((o) => o.id !== operator.id && matchesQuery(search, o.name)) ?? [];
+
+  const merge = useMutation({
+    mutationFn: () => {
+      if (!candidate) return Promise.reject(new Error("No duplicate selected"));
+      return api.post<OperatorMergeResult>(`/operators/${operator.id}/merge`, {
+        duplicate_operator_id: candidate.id,
+        keep_version: operator.version,
+        duplicate_version: candidate.version,
+      });
+    },
+    onSuccess: (merged) => {
+      setResult(merged);
+      setCandidate(null);
+      queryClient.invalidateQueries({ queryKey: ["operator", operator.id] });
+      queryClient.invalidateQueries({ queryKey: ["aircraft", "operator", operator.id] });
+      queryClient.invalidateQueries({ queryKey: ["operators"] });
+    },
+  });
+
+  return (
+    <section className="space-y-3 rounded-lg border border-danger/30 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Merge duplicate operator</h2>
+          <p className="text-sm text-fg/50">
+            Fold a duplicate record (e.g. a misspelled or re-entered name) into this one. Fleet, clients, users, and service
+            configs all move over; this operator&apos;s blank fields get filled in from the duplicate&apos;s real data. Not
+            reversible.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((v) => !v);
+            setCandidate(null);
+            setResult(null);
+          }}
+          className="h-9 shrink-0 rounded-md border border-danger/40 px-3 text-sm text-danger hover:border-danger"
+        >
+          {open ? "Cancel" : "Find duplicate…"}
+        </button>
+      </div>
+
+      {open && !candidate && !result && (
+        <div className="space-y-2">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search operators to merge in…" />
+          <ul className="max-h-64 divide-y divide-fg/10 overflow-y-auto rounded-md border border-fg/10 text-sm">
+            {candidates.slice(0, 50).map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  onClick={() => setCandidate(o)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-fg/5"
+                >
+                  <span>{o.name ?? <span className="italic text-fg/40">(unnamed)</span>}</span>
+                  {o.quarantined && <span className="text-xs text-danger">quarantined</span>}
+                </button>
+              </li>
+            ))}
+            {search.trim() !== "" && candidates.length === 0 && <li className="px-3 py-2 text-fg/50">No matches.</li>}
+          </ul>
+        </div>
+      )}
+
+      {candidate && !result && (
+        <div className="space-y-3 rounded-md border border-danger/30 bg-danger/5 p-3 text-sm">
+          <p>
+            Merge <span className="font-semibold">{candidate.name ?? "(unnamed)"}</span> into{" "}
+            <span className="font-semibold">{operator.name ?? "(unnamed)"}</span>? {candidate.name ?? "(unnamed)"} will be
+            deleted; everything pointing at it (fleet, clients, users, service configs) moves to this operator instead. This
+            cannot be undone.
+          </p>
+          {merge.isError && <p className="text-danger">{errorMessage(merge.error)}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={merge.isPending}
+              onClick={() => merge.mutate()}
+              className="h-9 rounded-md bg-danger px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {merge.isPending ? "Merging…" : "Confirm merge"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCandidate(null)}
+              className="h-9 rounded-md border border-fg/20 px-3 text-sm text-fg/70 hover:border-fg/40"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2 rounded-md border border-fg/10 bg-fg/5 p-3 text-sm">
+          <p className="font-medium">Merged successfully.</p>
+          <ul className="text-fg/70">
+            {Object.entries(result.reassigned)
+              .filter(([, count]) => count > 0)
+              .map(([table, count]) => (
+                <li key={table}>
+                  {count} {table.replace(/_/g, " ")} reassigned
+                </li>
+              ))}
+            {Object.values(result.reassigned).every((c) => c === 0) && <li>No related records needed reassigning.</li>}
+          </ul>
+          {result.fields_backfilled.length > 0 && (
+            <p className="text-fg/70">Filled in from the duplicate: {result.fields_backfilled.join(", ")}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setResult(null);
+            }}
+            className="h-9 rounded-md border border-fg/20 px-3 text-sm text-fg/70 hover:border-fg/40"
+          >
+            Done
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 

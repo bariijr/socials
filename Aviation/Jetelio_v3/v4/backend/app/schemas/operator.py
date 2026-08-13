@@ -88,3 +88,20 @@ class OperatorOut(ORMModel, OperatorBase):
     source_ref: str | None = None
 
     assignable_status: str
+
+
+class OperatorMergeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    duplicate_operator_id: UUID
+    keep_version: int
+    duplicate_version: int
+
+
+class OperatorMergeOut(BaseModel):
+    kept: OperatorOut
+    duplicate_id: UUID
+    # Row counts reassigned onto `kept` per table, plus which of `kept`'s
+    # own fields were empty and backfilled from the duplicate rather than
+    # left null — real data on the duplicate is never silently discarded.
+    reassigned: dict[str, int]
+    fields_backfilled: list[str]

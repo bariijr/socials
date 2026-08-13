@@ -2249,6 +2249,134 @@ explicit choice: switch providers rather than wait, supplying a DeepSeek key.
   `curl`, independent of this app, to rule out an app-side misconfiguration before reporting it as
   an account-balance issue.
 
+### 7.22 `uaa_coordinator.py` importer rewrite (task #128)
+
+A separate, in-progress "Coordinator" feature (not built by this session, see §7.21's note) had
+added `app/importer/loaders/uaa_coordinator.py` — an importer for `UAA_Coordinator_v5JTL.xlsm`
+(VENDORS/AGENTS/INTEL/TEAMS/TAILS/MAYFLY sheets). Assessed before touching anything (per the user's
+explicit "assess first"): it had a real bug in nearly every function — wrong field names against
+`Aircraft`/`ImportSheetResult`, `next_billing_ref()` called positionally against a keyword-only
+signature, a hand-built `TripLeg` missing `verdict`/`rule_engine_version`/`computed_snapshot` (which
+reproduces the §10.2 stale-snapshot bug), a hardcoded `"GLF5"` fallback, raw Excel codes inserted
+into FK columns unvalidated, and no `AGENTS` implementation at all. Rewritten to reuse this
+codebase's own established importer conventions (`app/importer/loaders/aircraft.py`/`vendors.py`/
+`operators.py`'s quarantine-by-prevalidation pattern) and to route `MAYFLY` through the real
+`app.services.trip_service.create_trip` feasibility pipeline — the same code every other trip in
+this system goes through — instead of hand-rolling a fake snapshot, wrapped in a `begin_nested()`
+savepoint so one bad trip in the workbook can't poison the rest of the import. Verified end-to-end
+against a real disposable Postgres test DB with a synthetic workbook covering all six sheets before
+committing (commit `52c45bf`); no unit tests added, matching every other loader in this directory.
+
+### 7.23 Trip-builder chat: Ollama, then all four providers with priority + workload failover (tasks #129–131)
+
+DeepSeek (§7.21) hit the same billing wall Anthropic did (§7.19) — both accounts needed funds. User's
+first call: swap to a self-hosted Ollama model instead (task #129, no billing risk). Provider swap
+followed the same pattern as before — only `app/services/trip_chat_service.py`'s provider import
+changed, `app/core/chat/schema.py`'s contract stayed put. `app/core/chat/ollama_provider.py` calls
+Ollama's OpenAI-compatible endpoint directly over `httpx`, no SDK. New `ollama` service added to
+`docker-compose.yml` (`ollama/ollama:latest`, named volume, deliberately **not** a hard `depends_on`
+of `api` — chat is an optional feature, same NO_PROVIDER_CONFIGURED honesty as everywhere else).
+
+User then asked to run all four providers (Ollama/DeepSeek/Anthropic/OpenAI) at once rather than
+picking one (task #130), then refined that to priority-ordered, workload-aware failover with
+per-provider suspension (task #131) — "concurrent... based on workload, one can also be suspended".
+`app/core/chat/dispatcher.py` now owns provider selection: an admin-editable `chat_provider_priority`
+named setting (CSV try-order), `chat_provider_suspended` (CSV, skip entirely regardless of order),
+and `chat_provider_max_concurrent` (per-provider in-flight cap, Redis-backed via new
+`app/core/chat/workload.py` — advisory, TTL-bounded so a crashed request can't wedge a provider
+"busy" forever). A configured-but-failing provider falls through to the next candidate on `None`,
+not just an unconfigured/suspended/busy one. `deepseek_provider.py`/`anthropic_provider.py` recreated
+(both raw `httpx` against each provider's native API, no SDK — same reasoning as the DeepSeek swap);
+new `openai_provider.py` added the same way. 9 dedicated tests
+(`tests/integration/test_chat_dispatcher.py`) cover priority order, suspension, failure-failover, and
+workload-based skip with mocked providers — never hits a real API from an automated test.
+
+**Live-verified against all four real providers** (task #131, after the `llama3.2:1b` model finally
+pulled through a very slow/unreliable connection — two large-image-pull failures on
+`ollama/ollama:latest` mid-download before it succeeded): a real `/feasibility/chat-parse` request
+correctly tried Ollama first (60s timeout hit), fell through to DeepSeek (real `402 Payment
+Required`), then to Anthropic (real `400`/"credit balance too low" — same billing wall as §7.19, just
+a different status code), and correctly skipped OpenAI (no key configured) — proving the failover
+chain itself is wired correctly end-to-end. **Two real findings from that live test, not just
+"needs funding":**
+- The `ollama` container's `mem_limit: 900m` (chosen for a small target VPS) was too tight for
+  `llama3.2:1b` — confirmed via `docker stats` showing 99.9% memory and **37GB of block I/O in a few
+  minutes** (severe swap thrashing), not just slow CPU. Raised to 3GB for testing, at which point it
+  ran cleanly (314% CPU across cores, 1.66GB block I/O) and completed in ~41s — `mem_limit` is now
+  `${OLLAMA_MEM_LIMIT:-900m}`, overridable per-deployment; `ollama_provider.py`'s
+  `REQUEST_TIMEOUT_SECONDS` raised 60s → 120s to give real headroom above the measured baseline.
+- Even with clean, unthrottled execution, `llama3.2:1b`'s tool-call **did not follow the required
+  nested `legs[]` schema** — it flattened everything to top-level keys, put the aircraft registration
+  in `operator_name`, and inverted an avoid/include direction. This parses without raising (so it
+  wouldn't have been caught by the None-on-failure discipline) but produces a wrong, not just
+  incomplete, draft. Recommendation given to the user: a 1B local model isn't reliable enough for
+  this specific structured-extraction task on either resource axis (memory *or* accuracy) — funding
+  one of the hosted providers is the more trustworthy path; Ollama stays wired as a free, zero-key
+  fallback in the priority list but shouldn't be the primary.
+
+### 7.24 Fleet search filter on the operator detail page (task #132)
+
+User: "add a search filter for fleet after choosing an operator". `/operators/[id]`'s Fleet section
+gained the same `SearchInput`/`matchesQuery` client-side filter task #122 already established for
+the top-level Fleet/Trips/Countries/Operators/Vendors list pages (matches registration, ICAO type,
+manufacturer, model series, default callsign) — no backend change, the full fleet list was already
+fetched in one call. Verified via a clean `next build` and a live HTTP check (browser automation
+unavailable this session — no visual confirmation, endpoint/build-verified only).
+
+### 7.25 Operator merge/dedup (task #133)
+
+User: "add a way to merge operators if they happen to be the same with names similar" (e.g. "XYZ
+Aviation Inc" vs "XYZ aviatio, Inc"). New `POST /operators/{keep_id}/merge`
+(`app/services/operator_service.merge_operators`, SUPER_ADMIN only — same access level as delete)
+reassigns every real FK reference onto the survivor: `aircraft`, `clients`,
+`service_delivery_configs`, `confirmation_routing_configs`, `users` via plain bulk `UPDATE`s, and
+`party_roles` via a special path — `PartyRole.operator_id` is 1:1 (`uq_party_role_operator`), so a
+naive bulk update would violate that constraint whenever both operators already have their own
+`PartyRole` row; in that case the duplicate's role is retired (soft-deleted) instead of reassigned,
+otherwise it's moved over normally. Any of the survivor's own blank fields get backfilled from the
+duplicate's real data (never silently discarded) before the duplicate is soft-deleted and an
+`action="MERGE"` audit log entry is written. 7 integration tests
+(`tests/integration/test_operators_api.py`) cover the fleet/client/config/user reassignment, both
+`PartyRole` branches, the self-merge guard, stale-version rejection, and the RBAC gate. Admin UI on
+`/operators/[id]` (SUPER_ADMIN only): search → pick duplicate → confirm (explicit "not reversible"
+copy) → see exactly what moved and what was backfilled.
+
+### 7.26 Trip Manager Overview redesign + a real `update_trip` PATCH bug fix (task #134)
+
+User expected the trip detail page's Overview to look like a reference screenshot — titled summary
+cards (Flight Details / Operator & Purpose / Requester Contact) with inline editing, plus the legs
+table below. Clarified first (the screenshot's fields — PGH/TSS Team/Intel/Progress — actually matched
+the separate, unrelated "Coordinator" feature's data model, not this app's Trip Manager) before
+building; user chose to redesign v4's own Trip Manager page using its own real data, not build a new
+Coordinator-feature page. `/admin/trips/[id]`'s Overview tab rebuilt as three cards using the
+existing `EditableInfoField`/`EditableInfoSelect` components (already proven on the operator/person
+detail pages) wired to the existing `PATCH /trips/{id}` endpoint — no new backend fields needed,
+`TripUpdateIn` already covered all of it.
+
+**Real bug found and fixed while live-testing the inline-clear path**: `update_trip` applied every
+field with `if payload.X is not None`, which can never distinguish "the client omitted this field"
+from "the client explicitly wants it cleared to null" — a nullable field could be *set* through this
+endpoint but never *unset*. This silently broke "clear to blank" for every nullable `Trip` field,
+including the pre-existing `owner_team` inline-edit, not just the newly-added fields. Fixed to the
+same `payload.model_dump(exclude={"version"}, exclude_unset=True)` pattern
+`operator_service.update_operator` already used correctly. New regression test
+(`test_explicit_null_clears_a_nullable_field`) proves both directions: an explicit `null` now clears,
+and an omitted field is still left untouched. Live-verified via `curl` against the real running stack
+(set then clear `serial_number`/`ops_type` on a real trip, confirmed via direct DB-backed API
+responses) before and after the fix, then cleaned up the test data.
+
+### 7.27 Unrelated "Coordinator" feature removed (task #135)
+
+The separate, in-progress "Coordinator" work flagged throughout §7.21–7.23 (not built by this
+session) is no longer wanted — user's explicit call. `backend/app/api/routers/coordinator.py` and
+`frontend/src/app/admin/coordinator/` deleted outright. `backend/app/main.py` — which had **both** a
+real duplicate-import syntax fix (needed just to make the app importable at all, task #127) **and**
+the coordinator router wiring tangled in the same file — kept the syntax fix, removed only the
+`coordinator` import and `app.include_router(coordinator.router)` line; confirmed the app still
+imports cleanly afterward. `backend/app/importer/loaders/uaa_coordinator.py` (§7.22) was **not**
+touched — that file was already rewritten into real, tested, working code and committed on its own
+merit, independent of whether the rest of the Coordinator feature survives.
+
 ---
 
 ## 8. Document storage & Excel import/export

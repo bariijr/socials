@@ -47,13 +47,18 @@ class Settings(BaseSettings):
 
     import_source_xlsx: str = "/app/data/JTLlayout-Index_admin.xlsx"
 
-    # Empty means "not configured" — trip_chat_service's parse endpoint is a
-    # no-op (NO_PROVIDER_CONFIGURED-style honesty) until the user supplies
-    # their own key, same pattern as imap_host above. Task #127: switched
-    # from Anthropic to DeepSeek (OpenAI-compatible function calling,
-    # https://api.deepseek.com) — user's explicit choice, after Anthropic's
-    # account hit a billing wall (task #125, §7.19).
+    # Trip-builder chat (task #125) can run on any of four providers at
+    # once — app.core.chat.dispatcher picks which one per request via the
+    # admin-editable chat_provider named setting (task #130). Each field
+    # below is independently "empty/unset means not configured"
+    # (NO_PROVIDER_CONFIGURED-style honesty, same pattern as imap_host
+    # above); an admin can fund/configure any subset of these and pick
+    # between whichever are actually live.
+    ollama_base_url: str = ""  # no key: talks to a container on the private Docker network
+    ollama_model: str = "llama3.2:1b"
     deepseek_api_key: str = ""
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
 
     # Named-settings seed defaults (also written into the `settings` table on
     # first migration/import so they are editable at runtime thereafter).

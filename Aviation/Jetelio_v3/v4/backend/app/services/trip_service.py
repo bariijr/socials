@@ -666,32 +666,14 @@ async def update_trip(
         raise VersionConflictError("Trip", trip_id, payload.version, trip.version)
 
     before = {"status": trip.status.value, "notes": trip.notes}
-    if payload.status is not None:
-        trip.status = payload.status
-    if payload.notes is not None:
-        trip.notes = payload.notes
-    if payload.requested_by_name is not None:
-        trip.requested_by_name = payload.requested_by_name
-    if payload.requested_by_email is not None:
-        trip.requested_by_email = payload.requested_by_email
-    if payload.requested_by_phone is not None:
-        trip.requested_by_phone = payload.requested_by_phone
-    if payload.aircraft_registration is not None:
-        trip.aircraft_registration = payload.aircraft_registration
-    if payload.entered_mtow_kg is not None:
-        trip.entered_mtow_kg = payload.entered_mtow_kg
-    if payload.operator_airline_name is not None:
-        trip.operator_airline_name = payload.operator_airline_name
-    if payload.serial_number is not None:
-        trip.serial_number = payload.serial_number
-    if payload.colors is not None:
-        trip.colors = payload.colors
-    if payload.ops_type is not None:
-        trip.ops_type = payload.ops_type
-    if payload.flight_purpose is not None:
-        trip.flight_purpose = payload.flight_purpose
-    if payload.owner_team is not None:
-        trip.owner_team = payload.owner_team
+    # exclude_unset — not the earlier "if value is not None" per field,
+    # which could never distinguish "the client omitted this field" from
+    # "the client explicitly wants it cleared to null" and so could never
+    # actually null out any nullable field via this endpoint. Same
+    # PATCH-semantics fix as app.services.operator_service.update_operator.
+    values = payload.model_dump(exclude={"version"}, exclude_unset=True)
+    for key, value in values.items():
+        setattr(trip, key, value)
     trip.updated_by = actor_id
     trip.version += 1
     await session.flush()

@@ -1,10 +1,13 @@
-"""Trip-builder chat parsing (task #125, provider swapped to DeepSeek in
-task #127) — turns a free-text or structured permit-request message into
-a pre-fillable trip/leg draft.
+"""Trip-builder chat parsing (task #125; provider swapped Anthropic ->
+DeepSeek in task #127, DeepSeek -> Ollama in task #129, then all four
+wired at once with priority-ordered, workload-aware failover in task
+#131) — turns a free-text or structured permit-request message into a
+pre-fillable trip/leg draft.
 
-Two-step, deliberately kept separate: app.core.chat.deepseek_provider
-extracts verbatim *intent* (location/country names, dates) and is
-instructed never to invent a code; this module is the only place that
+Two-step, deliberately kept separate: app.core.chat.dispatcher extracts
+verbatim *intent* (location/country names, dates), trying each configured
+provider in priority order until one succeeds, and is instructed never to
+invent a code; this module is the only place that
 resolves those names against real DB rows (the exact same search
 functions the public lookup endpoints already use), so a hallucinated or
 mismatched location can never silently become a "resolved" ICAO/ISO code.
@@ -19,7 +22,7 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chat.deepseek_provider import extract_trip_request
+from app.core.chat import dispatcher
 from app.core.chat.schema import LegExtraction, TripExtraction
 from app.services import feasibility_iq_service
 
@@ -112,13 +115,22 @@ async def _resolve_leg(session: AsyncSession, leg: LegExtraction, *, index: int,
     )
 
 
+async def extract_trip_request(session: AsyncSession, message: str, *, today: date) -> TripExtraction | None:
+    """Thin wrapper kept as a module-level name (rather than calling
+    dispatcher.extract_trip_request directly from parse_trip_message) so
+    tests can monkeypatch one stable symbol here regardless of which of
+    the four underlying providers the admin currently has selected.
+    """
+    return await dispatcher.extract_trip_request(session, message, today=today)
+
+
 async def parse_trip_message(session: AsyncSession, message: str, *, today: date) -> ChatTripDraft | None:
-    """Returns None only when extraction itself failed (no API key
+    """Returns None only when extraction itself failed (no provider
     configured, or the LLM call/response didn't work out) — the caller
     (router) is responsible for turning that into an honest "chat isn't
     available right now" response, never a fabricated empty draft.
     """
-    extraction: TripExtraction | None = await extract_trip_request(message, today=today)
+    extraction: TripExtraction | None = await extract_trip_request(session, message, today=today)
     if extraction is None:
         return None
 

@@ -56,7 +56,7 @@ async def chat_fixture_data(session, draw_unique_iso3):
 
 
 def _mock_extraction(monkeypatch, extraction: TripExtraction | None) -> None:
-    async def _fake(message: str, *, today: date):
+    async def _fake(session, message: str, *, today: date):
         return extraction
 
     monkeypatch.setattr(trip_chat_service, "extract_trip_request", _fake)
@@ -140,10 +140,10 @@ class TestParseTripMessage:
 
     @pytest.mark.asyncio
     async def test_extraction_failure_returns_none(self, session, monkeypatch, chat_fixture_data):
-        # No API key / a failed Anthropic call — the provider itself
-        # already returns None in that case (see deepseek_provider.py);
-        # parse_trip_message must propagate that honestly, never fabricate
-        # an empty-but-successful-looking draft.
+        # No base URL configured / a failed Ollama call — the provider
+        # itself already returns None in that case (see
+        # ollama_provider.py); parse_trip_message must propagate that
+        # honestly, never fabricate an empty-but-successful-looking draft.
         _mock_extraction(monkeypatch, None)
 
         draft = await trip_chat_service.parse_trip_message(session, "irrelevant", today=date(2026, 8, 13))

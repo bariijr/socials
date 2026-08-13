@@ -65,6 +65,36 @@ services:
     ports:
       - "${MAILHOG_UI_PORT:-18025}:8025"
 
+  # Trip-builder chat extraction (task #129) — self-hosted, no API key/
+  # billing, chosen after both the Anthropic (task #125) and DeepSeek (task
+  # #127) accounts hit real billing walls. Deliberately NOT a hard
+  # dependency of `api` (no `depends_on` on it below) — the chat feature is
+  # optional (NO_PROVIDER_CONFIGURED-style honesty, same as every other
+  # optional integration in this app), so `api` must still come up cleanly
+  # if this container is slow, unhealthy, or absent.
+  #
+  # First-run step (not automated — matches this project's existing
+  # manual-step conventions): `docker compose exec ollama ollama pull
+  # llama3.2:1b` once; the pulled model persists in the `ollama_data`
+  # volume across restarts. mem_limit is set deliberately tight for a
+  # small VPS — if inference needs more than this to run reliably, either
+  # raise the limit or switch OLLAMA_MODEL to something smaller (e.g.
+  # `qwen2.5:0.5b`) in `.env`.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jetelio_v4_ollama
+    restart: unless-stopped
+    mem_limit: ${OLLAMA_MEM_LIMIT:-900m}
+    volumes:
+      - ollama_data:/root/.ollama
+    networks: [jetelio]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   api:
     build:
       context: ./backend
@@ -79,6 +109,8 @@ services:
       S3_ENDPOINT_URL: http://minio:9000
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -147,6 +179,8 @@ services:
       TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jetelio}:${POSTGRES_PASSWORD}@db:5432/jetelio_v4_test
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT_URL: http://minio:9000
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
     depends_on:
       db: { condition: service_healthy }
     networks: [jetelio]
@@ -200,3 +234,4 @@ volumes:
   db_data:
   redis_data:
   minio_data:
+  ollama_data:
