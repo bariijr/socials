@@ -240,26 +240,26 @@ export default function NewTripPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm text-fg/60">MTOW (optional)</label>
-            <div className="flex gap-2">
+            {/* Matches the public VIQ page's unit-suffix-style control
+                (frontend/src/app/page.tsx, task #113) — one bordered box
+                with the input flush-left and a suffix button that cycles
+                kg/lb, instead of a separate two-button segmented toggle. */}
+            <div className="flex h-11 items-stretch overflow-hidden rounded-md border border-fg/20 focus-within:border-fg/40">
               <input
                 type="number"
                 min={0}
                 value={mtowKg}
                 onChange={(e) => setMtowKg(e.target.value)}
-                className="mono-figures h-11 w-full rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
+                className="mono-figures h-full min-w-0 flex-1 bg-transparent px-3 text-base text-fg outline-none"
               />
-              <div className="flex overflow-hidden rounded-md border border-fg/20">
-                {(["kg", "lb"] as const).map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setMtowUnit(u)}
-                    className={`h-11 px-2.5 text-xs uppercase ${mtowUnit === u ? "bg-primary text-fg" : "text-fg/60 hover:bg-fg/10"}`}
-                  >
-                    {u}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => setMtowUnit(mtowUnit === "kg" ? "lb" : "kg")}
+                className="h-full shrink-0 border-l border-fg/20 px-3 text-xs font-semibold uppercase text-fg/60 transition-colors hover:bg-fg/10 hover:text-fg"
+                aria-label="Toggle MTOW unit"
+              >
+                {mtowUnit}
+              </button>
             </div>
           </div>
           <div>

@@ -19,6 +19,24 @@ class AircraftTypeLookupOut(BaseModel):
     model_series: str | None
 
 
+class PublicAircraftLookupOut(BaseModel):
+    """Public-safe registration autofill for the VIQ door — deliberately a
+    much narrower projection than app.schemas.trip.AircraftLookupOut
+    (admin-only), which additionally exposes operator_id/operator_name and
+    that operator's billing clients. Registration + type + MTOW is
+    performance data a requester filling in their own trip already knows;
+    operator/contact/client data is not, and exposing it here would let
+    anyone type a real tail number and learn who operates it — the exact
+    leak AircraftLookupOut's own docstring says never to allow publicly.
+    """
+
+    model_config = {"protected_namespaces": ()}
+
+    registration: str
+    icao_type: str
+    mtow_kg: float | None
+
+
 class CountryLookupOut(BaseModel):
     iso3: str
     name: str

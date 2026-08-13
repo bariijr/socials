@@ -1838,6 +1838,43 @@ clicked the suffix, confirmed it toggled `KG → LB` with the entered number unc
 original toggle's behavior — only how the number is *interpreted* on submit changes, never the
 raw text itself), console clean.
 
+### 7.15a Admin MTOW toggle parity + public registration autofill (task #123)
+
+User noticed the admin Trip Manager's "new trip" MTOW field (`admin/trips/new/page.tsx`) still had
+the *pre*-#113 look — a number input plus a separate two-button segmented kg/lb toggle — never
+migrated when VIQ got the unit-suffix restyle. Fixed by copying §7.15's exact markup over; same
+`mtowKg`/`mtowUnit` state and `mtowInKg()` conversion, pure JSX change.
+
+**Public-safe registration autofill on VIQ**: the admin Trip Manager has long had a real
+registration → aircraft-type/MTOW/operator/billing-client autofill
+(`GET /trips/aircraft-lookup`, `AircraftLookupOut`) — but it's explicitly admin-only, its own
+docstring warning that exposing it publicly "would leak one operator's fleet/contact details to
+anyone who types their tail number." The user asked for VIQ's Registration/MTOW/Operator fields to
+"autopopulate ... with available registries" too — a real conflict with that documented privacy
+boundary, surfaced back to the user rather than silently building around or through it. **User's
+explicit choice**: a new public endpoint returns type + MTOW only, never operator name/contact/
+billing data — Operator/airline stays a manual field, same as it already was.
+
+- New `PublicAircraftLookupOut` (`app/schemas/feasibility.py`) — `registration`/`icao_type`/
+  `mtow_kg` only, no `operator_id`/`operator_name`/`clients`. Docstring spells out why it's a
+  narrower projection than `AircraftLookupOut`, not just "the same minus some fields."
+- `feasibility_iq_service.lookup_aircraft_by_registration()` — deliberately never even imports
+  `Operator`/`Client` into this file, matching this codebase's existing discipline of not just
+  omitting sensitive data from a response but not touching the tables that hold it at all.
+- `GET /feasibility/aircraft-lookup?registration=` (public, rate-limited `lookup` bucket, 404 on no
+  match — same shape as the admin endpoint otherwise).
+- `app/page.tsx`: registration input's `onBlur` fires the lookup; a match autofills `aircraft`
+  (type) and `mtowKg`/`mtowUnit`, with a "Matched — type & MTOW filled in below" confirmation.
+  **Does not touch `operatorAirlineName`** — VIQ also accepts arbitrary/hypothetical aircraft (no
+  registration required), so a 404 is a silent no-op, not an error; the fields stay manually
+  editable either way, matching admin's "best-effort convenience" framing.
+- **Tests**: `tests/integration/test_feasibility_api.py::TestPublicAircraftLookup` — matched
+  registration returns type+MTOW and asserts `operator_name`/`operator_id`/`clients` are absent
+  from the response body *and* the operator's real name string doesn't appear anywhere in the raw
+  response text (not just "the named field is missing" — a stronger, harder-to-accidentally-break
+  assertion); unmatched registration is 404; lookup is case-insensitive. 318 passing full suite,
+  zero regressions. Frontend `next build` clean. Live-verified through nginx post-rebuild.
+
 ### 7.16 Single combined navigation map (task #114)
 
 The public VIQ page's per-leg "Route map" section — one separate small `RoutePreviewPanel` map
@@ -2107,9 +2144,9 @@ make test                      # domain unit tests (no DB needed) + integration 
 Integration tests need a real PostgreSQL + PostGIS database (geometry columns have no SQLite
 equivalent) and a reachable MinIO (aircraft document tests upload/download for real, no mock) —
 `docker compose --profile test run --rm api-test pytest -q` is the exact command used throughout
-this build to verify every change. **315 tests passing** as of the most recent full-suite run
-(task #121 completion — 313 (task #120) + 3 new (§5.1's reroute-track/world-outline coverage) − 1
-(§4.27's `TestRoleBucketing` count already folded into the 313 baseline); count previously dropped
+this build to verify every change. **318 tests passing** as of the most recent full-suite run
+(task #123 completion — 315 (task #121) + 3 new (§7.15a's `TestPublicAircraftLookup`); task #122's
+admin search/filter work added no new backend tests (client-side only); count previously dropped
 from 309 to 299 at task #110 as captcha-specific tests were deleted along with the feature, see
 §4.22), zero known failures. Note:
 `api-test` builds from its own Dockerfile

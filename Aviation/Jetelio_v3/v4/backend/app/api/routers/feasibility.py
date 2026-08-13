@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from app.core.email_client import send_email
+from app.core.errors import NotFoundError
 from app.core.rate_limit import rate_limit
 from app.database import get_db
 from app.schemas.feasibility import (
@@ -19,6 +20,7 @@ from app.schemas.feasibility import (
     FeasibilityCheckOut,
     FirLookupOut,
     FirOut,
+    PublicAircraftLookupOut,
     RequestQuoteIn,
     RequestQuoteOut,
     ReroutePreviewOut,
@@ -56,6 +58,22 @@ async def aircraft_types_lookup(
     q: str = Query(min_length=1, max_length=100), session: AsyncSession = Depends(get_db)
 ) -> list[AircraftTypeLookupOut]:
     return await feasibility_iq_service.search_aircraft_types(session, q)
+
+
+@router.get("/aircraft-lookup", response_model=PublicAircraftLookupOut, dependencies=[Depends(rate_limit("lookup"))])
+async def aircraft_lookup(
+    registration: str = Query(min_length=1, max_length=20), session: AsyncSession = Depends(get_db)
+) -> PublicAircraftLookupOut:
+    """Public-safe registration autofill for the VIQ door — type + MTOW
+    only. Deliberately not the admin Trip Manager's `/trips/aircraft-lookup`
+    (see PublicAircraftLookupOut's docstring): this never returns operator
+    name, contact details, or billing clients, so a stranger typing any
+    real tail number learns only its type and MTOW, not who operates it.
+    """
+    result = await feasibility_iq_service.lookup_aircraft_by_registration(session, registration)
+    if result is None:
+        raise NotFoundError("Aircraft", registration)
+    return result
 
 
 @router.get("/countries", response_model=list[CountryLookupOut], dependencies=[Depends(rate_limit("lookup"))])

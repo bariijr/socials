@@ -9,6 +9,7 @@ import type {
   FeasibilityCheckResult,
   LegInput,
   PersonPublicInput,
+  PublicAircraftLookup,
 } from "@/lib/types";
 import { AircraftTypePicker } from "@/components/AircraftTypePicker";
 import { PersonsEditor } from "@/components/PersonsEditor";
@@ -49,6 +50,8 @@ export default function FeasibilityIQPage() {
   const [registration, setRegistration] = useState("");
   const [mtowKg, setMtowKg] = useState("");
   const [mtowUnit, setMtowUnit] = useState<"kg" | "lb">("kg");
+  const [registrationMatched, setRegistrationMatched] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
   const [operatorAirlineName, setOperatorAirlineName] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -97,6 +100,38 @@ export default function FeasibilityIQPage() {
     return mtowUnit === "lb" ? n / LB_PER_KG : n;
   }
 
+  // Registration -> autofill aircraft type + MTOW from a real registered
+  // aircraft, if one is on file. Deliberately does NOT touch
+  // operatorAirlineName — the public lookup endpoint never returns
+  // operator/contact data (see PublicAircraftLookupOut's docstring), so
+  // "Operator / airline" stays a manual field a requester fills in
+  // themselves, same as before.
+  async function runRegistrationLookup() {
+    if (!registration.trim()) return;
+    setLookingUp(true);
+    try {
+      const found = await api.get<PublicAircraftLookup>(
+        `/feasibility/aircraft-lookup?registration=${encodeURIComponent(registration.trim())}`
+      );
+      setAircraft({ icao_type: found.icao_type, manufacturer: null, model_series: null });
+      if (found.mtow_kg !== null) {
+        setMtowKg(String(found.mtow_kg));
+        setMtowUnit("kg");
+      }
+      setRegistrationMatched(true);
+    } catch {
+      // No match (404) or any other failure (rate limit, network) is a
+      // silent no-op — VIQ takes arbitrary/hypothetical aircraft too,
+      // unlike the admin Trip Manager where every registration is
+      // expected to be a real fleet aircraft. This is a best-effort
+      // convenience autofill, not a required step; fields stay manually
+      // editable either way.
+      setRegistrationMatched(false);
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!aircraft) return;
@@ -142,9 +177,17 @@ export default function FeasibilityIQPage() {
               <input
                 type="text"
                 value={registration}
-                onChange={(e) => setRegistration(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setRegistration(e.target.value.toUpperCase());
+                  setRegistrationMatched(false);
+                }}
+                onBlur={runRegistrationLookup}
                 className="mono-figures h-11 w-full rounded-md border border-fg/20 bg-transparent px-3 text-base text-fg"
               />
+              {lookingUp && <p className="mt-1 text-xs text-fg/50">Checking…</p>}
+              {registrationMatched && !lookingUp && (
+                <p className="mt-1 text-xs text-success">Matched — type &amp; MTOW filled in below.</p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm text-fg/60">MTOW (optional)</label>

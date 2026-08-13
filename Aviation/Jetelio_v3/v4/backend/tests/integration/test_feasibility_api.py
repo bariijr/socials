@@ -15,11 +15,12 @@ from geoalchemy2.shape import from_shape
 from shapely.geometry import MultiPolygon, Polygon
 from sqlalchemy import select
 
-from app.models.aircraft import AircraftPerformance
+from app.models.aircraft import Aircraft, AircraftPerformance
 from app.models.airport import Airport
 from app.models.country import Country
 from app.models.geometry import CountryGeometry, FirBoundary
 from app.models.notification import Notification
+from app.models.operator import Operator
 from app.models.settings import Setting
 from app.models.trip import Trip, TripLeg
 MAILHOG_API = "http://mailhog:8025/api/v2"
@@ -120,6 +121,53 @@ def _check_payload(fixture: dict, legs: list[dict] | None = None) -> dict:
         "persons": [{"role": "CREW", "nationality_iso3": fixture["iso_b"]}],
         "legs": legs or [_leg(fixture)],
     }
+
+
+@pytest_asyncio.fixture
+async def registered_aircraft_fixture(session):
+    icao_type = f"T{uuid.uuid4().hex[:6]}".upper()
+    session.add(AircraftPerformance(icao_type=icao_type, max_range_nm=3000))
+    operator = Operator(name="Confidential Operator LLC")
+    session.add(operator)
+    await session.flush()
+
+    registration = f"N{uuid.uuid4().hex[:5]}".upper()
+    aircraft = Aircraft(registration=registration, icao_type=icao_type, operator_id=operator.id, mtow_kg=8500.0)
+    session.add(aircraft)
+    # client uses a separate DB connection than `session` — must commit.
+    await session.commit()
+    return {"registration": registration, "icao_type": icao_type, "operator_name": operator.name}
+
+
+class TestPublicAircraftLookup:
+    @pytest.mark.asyncio
+    async def test_matched_registration_returns_type_and_mtow_only(self, client, registered_aircraft_fixture):
+        g = registered_aircraft_fixture
+        resp = await client.get("/feasibility/aircraft-lookup", params={"registration": g["registration"]})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        assert body["registration"] == g["registration"]
+        assert body["icao_type"] == g["icao_type"]
+        assert body["mtow_kg"] == 8500.0
+        # The whole point of this endpoint being separate from the
+        # admin-only /trips/aircraft-lookup: never leak who operates it.
+        assert "operator_name" not in body
+        assert "operator_id" not in body
+        assert "clients" not in body
+        assert g["operator_name"] not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_unmatched_registration_is_404(self, client):
+        resp = await client.get("/feasibility/aircraft-lookup", params={"registration": "ZZZZZ"})
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_lookup_is_case_insensitive(self, client, registered_aircraft_fixture):
+        g = registered_aircraft_fixture
+        resp = await client.get("/feasibility/aircraft-lookup", params={"registration": g["registration"].lower()})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["registration"] == g["registration"]
 
 
 class TestFeasibilityCheck:

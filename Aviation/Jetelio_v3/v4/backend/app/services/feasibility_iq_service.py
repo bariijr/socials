@@ -18,7 +18,7 @@ from app.core.errors import NotFoundError
 from app.core.redis_client import get_redis
 from app.core.rule_engine import RULE_ENGINE_VERSION
 from app.domain.permits import aggregate_trip_verdict
-from app.models.aircraft import AircraftPerformance
+from app.models.aircraft import Aircraft, AircraftPerformance
 from app.models.airport import Airport
 from app.models.country import Country
 from app.models.geometry import FirBoundary
@@ -32,6 +32,7 @@ from app.schemas.feasibility import (
     LegCheckIn,
     LegResultOut,
     PersonPublicIn,
+    PublicAircraftLookupOut,
 )
 from app.services import leg_feasibility_service, settings_service
 from app.services.credentials_engine_service import PersonInput
@@ -99,6 +100,21 @@ async def search_aircraft_types(session: AsyncSession, q: str) -> list[AircraftT
         AircraftTypeLookupOut(icao_type=r.icao_type, manufacturer=r.manufacturer, model_series=r.model_series)
         for r in rows
     ]
+
+
+async def lookup_aircraft_by_registration(session: AsyncSession, registration: str) -> PublicAircraftLookupOut | None:
+    """Public-safe registration autofill — see PublicAircraftLookupOut's
+    docstring for why this is a narrower projection than the admin-only
+    app.services.trip_service.lookup_aircraft_by_registration. Deliberately
+    never touches Operator/Client at all here, not just omits them from the
+    response — same discipline as not even importing them into this file.
+    """
+    aircraft = (
+        await session.execute(select(Aircraft).where(Aircraft.registration == registration.strip().upper()))
+    ).scalar_one_or_none()
+    if aircraft is None:
+        return None
+    return PublicAircraftLookupOut(registration=aircraft.registration, icao_type=aircraft.icao_type, mtow_kg=aircraft.mtow_kg)
 
 
 async def search_countries(session: AsyncSession, q: str) -> list[CountryLookupOut]:

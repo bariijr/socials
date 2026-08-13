@@ -245,6 +245,15 @@ export interface AircraftTypeLookup {
   model_series: string | null;
 }
 
+// Public-safe registration autofill (VIQ) — type + MTOW only, deliberately
+// narrower than the admin-only AircraftLookup below (no operator_name/
+// operator_id/clients — see backend PublicAircraftLookupOut's docstring).
+export interface PublicAircraftLookup {
+  registration: string;
+  icao_type: string;
+  mtow_kg: number | null;
+}
+
 export interface CountryLookup {
   iso3: string;
   name: string;
