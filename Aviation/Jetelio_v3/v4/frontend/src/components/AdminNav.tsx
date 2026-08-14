@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, ArrowRight, Bell } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Page } from "@/lib/types";
 import { ADMIN_NAV_LINKS } from "@/lib/adminNav";
@@ -42,17 +43,17 @@ export function AdminNav() {
         type="button"
         onClick={() => router.back()}
         aria-label="Back"
-        className="h-8 rounded-md border border-fg/20 px-2 text-sm text-fg/70 hover:border-accent hover:text-accent"
+        className="flex h-8 w-8 items-center justify-center rounded-md border border-fg/20 text-fg/70 hover:border-accent hover:text-accent"
       >
-        ←
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
       </button>
       <button
         type="button"
         onClick={() => router.forward()}
         aria-label="Forward"
-        className="h-8 rounded-md border border-fg/20 px-2 text-sm text-fg/70 hover:border-accent hover:text-accent"
+        className="flex h-8 w-8 items-center justify-center rounded-md border border-fg/20 text-fg/70 hover:border-accent hover:text-accent"
       >
-        →
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </button>
       <span className="mx-2 h-5 w-px bg-fg/10" />
       <div className="flex flex-wrap gap-1">
@@ -74,9 +75,12 @@ export function AdminNav() {
           pathname === "/admin/notifications" ? "bg-primary text-fg" : "text-fg/60 hover:bg-fg/10"
         }`}
       >
-        <span aria-hidden>🔔</span>
+        <Bell className="h-4 w-4" aria-hidden="true" />
+        <span className="sr-only">
+          Notifications{!!unseen && unseen.total > 0 ? `, ${unseen.total} unread` : ""}
+        </span>
         {!!unseen && unseen.total > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-semibold text-white">
+          <span aria-hidden="true" className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-semibold text-white">
             {unseen.total}
           </span>
         )}

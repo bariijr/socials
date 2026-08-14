@@ -458,6 +458,7 @@ export interface ChatLegDraft {
   arrival: ResolvedAirport;
   departure_date: string | null;
   departure_time_utc: string | null;
+  call_sign: string | null;
   avoid_countries: ResolvedCountry[];
   include_countries: ResolvedCountry[];
 }

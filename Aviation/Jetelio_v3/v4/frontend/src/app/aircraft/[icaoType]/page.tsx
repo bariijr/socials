@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -9,6 +8,7 @@ import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite } from "@/lib/jwt";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableInfoField, EditableInfoCheckbox, InfoField } from "@/components/EditableCell";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 export default function AircraftPerformanceDetailPage() {
   useRequireAuth();
@@ -37,11 +37,7 @@ export default function AircraftPerformanceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/aircraft" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Aircraft types
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Aircraft types", href: "/aircraft" }, { label: item.icao_type }]} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="mono-figures text-xl font-semibold">{item.icao_type}</h1>

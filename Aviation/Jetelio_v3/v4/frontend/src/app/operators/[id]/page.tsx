@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
@@ -24,6 +23,7 @@ import { StatusChip } from "@/components/StatusChip";
 import { EditableText, InfoField, EditableInfoField } from "@/components/EditableCell";
 import { CountryName, CountryPicker } from "@/components/CountryPicker";
 import { SearchInput } from "@/components/SearchInput";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import { matchesQuery } from "@/lib/search";
 
 const AIRCRAFT_STATUSES: AircraftStatus[] = ["ACTIVE", "GROUNDED", "ARCHIVED"];
@@ -101,11 +101,7 @@ export default function OperatorDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/operators" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Operators
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Operators", href: "/operators" }, { label: operator.name ?? "(unnamed)" }]} />
 
       <header className="space-y-1">
         <div className="flex flex-wrap items-center gap-3">
@@ -149,13 +145,24 @@ export default function OperatorDetailPage() {
           label="Contact phone"
           value={operator.contact_phone}
           writable={writable}
+          type="tel"
+          autoComplete="tel"
           onSave={(v) => saveOperatorField("contact_phone", v || null)}
         />
-        <EditableInfoField label="OCC email" value={operator.occ_email} writable={writable} onSave={(v) => saveOperatorField("occ_email", v || null)} />
+        <EditableInfoField
+          label="OCC email"
+          value={operator.occ_email}
+          writable={writable}
+          type="email"
+          autoComplete="email"
+          onSave={(v) => saveOperatorField("occ_email", v || null)}
+        />
         <EditableInfoField
           label="Billing email"
           value={operator.billing_email}
           writable={writable}
+          type="email"
+          autoComplete="email"
           onSave={(v) => saveOperatorField("billing_email", v || null)}
         />
         <EditableInfoField
@@ -545,11 +552,15 @@ function AircraftForm({
     <form onSubmit={handleSubmit} className="space-y-3 rounded-md border border-fg/10 bg-fg/5 p-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <label className={labelCls}>Registration</label>
+          <label className={labelCls}>
+            Registration<span className="ml-0.5 text-danger" aria-hidden="true">*</span>
+          </label>
           <input className={`mono-figures ${inputCls}`} value={registration} onChange={(e) => setRegistration(e.target.value.toUpperCase())} required />
         </div>
         <div>
-          <label className={labelCls}>ICAO type</label>
+          <label className={labelCls}>
+            ICAO type<span className="ml-0.5 text-danger" aria-hidden="true">*</span>
+          </label>
           <input className={`mono-figures ${inputCls}`} value={icaoType} onChange={(e) => setIcaoType(e.target.value.toUpperCase())} required />
         </div>
         <div>

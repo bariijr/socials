@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -10,6 +9,7 @@ import { getCurrentUserRole, canWrite } from "@/lib/jwt";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableText, InfoField, EditableInfoField } from "@/components/EditableCell";
 import { CountryName, CountryPicker } from "@/components/CountryPicker";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 export default function AirportDetailPage() {
   useRequireAuth();
@@ -38,11 +38,7 @@ export default function AirportDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/airports" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Airports
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Airports", href: "/airports" }, { label: airport.name }]} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">

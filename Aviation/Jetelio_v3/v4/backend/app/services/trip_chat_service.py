@@ -17,6 +17,7 @@ before ever submitting, same safety net as admin's existing registration
 autofill.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -25,6 +26,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.chat import dispatcher
 from app.core.chat.schema import LegExtraction, TripExtraction
 from app.services import feasibility_iq_service
+
+# Real CAA/ops permit-request messages routinely write a leg as
+# "CITY / ICAO" (e.g. "BLANTYRE / FWCL") — the chat schema's own
+# instructions require extracting that verbatim, so a leg's departure_query
+# often arrives as the whole "City / ICAO" string, which no single
+# name/city/icao field in the airports table will ever literally contain
+# as a substring (search_airports requires the *entire* query to match one
+# field). Before falling back to a fuzzy whole-string search, look for a
+# bare 4-letter token and try resolving on that alone. This isn't a guess:
+# search_airports still checks the token against real rows, so a
+# non-ICAO 4-letter word (a short city name, say) simply finds nothing and
+# falls through to the normal fuzzy search unaffected.
+_ICAO_TOKEN_PATTERN = re.compile(r"\b([A-Za-z]{4})\b")
 
 
 @dataclass(frozen=True)
@@ -54,6 +68,9 @@ class ChatLegDraft:
     arrival: ResolvedAirport
     departure_date: str | None
     departure_time_utc: str | None
+    # Free-text identifier, not a code needing DB resolution — passed
+    # through verbatim exactly like aircraft_registration below.
+    call_sign: str | None = None
     avoid_countries: list[ResolvedCountry] = field(default_factory=list)
     include_countries: list[ResolvedCountry] = field(default_factory=list)
 
@@ -73,6 +90,12 @@ class ChatTripDraft:
 
 
 async def _resolve_airport(session: AsyncSession, query: str, *, role: str, warnings: list[str]) -> ResolvedAirport:
+    for token in _ICAO_TOKEN_PATTERN.findall(query):
+        token_matches = await feasibility_iq_service.search_airports(session, token)
+        exact = next((m for m in token_matches if m.icao.upper() == token.upper()), None)
+        if exact is not None:
+            return ResolvedAirport(query=query, icao=exact.icao, name=exact.name)
+
     matches = await feasibility_iq_service.search_airports(session, query)
     if not matches:
         warnings.append(f"Could not match {role} \"{query}\" to a known airport — please select it manually.")
@@ -110,6 +133,7 @@ async def _resolve_leg(session: AsyncSession, leg: LegExtraction, *, index: int,
         arrival=arrival,
         departure_date=leg.departure_date,
         departure_time_utc=leg.departure_time_utc,
+        call_sign=leg.call_sign,
         avoid_countries=avoid_countries,
         include_countries=include_countries,
     )

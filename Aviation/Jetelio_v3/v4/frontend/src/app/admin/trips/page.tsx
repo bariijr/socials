@@ -21,6 +21,8 @@ export default function TripsListPage() {
   useRequireAuth();
   const [status, setStatus] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<string>(STATUSES[0]);
   const queryClient = useQueryClient();
   const writable = canWrite(getCurrentUserRole());
 
@@ -35,6 +37,33 @@ export default function TripsListPage() {
   const patch = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.patch<Trip>(`/trips/${id}`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trips"] }),
+  });
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll(visible: Trip[]) {
+    setSelected((prev) => {
+      const allSelected = visible.length > 0 && visible.every((r) => prev.has(r.id));
+      return allSelected ? new Set() : new Set(visible.map((r) => r.id));
+    });
+  }
+
+  const bulkUpdate = useMutation({
+    mutationFn: async () => {
+      const targets = rows.filter((r) => selected.has(r.id));
+      await Promise.all(targets.map((r) => api.patch<Trip>(`/trips/${r.id}`, { version: r.version, status: bulkStatus })));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      setSelected(new Set());
+    },
   });
 
   return (
@@ -68,11 +97,47 @@ export default function TripsListPage() {
 
       <SearchInput value={search} onChange={setSearch} placeholder="Search trips…" />
 
+      {writable && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="text-fg/70">{selected.size} selected</span>
+          <select
+            value={bulkStatus}
+            onChange={(e) => setBulkStatus(e.target.value)}
+            className="h-9 rounded-md border border-fg/20 bg-transparent px-2 text-sm text-fg"
+          >
+            {STATUSES.map((s) => (
+              <option key={s} value={s} className="bg-base">
+                {s}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={bulkUpdate.isPending}
+            onClick={() => bulkUpdate.mutate()}
+            className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-fg disabled:opacity-50"
+          >
+            {bulkUpdate.isPending ? "Updating…" : `Set status: ${bulkStatus}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="h-9 rounded-md border border-fg/20 px-3 text-sm text-fg/70 hover:border-fg/40"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {isLoading && <p className="text-fg/60">Loading…</p>}
       {data && (
         <DataTable
           rowKey={(r) => r.id}
           rows={rows}
+          emptyMessage={search.trim() ? `No trips match "${search}".` : "No trips yet."}
+          bulkSelect={
+            writable ? { selectedKeys: selected, onToggleRow: toggleRow, onToggleAll: toggleAll } : undefined
+          }
           columns={[
             {
               header: "Trip",

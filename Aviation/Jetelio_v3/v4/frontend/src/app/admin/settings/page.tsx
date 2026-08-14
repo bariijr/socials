@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Setting } from "@/lib/types";
 import { useRequireAuth } from "@/lib/useRequireAuth";
@@ -157,19 +158,19 @@ export default function ChatProviderSettingsPage() {
                     type="button"
                     disabled={i === 0}
                     onClick={() => move(name, -1)}
-                    className="h-8 w-8 rounded-md border border-fg/20 text-sm text-fg/70 hover:border-fg/40 disabled:opacity-30"
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-fg/20 text-fg/70 hover:border-fg/40 disabled:opacity-30"
                     aria-label={`Move ${name} up`}
                   >
-                    ↑
+                    <ArrowUp className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     disabled={i === order.length - 1}
                     onClick={() => move(name, 1)}
-                    className="h-8 w-8 rounded-md border border-fg/20 text-sm text-fg/70 hover:border-fg/40 disabled:opacity-30"
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-fg/20 text-fg/70 hover:border-fg/40 disabled:opacity-30"
                     aria-label={`Move ${name} down`}
                   >
-                    ↓
+                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
               )}

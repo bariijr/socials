@@ -373,6 +373,7 @@ class ChatLegDraftOut(BaseModel):
     arrival: ResolvedAirportOut
     departure_date: str | None
     departure_time_utc: str | None
+    call_sign: str | None
     avoid_countries: list[ResolvedCountryOut]
     include_countries: list[ResolvedCountryOut]
 

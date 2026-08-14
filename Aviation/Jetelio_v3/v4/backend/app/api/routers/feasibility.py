@@ -134,6 +134,7 @@ async def chat_parse(payload: ChatParseIn, session: AsyncSession = Depends(get_d
                 arrival=ResolvedAirportOut(query=leg.arrival.query, icao=leg.arrival.icao, name=leg.arrival.name),
                 departure_date=leg.departure_date,
                 departure_time_utc=leg.departure_time_utc,
+                call_sign=leg.call_sign,
                 avoid_countries=[ResolvedCountryOut(query=c.query, iso3=c.iso3, name=c.name) for c in leg.avoid_countries],
                 include_countries=[ResolvedCountryOut(query=c.query, iso3=c.iso3, name=c.name) for c in leg.include_countries],
             )

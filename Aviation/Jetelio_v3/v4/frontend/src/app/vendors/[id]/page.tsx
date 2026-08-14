@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -10,6 +9,7 @@ import { getCurrentUserRole, canWrite } from "@/lib/jwt";
 import { formatUtcDate } from "@/lib/format";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableText, InfoField, EditableInfoField, EditableInfoSelect } from "@/components/EditableCell";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 const CAPABILITY_STATUS_OPTIONS = [
   { value: "PENDING", label: "Pending" },
@@ -45,11 +45,7 @@ export default function VendorDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/vendors" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Vendors
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Vendors", href: "/vendors" }, { label: vendor.name }]} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">

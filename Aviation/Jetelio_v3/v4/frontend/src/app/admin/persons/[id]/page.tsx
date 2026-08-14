@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -9,6 +8,7 @@ import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite, canDelete } from "@/lib/jwt";
 import { EditableInfoField, EditableInfoSelect } from "@/components/EditableCell";
 import { DocumentsPanel } from "@/components/DocumentsPanel";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 const ROLE_HINT_OPTIONS = [
   { value: "CREW", label: "Crew" },
@@ -45,11 +45,7 @@ export default function PersonDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/admin/persons" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Persons
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Persons", href: "/admin/persons" }, { label: person.full_name }]} />
       <h1 className="text-xl font-semibold">{person.full_name}</h1>
 
       <section className="grid gap-4 rounded-lg border border-fg/10 p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -76,8 +72,22 @@ export default function PersonDetailPage() {
           type="text"
           placeholder="YYYY-MM-DD"
         />
-        <EditableInfoField label="Email" value={person.email} writable={writable} onSave={(v) => saveField("email", v || null)} />
-        <EditableInfoField label="Phone" value={person.phone} writable={writable} onSave={(v) => saveField("phone", v || null)} />
+        <EditableInfoField
+          label="Email"
+          value={person.email}
+          writable={writable}
+          type="email"
+          autoComplete="email"
+          onSave={(v) => saveField("email", v || null)}
+        />
+        <EditableInfoField
+          label="Phone"
+          value={person.phone}
+          writable={writable}
+          type="tel"
+          autoComplete="tel"
+          onSave={(v) => saveField("phone", v || null)}
+        />
         <EditableInfoField
           label="Passport number"
           value={person.passport_number}

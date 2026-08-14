@@ -69,6 +69,14 @@ INPUT_SCHEMA = {
                         "type": ["string", "null"],
                         "description": "24h HH:MM UTC departure time if explicitly given (e.g. an ETD like '0815 UTC'), else null.",
                     },
+                    "call_sign": {
+                        "type": ["string", "null"],
+                        "description": (
+                            "The flight callsign for this leg, verbatim, if one is explicitly stated (e.g. "
+                            "'callsign TWY201', 'FLIGHT NBR WY1026'). Not the aircraft's tail number/registration "
+                            "and not the aircraft type/model — those are separate fields. Null if no callsign is given."
+                        ),
+                    },
                     "avoid_country_queries": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -102,6 +110,15 @@ system resolves verbatim names against real airport/country data.
 a plausible-sounding value that isn't really there.
 - A structured CAA-style block's ROUTE line (airway/waypoint string) is not itself a location — do not treat \
 it as a leg's departure/arrival; use the ITINERARY block's actual station identifiers instead.
+- aircraft_registration, call_sign, and aircraft_type_query are three DIFFERENT things — never put one's value \
+in another field:
+  * aircraft_registration is the tail number (e.g. "N123AB", "N80TE", "G-ATWA") — usually near "REGISTRY", \
+"REG", or written directly after the operator name.
+  * call_sign is a flight identifier like "TWY201" or "WY1026" — usually near the word "callsign", "FLIGHT NBR", \
+or similar, and is per-leg if the message gives one per leg.
+  * aircraft_type_query is the aircraft's make/model (e.g. "Gulfstream G650", "GLEX", "A321neo") — leave it \
+null if the message never actually names a type/model, even if a registration or callsign is given. Do not \
+guess a type from a registration or callsign.
 """
 
 
@@ -111,6 +128,7 @@ class LegExtraction:
     arrival_query: str
     departure_date: str | None
     departure_time_utc: str | None
+    call_sign: str | None = None
     avoid_country_queries: list[str] = field(default_factory=list)
     include_country_queries: list[str] = field(default_factory=list)
 
@@ -131,6 +149,7 @@ def parse_leg(raw: dict) -> LegExtraction:
         arrival_query=str(raw["arrival_query"]),
         departure_date=raw.get("departure_date") or None,
         departure_time_utc=raw.get("departure_time_utc") or None,
+        call_sign=raw.get("call_sign") or None,
         avoid_country_queries=[str(c) for c in (raw.get("avoid_country_queries") or [])],
         include_country_queries=[str(c) for c in (raw.get("include_country_queries") or [])],
     )

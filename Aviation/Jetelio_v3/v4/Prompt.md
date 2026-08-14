@@ -2445,6 +2445,65 @@ in live testing, e.g. `PERMIT_US_CUSTOMS_BOND`, `LTR_VISA_WAIVER_PROGRAM_AGREEME
 feature to aircraft documents is a real follow-up, not done in this session — would need either a
 much larger per-type template registry or an open-ended (no-fixed-schema) extraction approach.
 
+### 7.30 UI/UX flow study + implementation (task #138)
+
+User asked for a UI/UX study via the `ui-ux-pro-max` skill, then to implement it. The skill (built for
+mobile app UI — React Native/iOS/Android) doesn't map directly onto this desktop web admin app, so only
+what's genuinely stack-agnostic (typography, color, forms, accessibility, general UX patterns) was used;
+mobile-specific rules (touch targets, safe areas, bottom-nav limits) were skipped. The study itself was
+grounded in a direct read of the real code, not templated advice — findings included a literal 🔔 emoji
+standing in as `AdminNav.tsx`'s notification icon (marked `aria-hidden`, so a screen reader announces
+nothing for it), plain `←`/`→` text-glyph nav buttons, no breadcrumbs on any nested detail page, bulk
+actions existing only on the Services tab, and no skip-link. Published as a proposal artifact first,
+explicitly scoped (presentation/interaction only, no new endpoints or data model changes), before
+building anything.
+
+Implementation, once approved:
+- Added `lucide-react`; replaced the emoji bell and text-glyph arrows in `AdminNav.tsx` and the
+  chat-provider settings page's priority reorder buttons with real SVG icons (`MobileNav.tsx` was
+  already clean — real hand-authored SVGs, no emoji, confirmed via a full-repo sweep before assuming
+  the problem was systemic).
+- New shared `Breadcrumb` component, replacing the "← List" back-link pattern on every nested detail
+  page found across the app (Operators, Trips, Persons, Parties, Vendors, Airports, Aircraft types,
+  Countries — seven pages beyond the two named in the original proposal, found via a broader grep sweep).
+- Skip-to-content link as the first focusable element in `layout.tsx`.
+- `DataTable` (the one shared table component every list page already uses) gained optional
+  `bulkSelect` support — applied to the Trips list for bulk status changes. The "operator merge
+  picker" item from the original proposal was dropped on reflection: merge is inherently pairwise
+  (one duplicate into one survivor), not a coherent fit for multi-select.
+- `EditableText`/`EditableInfoField` gained `type="email"|"tel"` and `autoComplete` support, applied to
+  every real contact field found (Operator, Trip requester, Person, Party) — plus a `required` prop
+  with a visual asterisk, applied to the Aircraft-add form's Registration/ICAO type fields. The
+  "Operator create form" item from the original proposal doesn't apply — no such form exists anywhere
+  in the app (operators are import-only); left alone rather than building new functionality unasked.
+
+**Two real, unrelated bugs found and fixed while live-testing the trip-builder chat feature with real
+user-reported messages during this work**:
+- A real CAA-style permit message writes each leg as "CITY / ICAO" (e.g. "BLANTYRE / FWCL") — the chat
+  extraction schema's own instructions correctly require extracting that whole string verbatim, but
+  `search_airports` requires the *entire* query to match one field, so a compound string could never
+  resolve. Fixed in `trip_chat_service._resolve_airport`: before falling back to the fuzzy whole-string
+  search, look for a bare 4-letter token and try resolving on that alone — still checked against real
+  rows (an exact ICAO match only), never a guess.
+- The chat extraction schema had no `call_sign` field at all, even though `TripLegIn`/`LegInput` already
+  support one — a stated callsign ("callsign TWY201") had nowhere correct to go, and the model stuffed it
+  into `aircraft_type_query` instead, producing a wrong-not-missing error. Added `call_sign` to
+  `LegExtraction`/`INPUT_SCHEMA` end-to-end (schema → `ChatLegDraftOut` → both frontend
+  `applyChatDraft()` call sites), and strengthened `SYSTEM_PROMPT` to explicitly disambiguate
+  registration vs. callsign vs. aircraft type/model — the three fields the model kept conflating.
+  Live-verified against the exact real reported message end-to-end after the fix: `aircraft_type`
+  correctly resolves to `null` (no message content actually states one), `call_sign` populates
+  correctly, and all three airports (FWCL/FALA/HECA) resolve to their real rows.
+
+**Infrastructure note**: mid-session, `docker compose build` calls started hanging, then failed outright
+with "no space left on device" — the host's C: drive was at 100% (238GB used, 0 free), which in hindsight
+explains most of this session's earlier "slow network" symptoms (pulls/builds that were actually disk
+I/O-starved, not network-flaky). Docker Desktop itself crashed as a result and had to be relaunched.
+`docker builder prune -f` reclaimed ~12.8GB of the accumulated build-cache churn from this session's many
+rebuilds, restoring ~8GB of headroom — enough to keep working, but the underlying near-full disk is a
+real, larger cleanup this session didn't attempt (a 238GB drive with only ~8GB free from Docker cache
+alone is not a Docker problem to fully solve).
+
 ---
 
 ## 8. Document storage & Excel import/export

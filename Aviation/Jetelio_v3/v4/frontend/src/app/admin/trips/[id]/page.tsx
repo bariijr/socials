@@ -30,6 +30,7 @@ import { LegSummaryTable } from "@/components/LegSummaryTable";
 import { LegEditor } from "@/components/LegEditor";
 import { CountryName } from "@/components/CountryPicker";
 import { EditableText, EditableInfoField, EditableInfoSelect } from "@/components/EditableCell";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 const TABS = ["Overview", "Route", "Permits", "Services", "Crew & Pax", "Documents", "Billing", "Messages"] as const;
 type Tab = (typeof TABS)[number];
@@ -227,6 +228,8 @@ export default function TripDetailPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb items={[{ label: "Trips", href: "/admin/trips" }, { label: `Trip ${trip.id.slice(0, 8)}` }]} />
+
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold">Trip {trip.id.slice(0, 8)}</h1>
@@ -372,6 +375,8 @@ export default function TripDetailPage() {
                   label="Contact email"
                   value={trip.requested_by_email}
                   writable={writable}
+                  type="email"
+                  autoComplete="email"
                   onSave={(v) => updateTrip.mutateAsync({ version: trip.version, requested_by_email: v || undefined })}
                 />
                 <EditableInfoField
@@ -379,6 +384,8 @@ export default function TripDetailPage() {
                   value={trip.requested_by_phone}
                   writable={writable}
                   mono
+                  type="tel"
+                  autoComplete="tel"
                   onSave={(v) => updateTrip.mutateAsync({ version: trip.version, requested_by_phone: v || undefined })}
                 />
                 <div>

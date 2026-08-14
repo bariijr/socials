@@ -21,12 +21,14 @@ export function EditableText({
   placeholder,
   mono,
   type = "text",
+  autoComplete,
 }: BaseProps & {
   value: string;
   onSave: (next: string) => Promise<unknown>;
   placeholder?: string;
   mono?: boolean;
-  type?: "text" | "number";
+  type?: "text" | "number" | "email" | "tel";
+  autoComplete?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -76,6 +78,7 @@ export function EditableText({
     <input
       ref={ref}
       type={type}
+      autoComplete={autoComplete}
       value={draft}
       disabled={saving}
       onChange={(e) => setDraft(e.target.value)}
@@ -192,6 +195,8 @@ export function EditableInfoField({
   suffix,
   placeholder,
   type,
+  autoComplete,
+  required,
 }: {
   label: string;
   value: string | null;
@@ -200,13 +205,30 @@ export function EditableInfoField({
   mono?: boolean;
   suffix?: string;
   placeholder?: string;
-  type?: "text" | "number";
+  type?: "text" | "number" | "email" | "tel";
+  autoComplete?: string;
+  required?: boolean;
 }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-fg/50">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-fg/50">
+        {label}
+        {required && (
+          <span className="ml-0.5 text-danger" aria-hidden="true">
+            *
+          </span>
+        )}
+      </div>
       <div className="text-sm text-fg">
-        <EditableText value={value ?? ""} writable={writable} onSave={onSave} mono={mono} placeholder={placeholder} type={type} />
+        <EditableText
+          value={value ?? ""}
+          writable={writable}
+          onSave={onSave}
+          mono={mono}
+          placeholder={placeholder}
+          type={type}
+          autoComplete={autoComplete}
+        />
         {suffix && value && <span className="ml-1 text-fg/50">{suffix}</span>}
       </div>
     </div>

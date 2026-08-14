@@ -139,6 +139,42 @@ class TestParseTripMessage:
         assert any("Also Not A Real Country Name" in w for w in draft.warnings)
 
     @pytest.mark.asyncio
+    async def test_city_slash_icao_format_resolves_on_the_embedded_code(self, session, monkeypatch, chat_fixture_data):
+        # Real-world failure (task #138): a genuine CAA-style permit-request
+        # message writes each leg as "CITY / ICAO" (e.g. "BLANTYRE / FWCL").
+        # The chat schema's own instructions require extracting that whole
+        # string verbatim, so the query the fixture's airports never
+        # literally contain ("Departure City" != "Some Other City / DXXX")
+        # must still resolve — on the embedded ICAO token, not the city name.
+        g = chat_fixture_data
+        extraction = TripExtraction(
+            aircraft_registration=None,
+            aircraft_type_query=None,
+            operator_name=None,
+            crew_count=None,
+            pax_count=None,
+            legs=[
+                LegExtraction(
+                    departure_query=f"Some Other City Name / {g['dep_icao']}",
+                    arrival_query=f"Yet Another City / {g['arr_icao']}",
+                    departure_date=None,
+                    departure_time_utc=None,
+                    avoid_country_queries=[],
+                    include_country_queries=[],
+                )
+            ],
+        )
+        _mock_extraction(monkeypatch, extraction)
+
+        draft = await trip_chat_service.parse_trip_message(session, "irrelevant", today=date(2026, 8, 13))
+
+        assert draft is not None
+        leg = draft.legs[0]
+        assert leg.departure.icao == g["dep_icao"]
+        assert leg.arrival.icao == g["arr_icao"]
+        assert draft.warnings == []
+
+    @pytest.mark.asyncio
     async def test_extraction_failure_returns_none(self, session, monkeypatch, chat_fixture_data):
         # No base URL configured / a failed Ollama call — the provider
         # itself already returns None in that case (see

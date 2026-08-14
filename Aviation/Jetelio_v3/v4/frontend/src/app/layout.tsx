@@ -46,9 +46,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
+        <a
+          href="#main-content"
+          className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-fg focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+        >
+          Skip to content
+        </a>
         <QueryProvider>
           <AdminNav />
-          <main className="mx-auto max-w-7xl px-4 py-6 pb-24 md:pb-6">{children}</main>
+          <main id="main-content" className="mx-auto max-w-7xl px-4 py-6 pb-24 md:pb-6">
+            {children}
+          </main>
           <MobileNav />
           <ThemeToggle />
           <ServiceWorkerRegistration />

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -10,6 +9,7 @@ import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite, canDelete } from "@/lib/jwt";
 import { EditableInfoField } from "@/components/EditableCell";
 import { DocumentsPanel } from "@/components/DocumentsPanel";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 // Only AGENT/WALK_IN are addable here — OPERATOR/CLIENT/VENDOR roles link
 // to a real existing Operator/Client/Vendor row (party_roles.operator_id
@@ -60,11 +60,7 @@ export default function PartyDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/admin/parties" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Parties
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Parties", href: "/admin/parties" }, { label: party.name }]} />
       <h1 className="text-xl font-semibold">{party.name}</h1>
 
       <section className="grid gap-4 rounded-lg border border-fg/10 p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -79,8 +75,22 @@ export default function PartyDetailPage() {
         />
         <EditableInfoField label="Address" value={party.address} writable={writable} onSave={(v) => saveField("address", v || null)} />
         <EditableInfoField label="Contact name" value={party.contact_name} writable={writable} onSave={(v) => saveField("contact_name", v || null)} />
-        <EditableInfoField label="Contact email" value={party.contact_email} writable={writable} onSave={(v) => saveField("contact_email", v || null)} />
-        <EditableInfoField label="Contact phone" value={party.contact_phone} writable={writable} onSave={(v) => saveField("contact_phone", v || null)} />
+        <EditableInfoField
+          label="Contact email"
+          value={party.contact_email}
+          writable={writable}
+          type="email"
+          autoComplete="email"
+          onSave={(v) => saveField("contact_email", v || null)}
+        />
+        <EditableInfoField
+          label="Contact phone"
+          value={party.contact_phone}
+          writable={writable}
+          type="tel"
+          autoComplete="tel"
+          onSave={(v) => saveField("contact_phone", v || null)}
+        />
         <EditableInfoField label="Notes" value={party.notes} writable={writable} onSave={(v) => saveField("notes", v || null)} />
       </section>
 

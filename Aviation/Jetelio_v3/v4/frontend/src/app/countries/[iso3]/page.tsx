@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -9,6 +8,7 @@ import { useRequireAuth } from "@/lib/useRequireAuth";
 import { getCurrentUserRole, canWrite } from "@/lib/jwt";
 import { StatusChip } from "@/components/StatusChip";
 import { EditableText, InfoField, EditableInfoField, EditableInfoCheckbox, EditableInfoSelect } from "@/components/EditableCell";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 const GROUND_HANDLING_OPTIONS = [
   { value: "MANDATORY", label: "Mandatory" },
@@ -51,11 +51,7 @@ export default function CountryDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/countries" className="text-sm text-fg/50 hover:text-fg/80">
-          ← Countries
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: "Countries", href: "/countries" }, { label: country.name }]} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">

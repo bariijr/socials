@@ -160,6 +160,7 @@ export default function NewTripPage() {
         draft.legs.map((leg) => ({
           dep_icao: leg.departure.icao ?? "",
           arr_icao: leg.arrival.icao ?? "",
+          call_sign: leg.call_sign,
           reference_datetime: leg.departure_date
             ? new Date(`${leg.departure_date}T${leg.departure_time_utc ?? "09:00"}:00Z`).toISOString()
             : null,
