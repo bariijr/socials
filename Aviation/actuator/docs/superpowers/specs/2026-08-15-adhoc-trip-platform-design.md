@@ -24,10 +24,13 @@ SMTP/IMAP worker.
   wired into Actuator's existing NestJS modules (Permits/Billing/Compliance/
   Reference/Auth/Tenants). Own docker-compose, own port, own auth, once a
   backend exists.
-- **Frontend-first build**: Next.js page flow against hardcoded/seeded mock
-  data, no backend yet. Backend (NestJS + Postgres + SMTP/IMAP worker) is a
-  later phase, out of scope for the implementation plan that follows this
-  spec.
+- **Frontend-first build**: static HTML pages + vanilla JavaScript (ES
+  modules) against hardcoded/seeded mock data, no backend, no build step.
+  This is a deliberate intermediate step — once the page flow is validated,
+  it converts to Next.js (the domain-logic layer is written framework-free
+  from the start specifically so that conversion is a lift, not a rewrite).
+  Backend (NestJS + Postgres + SMTP/IMAP worker) is a later phase, out of
+  scope for the implementation plan that follows this spec.
 - **Single flat role** for now — every user is an ops staffer with full
   access to everything (trips, services, comms, reference data). No RBAC,
   no per-trip assignment gating. `AssignedTo` on a service is a label, not
