@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the page flow for the ad-hoc trip management platform — Action Board, Trips, Trip Sheet (Itinerary/Services/Comms/History), trip-creation wizard, and Reference Data — as plain HTML pages + vanilla JS (ES modules), running entirely against hardcoded/seeded mock data, no backend, no build step.
+**Goal:** Build the page flow for the ad-hoc trip management platform — Action Board, Trips, Trip Sheet (Itinerary/Roster/Services/Comms/History), trip-creation wizard, and Reference Data — as plain HTML pages + vanilla JS (ES modules), running entirely against hardcoded/seeded mock data, no backend, no build step.
 
 **Architecture:** One static HTML file per page/route (`index.html`, `trips.html`, `trip-sheet.html?id=...`, `trip-new.html`, four `reference-*.html`), each loading a small `<script type="module">` from `js/pages/`. All domain logic with real behavior (urgency/lead-time math, schedule-change re-confirm invalidation, scope-type filtering, stop derivation/rebuild diffing, email template generation) lives in framework-free plain-JS modules under `js/lib/`, unit-tested directly with Vitest (`node` environment, no DOM). A single in-memory `store` (`js/lib/store.js`) holds all seeded state and exposes mutation methods plus a `subscribe`/`notify` mechanism; every page module calls `store.subscribe(render)` and re-renders its own DOM on any change. No persistence beyond the browser session — intentional for this phase. This is a deliberate intermediate step: the `js/lib/` logic layer is written framework-free specifically so a later Next.js conversion can reuse it unchanged, converting only the page layer.
 
@@ -42,6 +42,7 @@ actuator/frontend/
   reference-aircraft.html
   reference-providers.html
   reference-country-rules.html
+  reference-person-roles.html
   css/
     styles.css
   js/
@@ -49,12 +50,13 @@ actuator/frontend/
       core-logic.js                     — RequiredByZ / Urgency / re-confirm math (Task 2)
       scope.js                          — service-type -> scope-type filtering (Task 5)
       stops.js                          — stop derivation + rebuild diffing (Task 6)
-      templates.js                      — Composer email draft generation (Task 13)
+      templates.js                      — Composer email draft generation, REQUEST/REVISION/CANCEL modes (Task 13)
       trips-filter.js                   — Trips-list search/status filter (Task 10)
       store.js                          — in-memory state + mutation actions (Task 7)
       mock-data/
-        airports.js, countries.js, countryRules.js, aircraft.js, providers.js   (Task 3)
+        airports.js, countries.js, countryRules.js, aircraft.js, providers.js, personRoles.js   (Task 3)
         trips.js                        — seeded trips/legs/stops/services/comms/audit (Task 4)
+        persons.js                      — seeded trip roster (Task 4)
     pages/
       nav.js                            — shared nav bar (Task 8)
       ui-helpers.js                     — escapeHtml, urgencyBadgeHtml (Task 8)
@@ -62,11 +64,12 @@ actuator/frontend/
       trips-list.js                     (Task 10)
       trip-sheet.js                     — shell: header, tabs, routes to per-tab renderers (Task 11)
       trip-sheet-itinerary.js           (Task 11)
-      trip-sheet-services.js            (Task 12)
-      trip-sheet-comms.js               (Task 13)
-      trip-sheet-history.js             (Task 14)
-      trip-wizard.js                    (Task 15)
-      reference.js                      — generic renderer reused by all 4 reference pages (Task 16)
+      trip-sheet-roster.js              (Task 12)
+      trip-sheet-services.js            (Task 13)
+      trip-sheet-comms.js               (Task 14)
+      trip-sheet-history.js             (Task 15)
+      trip-wizard.js                    (Task 16)
+      reference.js                      — generic renderer reused by all 5 reference pages (Task 17)
 ```
 
 ---
@@ -187,7 +190,7 @@ git commit -m "Scaffold static HTML frontend with Vitest tooling for the logic l
 - Test: `actuator/frontend/js/lib/core-logic.test.js`
 
 **Interfaces:**
-- Produces: `computeRequiredByZ(basedOnEtdZ, rule)`, `computeUrgency(requiredByZ, nowZ)`, `needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours)`. `rule` is `{ leadTimeHours: number, workingDaysOnly: boolean }` (a country-rule object — see Task 3's shape). Consumed by `store.js` (Task 7), `action-board.js` (Task 9), `trip-sheet-services.js` (Task 12).
+- Produces: `computeRequiredByZ(basedOnEtdZ, rule)`, `computeUrgency(requiredByZ, nowZ)`, `needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours)`. `rule` is `{ leadTimeHours: number, workingDaysOnly: boolean }` (a country-rule object — see Task 3's shape). Consumed by `store.js` (Task 7), `action-board.js` (Task 9), `trip-sheet-services.js` (Task 13).
 
 Domain shapes used across this plan (documented once here, not re-declared per file — plain JS, no compile-time enforcement, but every mock-data and store file below conforms to these):
 
@@ -197,14 +200,21 @@ Country      { name, iso2, region, overflightPermitRequired, landingPermitRequir
 CountryRule  { id, countryIso2, serviceType, leadTimeHours, workingDaysOnly, toleranceHours, docsRequired: string[], escalationContact, notes? }
 Aircraft     { registration, icaoType, manufacturer, series, mtowKg, noiseCert }
 Provider     { id, name, serviceType, scopeIso2?, scopeIcao?, email, aogContact, workingHoursZ }
+PersonRole   { id, label }
 Trip         { id, tripCode, clientOperator, registration, ownerName, status, notifyRecipients: string[], createdAtZ }
-Leg          { id, tripId, sequence, depIcao, arrIcao, etdZ, etaZ, pax, crew, overflightCountries: string[], revision }
+Person       { id, tripId, name, roleId, notes?, removed? }   // trip-level roster, not per-leg; `removed` is a
+             // soft-delete flag — kept (not spliced out) so a removed person's audit trail
+             // stays reachable from the trip's History tab via recordId.
+Leg          { id, tripId, sequence, callSign, depIcao, arrIcao, etdZ, etaZ, overflightCountries: string[], revision }
+             // etdZ is always a known ISO string; etaZ is `string | null` — null means "TBD" (a real, common state
+             // for a return leg whose arrival time isn't known yet). No pax/crew fields — see Person/roster instead.
 Stop         { id, tripId, icao, arrZ, depZ, groundTimeHours, purpose }   // purpose: 'TURNAROUND' | 'TECH_STOP' | 'NIGHT_STOP'
+             // arrZ/groundTimeHours are null when the feeding leg's etaZ is null — the stop still exists, its time just isn't known yet.
 Service      { id, tripId, scopeType, scopeId, serviceType, providerId, status, refNumber, basedOnEtdZ, assignedTo }
              // scopeType: 'LEG' | 'STOP' | 'SEGMENT'; scopeId for SEGMENT is "<legId>:<countryIso2>"
              // status: 'NOT_REQUIRED' | 'NOT_STARTED' | 'REQUESTED' | 'CHASING' | 'CONFIRMED' | 'RECONFIRM_REQUIRED' | 'CANCELLED'
 Comm         { id, tripId, serviceId, direction, kind, token, from, to: string[], subject, body, timestampZ }
-             // direction: 'IN' | 'OUT'; kind: 'REQUEST' | 'NOTIFICATION'
+             // direction: 'IN' | 'OUT'; kind: 'REQUEST' | 'NOTIFICATION' | 'CANCEL'
 AuditEntry   { id, timestampZ, user, table, recordId, field, oldValue, newValue }
 ```
 
@@ -315,11 +325,11 @@ git commit -m "Add urgency/lead-time/re-confirm pure logic"
 ### Task 3: Reference mock data
 
 **Files:**
-- Create: `actuator/frontend/js/lib/mock-data/airports.js`, `countries.js`, `countryRules.js`, `aircraft.js`, `providers.js`
+- Create: `actuator/frontend/js/lib/mock-data/airports.js`, `countries.js`, `countryRules.js`, `aircraft.js`, `providers.js`, `personRoles.js`
 - Test: `actuator/frontend/js/lib/mock-data/reference.test.js`
 
 **Interfaces:**
-- Produces: `export const airports = [...]`, `export const countries = [...]`, `export const countryRules = [...]`, `export const aircraft = [...]`, `export const providers = [...]` — shapes per Task 2's domain-shapes block. Consumed by `store.js` (Task 7).
+- Produces: `export const airports = [...]`, `export const countries = [...]`, `export const countryRules = [...]`, `export const aircraft = [...]`, `export const providers = [...]`, `export const personRoles = [...]` — shapes per Task 2's domain-shapes block (`personRoles` is `PersonRole[]`). Consumed by `store.js` (Task 7).
 
 - [ ] **Step 1: Write the failing integrity tests**
 
@@ -332,6 +342,7 @@ import { countries } from './countries.js';
 import { countryRules } from './countryRules.js';
 import { aircraft } from './aircraft.js';
 import { providers } from './providers.js';
+import { personRoles } from './personRoles.js';
 
 describe('reference data integrity', () => {
   const countryIso2s = new Set(countries.map((c) => c.iso2));
@@ -362,6 +373,12 @@ describe('reference data integrity', () => {
     const ruleServiceTypes = new Set(countryRules.map((r) => r.serviceType));
     const providerServiceTypes = new Set(providers.map((p) => p.serviceType));
     for (const st of ruleServiceTypes) expect(providerServiceTypes.has(st)).toBe(true);
+  });
+
+  it('has at least 8 person roles including PIC, Pax, and VIP', () => {
+    expect(personRoles.length).toBeGreaterThanOrEqual(8);
+    const labels = new Set(personRoles.map((r) => r.label));
+    for (const required of ['PIC', 'Pax', 'VIP']) expect(labels.has(required)).toBe(true);
   });
 });
 ```
@@ -458,16 +475,33 @@ export const providers = [
 ];
 ```
 
-- [ ] **Step 8: Run tests to verify they pass**
+- [ ] **Step 8: Implement `personRoles.js`**
+
+```js
+export const personRoles = [
+  { id: 'ROLE-PIC', label: 'PIC' },
+  { id: 'ROLE-SIC', label: 'SIC' },
+  { id: 'ROLE-FA', label: 'FA' },
+  { id: 'ROLE-MECHANIC', label: 'Mechanic' },
+  { id: 'ROLE-ENGINEER', label: 'Engineer' },
+  { id: 'ROLE-MEDICAL', label: 'Medical Staff' },
+  { id: 'ROLE-OTHER', label: 'Other' },
+  { id: 'ROLE-PAX', label: 'Pax' },
+  { id: 'ROLE-VIP', label: 'VIP' },
+  { id: 'ROLE-PRINCIPAL', label: 'Principal' },
+];
+```
+
+- [ ] **Step 9: Run tests to verify they pass**
 
 Run: `npm test -- reference`
-Expected: PASS (5 tests).
+Expected: PASS (6 tests).
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/lib/mock-data/airports.js frontend/js/lib/mock-data/countries.js frontend/js/lib/mock-data/countryRules.js frontend/js/lib/mock-data/aircraft.js frontend/js/lib/mock-data/providers.js frontend/js/lib/mock-data/reference.test.js
+git add frontend/js/lib/mock-data/airports.js frontend/js/lib/mock-data/countries.js frontend/js/lib/mock-data/countryRules.js frontend/js/lib/mock-data/aircraft.js frontend/js/lib/mock-data/providers.js frontend/js/lib/mock-data/personRoles.js frontend/js/lib/mock-data/reference.test.js
 git commit -m "Seed reference mock data for East Africa / Middle East corridor"
 ```
 
@@ -477,11 +511,12 @@ git commit -m "Seed reference mock data for East Africa / Middle East corridor"
 
 **Files:**
 - Create: `actuator/frontend/js/lib/mock-data/trips.js`
+- Create: `actuator/frontend/js/lib/mock-data/persons.js`
 - Test: `actuator/frontend/js/lib/mock-data/trips.test.js`
 
 **Interfaces:**
-- Consumes: nothing (self-contained fixture).
-- Produces: `export const trips`, `legs`, `stops`, `services`, `comms`, `auditEntries` (shapes per Task 2). Consumed by `store.js` (Task 7).
+- Consumes: `personRoles` (Task 3, for role IDs used in seeded `persons`).
+- Produces: `export const trips`, `legs`, `stops`, `services`, `comms`, `auditEntries` from `trips.js`; `export const persons` from `persons.js` (shapes per Task 2). Consumed by `store.js` (Task 7).
 
 - [ ] **Step 1: Write the failing integrity tests**
 
@@ -490,6 +525,8 @@ git commit -m "Seed reference mock data for East Africa / Middle East corridor"
 ```js
 import { describe, it, expect } from 'vitest';
 import { trips, legs, stops, services, comms, auditEntries } from './trips.js';
+import { persons } from './persons.js';
+import { personRoles } from './personRoles.js';
 
 describe('transactional seed data integrity', () => {
   const tripIds = new Set(trips.map((t) => t.id));
@@ -540,6 +577,24 @@ describe('transactional seed data integrity', () => {
       expect(a.recordId.length).toBeGreaterThan(0);
     }
   });
+
+  it('every leg has a callSign and a real ETD, and at least one leg has a null (TBD) ETA', () => {
+    for (const l of legs) {
+      expect(typeof l.callSign).toBe('string');
+      expect(l.callSign.length).toBeGreaterThan(0);
+      expect(typeof l.etdZ).toBe('string');
+    }
+    expect(legs.some((l) => l.etaZ === null)).toBe(true);
+  });
+
+  it('every person references a real trip and a real role', () => {
+    const roleIds = new Set(personRoles.map((r) => r.id));
+    for (const p of persons) {
+      expect(tripIds.has(p.tripId)).toBe(true);
+      expect(roleIds.has(p.roleId)).toBe(true);
+    }
+    expect(persons.length).toBeGreaterThan(0);
+  });
 });
 ```
 
@@ -567,18 +622,21 @@ export const trips = [
   },
 ];
 
+Leg 3's `etaZ` is deliberately `null` ("TBD") — the trip's final arrival back into HTDA isn't confirmed yet, matching the real-world case where a return leg's arrival time is still open. Each leg carries its own Call Sign (real operators reuse the registration but assign a distinct call sign per rotation, as in the multi-leg overflight example).
+
+```js
 export const legs = [
-  { id: 'LEG-0041-1', tripId: 'TRIP-0041', sequence: 1, depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', pax: 6, crew: 2, overflightCountries: [], revision: 0 },
-  { id: 'LEG-0041-2', tripId: 'TRIP-0041', sequence: 2, depIcao: 'HKJK', arrIcao: 'HAAB', etdZ: '2026-08-20T09:00:00.000Z', etaZ: '2026-08-20T10:45:00.000Z', pax: 6, crew: 2, overflightCountries: ['ET'], revision: 1 },
-  { id: 'LEG-0041-3', tripId: 'TRIP-0041', sequence: 3, depIcao: 'HAAB', arrIcao: 'HTDA', etdZ: '2026-08-21T07:00:00.000Z', etaZ: '2026-08-21T09:30:00.000Z', pax: 6, crew: 2, overflightCountries: ['KE'], revision: 0 },
-  { id: 'LEG-0052-1', tripId: 'TRIP-0052', sequence: 1, depIcao: 'FAOR', arrIcao: 'OMDB', etdZ: '2026-08-16T18:00:00.000Z', etaZ: '2026-08-17T04:30:00.000Z', pax: 4, crew: 2, overflightCountries: ['SA'], revision: 0 },
+  { id: 'LEG-0041-1', tripId: 'TRIP-0041', sequence: 1, callSign: 'ACJ041A', depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', overflightCountries: [], revision: 0 },
+  { id: 'LEG-0041-2', tripId: 'TRIP-0041', sequence: 2, callSign: 'ACJ041B', depIcao: 'HKJK', arrIcao: 'HAAB', etdZ: '2026-08-20T09:00:00.000Z', etaZ: '2026-08-20T10:45:00.000Z', overflightCountries: ['ET'], revision: 1 },
+  { id: 'LEG-0041-3', tripId: 'TRIP-0041', sequence: 3, callSign: 'ACJ041C', depIcao: 'HAAB', arrIcao: 'HTDA', etdZ: '2026-08-21T07:00:00.000Z', etaZ: null, overflightCountries: ['KE'], revision: 0 },
+  { id: 'LEG-0052-1', tripId: 'TRIP-0052', sequence: 1, callSign: 'KLA052A', depIcao: 'FAOR', arrIcao: 'OMDB', etdZ: '2026-08-16T18:00:00.000Z', etaZ: '2026-08-17T04:30:00.000Z', overflightCountries: ['SA'], revision: 0 },
 ];
 
 export const stops = [
   { id: 'STOP-0041-HTDA-1', tripId: 'TRIP-0041', icao: 'HTDA', arrZ: null, depZ: '2026-08-20T05:00:00.000Z', groundTimeHours: null, purpose: 'TURNAROUND' },
   { id: 'STOP-0041-HKJK', tripId: 'TRIP-0041', icao: 'HKJK', arrZ: '2026-08-20T06:15:00.000Z', depZ: '2026-08-20T09:00:00.000Z', groundTimeHours: 2.75, purpose: 'TECH_STOP' },
   { id: 'STOP-0041-HAAB', tripId: 'TRIP-0041', icao: 'HAAB', arrZ: '2026-08-20T10:45:00.000Z', depZ: '2026-08-21T07:00:00.000Z', groundTimeHours: 20.25, purpose: 'NIGHT_STOP' },
-  { id: 'STOP-0041-HTDA-2', tripId: 'TRIP-0041', icao: 'HTDA', arrZ: '2026-08-21T09:30:00.000Z', depZ: null, groundTimeHours: null, purpose: 'TURNAROUND' },
+  { id: 'STOP-0041-HTDA-2', tripId: 'TRIP-0041', icao: 'HTDA', arrZ: null, depZ: null, groundTimeHours: null, purpose: 'TURNAROUND' },
   { id: 'STOP-0052-FAOR', tripId: 'TRIP-0052', icao: 'FAOR', arrZ: null, depZ: '2026-08-16T18:00:00.000Z', groundTimeHours: null, purpose: 'TURNAROUND' },
   { id: 'STOP-0052-OMDB', tripId: 'TRIP-0052', icao: 'OMDB', arrZ: '2026-08-17T04:30:00.000Z', depZ: null, groundTimeHours: null, purpose: 'TURNAROUND' },
 ];
@@ -594,7 +652,7 @@ export const services = [
 ];
 
 export const comms = [
-  { id: 'COMM-0041-01', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'OUT', kind: 'REQUEST', token: '[T26-0041/SVC-0041-01]', from: 'ops@insider.co.tz', to: ['ops@nbohandling.example'], subject: 'Handling request — 5H-ABC [T26-0041/SVC-0041-01]', body: 'Requesting handling for 5H-ABC arriving HKJK 2026-08-20T06:15Z, departing 2026-08-20T09:00Z. 6 pax, 2 crew.', timestampZ: '2026-08-02T08:00:00.000Z' },
+  { id: 'COMM-0041-01', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'OUT', kind: 'REQUEST', token: '[T26-0041/SVC-0041-01]', from: 'ops@insider.co.tz', to: ['ops@nbohandling.example'], subject: 'Handling request — 5H-ABC [T26-0041/SVC-0041-01]', body: 'Requesting handling for 5H-ABC arriving HKJK 2026-08-20T06:15Z, departing 2026-08-20T09:00Z. Full crew and pax per manifest.', timestampZ: '2026-08-02T08:00:00.000Z' },
   { id: 'COMM-0041-02', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'IN', kind: 'REQUEST', token: '[T26-0041/SVC-0041-01]', from: 'ops@nbohandling.example', to: ['ops@insider.co.tz'], subject: 'RE: Handling request — 5H-ABC [T26-0041/SVC-0041-01]', body: 'Confirmed, ref HKJK-HDL-8823.', timestampZ: '2026-08-02T10:30:00.000Z' },
   { id: 'COMM-0041-03', tripId: 'TRIP-0041', serviceId: null, direction: 'OUT', kind: 'NOTIFICATION', token: null, from: 'ops@insider.co.tz', to: ['crew.5habc@example.com', 'flightdept@acaciacharters.example'], subject: 'Trip T26-0041 confirmed', body: 'Trip T26-0041 (HTDA-HKJK-HAAB-HTDA) is now confirmed.', timestampZ: '2026-08-05T12:00:00.000Z' },
 ];
@@ -607,17 +665,34 @@ export const auditEntries = [
 ];
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Implement `persons.js`**
+
+A five-person roster for T26-0041 (crew + a principal + a pax) and a three-person roster for T26-0052 — including a named crew-transport contact, matching how real handling telexes name a specific individual rather than just a headcount.
+
+```js
+export const persons = [
+  { id: 'PER-0041-01', tripId: 'TRIP-0041', name: 'Capt. B. Mwangi', roleId: 'ROLE-PIC' },
+  { id: 'PER-0041-02', tripId: 'TRIP-0041', name: 'F/O A. Ngugi', roleId: 'ROLE-SIC' },
+  { id: 'PER-0041-03', tripId: 'TRIP-0041', name: 'J. Kileo', roleId: 'ROLE-FA' },
+  { id: 'PER-0041-04', tripId: 'TRIP-0041', name: 'D. Massawe', roleId: 'ROLE-PRINCIPAL' },
+  { id: 'PER-0041-05', tripId: 'TRIP-0041', name: 'R. Chami', roleId: 'ROLE-PAX' },
+  { id: 'PER-0052-01', tripId: 'TRIP-0052', name: 'Capt. T. Swanson', roleId: 'ROLE-PIC' },
+  { id: 'PER-0052-02', tripId: 'TRIP-0052', name: 'E. Grabman', roleId: 'ROLE-OTHER', notes: 'Crew transport contact' },
+  { id: 'PER-0052-03', tripId: 'TRIP-0052', name: 'M. Achieng', roleId: 'ROLE-VIP' },
+];
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run: `npm test -- trips`
-Expected: PASS (6 tests).
+Expected: PASS (8 tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/lib/mock-data/trips.js frontend/js/lib/mock-data/trips.test.js
-git commit -m "Add seeded trips/legs/stops/services/comms/audit fixtures"
+git add frontend/js/lib/mock-data/trips.js frontend/js/lib/mock-data/persons.js frontend/js/lib/mock-data/trips.test.js
+git commit -m "Add seeded trips/legs/stops/services/comms/audit/persons fixtures"
 ```
 
 ---
@@ -629,7 +704,7 @@ git commit -m "Add seeded trips/legs/stops/services/comms/audit fixtures"
 - Test: `actuator/frontend/js/lib/scope.test.js`
 
 **Interfaces:**
-- Produces: `scopeTypeForServiceType(serviceType)`, `getScopeCandidates(serviceType, legs, stops)` returning `{ scopeId, label }[]`. Consumed by `store.js`, `trip-sheet-services.js` (Task 12).
+- Produces: `scopeTypeForServiceType(serviceType)`, `getScopeCandidates(serviceType, legs, stops)` returning `{ scopeId, label }[]`. Consumed by `store.js`, `trip-sheet-services.js` (Task 13).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -640,8 +715,8 @@ import { describe, it, expect } from 'vitest';
 import { scopeTypeForServiceType, getScopeCandidates } from './scope.js';
 
 const legs = [
-  { id: 'L1', tripId: 'T1', sequence: 1, depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', pax: 1, crew: 1, overflightCountries: [], revision: 0 },
-  { id: 'L2', tripId: 'T1', sequence: 2, depIcao: 'HKJK', arrIcao: 'HAAB', etdZ: '2026-08-20T09:00:00.000Z', etaZ: '2026-08-20T10:45:00.000Z', pax: 1, crew: 1, overflightCountries: ['ET'], revision: 0 },
+  { id: 'L1', tripId: 'T1', sequence: 1, callSign: 'ACW169', depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', overflightCountries: [], revision: 0 },
+  { id: 'L2', tripId: 'T1', sequence: 2, callSign: 'ACW170', depIcao: 'HKJK', arrIcao: 'HAAB', etdZ: '2026-08-20T09:00:00.000Z', etaZ: '2026-08-20T10:45:00.000Z', overflightCountries: ['ET'], revision: 0 },
 ];
 const stops = [
   { id: 'S1', tripId: 'T1', icao: 'HKJK', arrZ: '2026-08-20T06:15:00.000Z', depZ: '2026-08-20T09:00:00.000Z', groundTimeHours: 2.75, purpose: 'TECH_STOP' },
@@ -732,7 +807,7 @@ git commit -m "Add service-type to scope-type filtering logic"
 - Test: `actuator/frontend/js/lib/stops.test.js`
 
 **Interfaces:**
-- Produces: `deriveStopsFromLegs(tripId, legs)`, `diffStopsForRebuild(tripId, legs, existingStops, hasAttachedServices)` returning `{ kept, added, orphaned }`. Consumed by `store.js` (Task 7), `trip-wizard.js` (Task 15).
+- Produces: `deriveStopsFromLegs(tripId, legs)`, `diffStopsForRebuild(tripId, legs, existingStops, hasAttachedServices)` returning `{ kept, added, orphaned }`. Consumed by `store.js` (Task 7), `trip-wizard.js` (Task 16).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -743,8 +818,8 @@ import { describe, it, expect } from 'vitest';
 import { deriveStopsFromLegs, diffStopsForRebuild } from './stops.js';
 
 const legs = [
-  { id: 'L1', tripId: 'T1', sequence: 1, depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', pax: 1, crew: 1, overflightCountries: [], revision: 0 },
-  { id: 'L2', tripId: 'T1', sequence: 2, depIcao: 'HKJK', arrIcao: 'HAAB', etdZ: '2026-08-20T09:00:00.000Z', etaZ: '2026-08-20T10:45:00.000Z', pax: 1, crew: 1, overflightCountries: ['ET'], revision: 0 },
+  { id: 'L1', tripId: 'T1', sequence: 1, callSign: 'ACW169', depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', overflightCountries: [], revision: 0 },
+  { id: 'L2', tripId: 'T1', sequence: 2, callSign: 'ACW170', depIcao: 'HKJK', arrIcao: 'HAAB', etdZ: '2026-08-20T09:00:00.000Z', etaZ: '2026-08-20T10:45:00.000Z', overflightCountries: ['ET'], revision: 0 },
 ];
 
 describe('deriveStopsFromLegs', () => {
@@ -760,6 +835,19 @@ describe('deriveStopsFromLegs', () => {
   it('marks a stop NIGHT_STOP when ground time exceeds 8 hours', () => {
     const longLegs = [legs[0], { ...legs[1], etdZ: '2026-08-21T07:00:00.000Z' }];
     expect(deriveStopsFromLegs('T1', longLegs)[1].purpose).toBe('NIGHT_STOP');
+  });
+
+  it('leaves arrZ and groundTimeHours null for a mid-route stop when the feeding leg has no ETA yet (TBD)', () => {
+    const tbdLegs = [legs[0], { ...legs[1], etaZ: null }];
+    const result = deriveStopsFromLegs('T1', tbdLegs);
+    expect(result[2].arrZ).toBeNull();
+    expect(result[2].groundTimeHours).toBeNull();
+  });
+
+  it('leaves the final stop\'s arrZ null when the last leg has no ETA yet (TBD)', () => {
+    const tbdLegs = [{ ...legs[0], etaZ: null }];
+    const result = deriveStopsFromLegs('T1', tbdLegs);
+    expect(result[result.length - 1].arrZ).toBeNull();
   });
 });
 
@@ -814,9 +902,15 @@ export function deriveStopsFromLegs(tripId, legs) {
       result.push({ tripId, icao: leg.arrIcao, arrZ: leg.etaZ, depZ: null, groundTimeHours: null, purpose: 'TURNAROUND' });
     } else {
       const nextLeg = sorted[index + 1];
-      const groundTimeHours = (new Date(nextLeg.etdZ).getTime() - new Date(leg.etaZ).getTime()) / 3_600_000;
-      const purpose = groundTimeHours > 8 ? 'NIGHT_STOP' : 'TECH_STOP';
-      result.push({ tripId, icao: leg.arrIcao, arrZ: leg.etaZ, depZ: nextLeg.etdZ, groundTimeHours, purpose });
+      if (leg.etaZ === null) {
+        // ETA not known yet (TBD) — the stop exists so staff can attach a handler, but ground
+        // time and a TECH_STOP/NIGHT_STOP call can't be made until the leg's ETA is filled in.
+        result.push({ tripId, icao: leg.arrIcao, arrZ: null, depZ: nextLeg.etdZ, groundTimeHours: null, purpose: 'TECH_STOP' });
+      } else {
+        const groundTimeHours = (new Date(nextLeg.etdZ).getTime() - new Date(leg.etaZ).getTime()) / 3_600_000;
+        const purpose = groundTimeHours > 8 ? 'NIGHT_STOP' : 'TECH_STOP';
+        result.push({ tripId, icao: leg.arrIcao, arrZ: leg.etaZ, depZ: nextLeg.etdZ, groundTimeHours, purpose });
+      }
     }
   });
 
@@ -844,7 +938,7 @@ export function diffStopsForRebuild(tripId, legs, existingStops, hasAttachedServ
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- stops`
-Expected: PASS (6 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -863,15 +957,18 @@ git commit -m "Add stop derivation and rebuild-diff logic"
 - Test: `actuator/frontend/js/lib/store.test.js`
 
 **Interfaces:**
-- Consumes: all Task 3/4 mock-data modules, `needsReconfirm` (Task 2), `diffStopsForRebuild` (Task 6).
+- Consumes: all Task 3/4 mock-data modules (including `personRoles`, Task 3, and `persons`, Task 4), `needsReconfirm` (Task 2), `diffStopsForRebuild` (Task 6).
 - Produces: `createStore()` factory (used directly by tests to avoid singleton cross-test pollution) and `export const store = createStore()` (the singleton every page module imports). Shape:
 
 ```
-store.state = { airports, countries, countryRules, aircraft, providers, trips, legs, stops, services, comms, audit }
+store.state = { airports, countries, countryRules, aircraft, providers, personRoles, trips, persons, legs, stops, services, comms, audit }
 store.subscribe(listener) -> unsubscribe function
 store.addTrip(trip) -> Trip                       // trip without id/createdAtZ
+store.addPerson(person) -> Person                 // person without id
+store.removePerson(personId, user)                // soft-delete (sets removed: true, not spliced out — see Person shape), audits
 store.addLeg(leg) -> Leg                          // leg without id/revision
 store.updateLegEtd(legId, newEtdZ, user)          // mutates leg, bumps revision, audits, flips affected CONFIRMED services to RECONFIRM_REQUIRED
+store.updateLegEta(legId, newEtaZ, user)          // mutates leg, bumps revision, audits — no re-confirm cascade (services key off ETD, not ETA)
 store.addStops(newStops) -> Stop[]                // stops without id
 store.rebuildStops(tripId, user) -> { kept, added, orphaned }
 store.addService(service) -> Service              // service without id
@@ -925,6 +1022,33 @@ describe('store', () => {
     expect(svc.status).toBe('RECONFIRM_REQUIRED');
   });
 
+  it('updateLegEta fills in a TBD ETA, bumps revision, and audits, without touching any service status', () => {
+    const store = createStore();
+    const leg = store.state.legs.find((l) => l.id === 'LEG-0041-3');
+    expect(leg.etaZ).toBeNull();
+    const confirmedBefore = store.state.services.filter((s) => s.status === 'CONFIRMED').map((s) => s.id);
+    store.updateLegEta('LEG-0041-3', '2026-08-21T09:30:00.000Z', 'Tester');
+    const updated = store.state.legs.find((l) => l.id === 'LEG-0041-3');
+    expect(updated.etaZ).toBe('2026-08-21T09:30:00.000Z');
+    expect(updated.revision).toBe(leg.revision + 1);
+    const confirmedAfter = store.state.services.filter((s) => s.status === 'CONFIRMED').map((s) => s.id);
+    expect(confirmedAfter).toEqual(confirmedBefore);
+  });
+
+  it('addPerson appends a person to state; removePerson soft-deletes it (kept, flagged) and audits', () => {
+    const store = createStore();
+    const before = store.state.persons.length;
+    const created = store.addPerson({ tripId: 'TRIP-0041', name: 'Test Person', roleId: 'ROLE-PAX' });
+    expect(store.state.persons.length).toBe(before + 1);
+    expect(created.id).toBeTruthy();
+    const auditBefore = store.state.audit.length;
+    store.removePerson(created.id, 'Tester');
+    // Still present (soft delete) so its audit trail stays reachable from the trip's History tab.
+    expect(store.state.persons.length).toBe(before + 1);
+    expect(store.state.persons.find((p) => p.id === created.id).removed).toBe(true);
+    expect(store.state.audit.length).toBe(auditBefore + 1);
+  });
+
   it('addService appends a service to state', () => {
     const store = createStore();
     const before = store.state.services.length;
@@ -970,7 +1094,9 @@ import { countries } from './mock-data/countries.js';
 import { countryRules } from './mock-data/countryRules.js';
 import { aircraft } from './mock-data/aircraft.js';
 import { providers } from './mock-data/providers.js';
+import { personRoles } from './mock-data/personRoles.js';
 import { trips as seedTrips, legs as seedLegs, stops as seedStops, services as seedServices, comms as seedComms, auditEntries as seedAudit } from './mock-data/trips.js';
+import { persons as seedPersons } from './mock-data/persons.js';
 import { needsReconfirm } from './core-logic.js';
 import { diffStopsForRebuild } from './stops.js';
 
@@ -982,8 +1108,9 @@ function nextId(prefix) {
 
 export function createStore() {
   const state = {
-    airports, countries, countryRules, aircraft, providers,
+    airports, countries, countryRules, aircraft, providers, personRoles,
     trips: seedTrips.map((t) => ({ ...t })),
+    persons: seedPersons.map((p) => ({ ...p })),
     legs: seedLegs.map((l) => ({ ...l })),
     stops: seedStops.map((s) => ({ ...s })),
     services: seedServices.map((s) => ({ ...s })),
@@ -1012,11 +1139,37 @@ export function createStore() {
     return created;
   }
 
+  function addPerson(person) {
+    const created = { ...person, id: nextId('PER') };
+    state.persons.push(created);
+    notify();
+    return created;
+  }
+
+  function removePerson(personId, user) {
+    const person = state.persons.find((p) => p.id === personId);
+    if (!person) return;
+    // Soft delete — kept in state (not spliced out) so this audit entry stays reachable from
+    // the trip's History tab, which finds entries by joining recordId back to a live record.
+    addAuditEntry({ user, table: 'Person', recordId: personId, field: 'removed', oldValue: 'false', newValue: 'true' });
+    person.removed = true;
+    notify();
+  }
+
   function addLeg(leg) {
     const created = { ...leg, id: nextId('LEG'), revision: 0 };
     state.legs.push(created);
     notify();
     return created;
+  }
+
+  function updateLegEta(legId, newEtaZ, user) {
+    const leg = state.legs.find((l) => l.id === legId);
+    if (!leg) return;
+    addAuditEntry({ user, table: 'Leg', recordId: legId, field: 'etaZ', oldValue: leg.etaZ === null ? 'TBD' : leg.etaZ, newValue: newEtaZ });
+    leg.etaZ = newEtaZ;
+    leg.revision += 1;
+    notify();
   }
 
   function updateLegEtd(legId, newEtdZ, user) {
@@ -1089,7 +1242,7 @@ export function createStore() {
     return created;
   }
 
-  return { state, subscribe, addTrip, addLeg, updateLegEtd, addStops, rebuildStops, addService, updateServiceStatus, addComm, addAuditEntry };
+  return { state, subscribe, addTrip, addPerson, removePerson, addLeg, updateLegEtd, updateLegEta, addStops, rebuildStops, addService, updateServiceStatus, addComm, addAuditEntry };
 }
 
 export const store = createStore();
@@ -1098,7 +1251,7 @@ export const store = createStore();
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- store`
-Expected: PASS (7 tests).
+Expected: PASS (9 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1424,7 +1577,7 @@ git commit -m "Add Trips list page with search/status filtering"
 
 **Interfaces:**
 - Consumes: `store` (Task 7), `mountNav`/`escapeHtml` (Task 8).
-- Produces: `trip-sheet.js` reads `?id=` from `window.location.search`, renders the header + 4-tab strip into `#trip-header`/`#trip-tabs`, and delegates active-tab content to `#trip-tab-content` via `renderItineraryTab(container, tripId)` (this task) and placeholder text for the other three tabs (wired in Tasks 12-14).
+- Produces: `trip-sheet.js` reads `?id=` from `window.location.search`, renders the header + 5-tab strip into `#trip-header`/`#trip-tabs`, and delegates active-tab content to `#trip-tab-content` via `renderItineraryTab(container, tripId)` (this task) and placeholder text for the other four tabs (wired in Tasks 12-15).
 
 - [ ] **Step 1: Create `trip-sheet.html`**
 
@@ -1464,14 +1617,21 @@ export function renderItineraryTab(container, tripId) {
   container.innerHTML = `
     <h2>Legs</h2>
     <table>
-      <thead><tr><th>Route</th><th>ETD (Z)</th><th>ETA (Z)</th><th></th></tr></thead>
+      <thead><tr><th>Call Sign</th><th>Route</th><th>ETD (Z)</th><th></th><th>ETA (Z)</th><th></th></tr></thead>
       <tbody>
         ${tripLegs.map((leg) => `
           <tr data-leg-id="${leg.id}">
+            <td>${escapeHtml(leg.callSign)}</td>
             <td>${escapeHtml(leg.depIcao)} → ${escapeHtml(leg.arrIcao)}</td>
             <td><input type="datetime-local" class="etd-input" value="${leg.etdZ.slice(0, 16)}" aria-label="ETD ${leg.id}" /></td>
-            <td>${escapeHtml(leg.etaZ)}</td>
             <td><button class="btn save-etd-btn">Save</button></td>
+            <td>
+              ${leg.etaZ === null
+                ? '<span class="banner-warning" style="padding:0.1rem 0.4rem;">TBD</span>'
+                : ''}
+              <input type="datetime-local" class="eta-input" value="${leg.etaZ ? leg.etaZ.slice(0, 16) : ''}" aria-label="ETA ${leg.id}" />
+            </td>
+            <td><button class="btn save-eta-btn">Save</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -1481,7 +1641,7 @@ export function renderItineraryTab(container, tripId) {
     <table>
       <thead><tr><th>ICAO</th><th>Purpose</th><th>Ground Time (h)</th></tr></thead>
       <tbody>
-        ${tripStops.map((s) => `<tr><td>${escapeHtml(s.icao)}</td><td>${escapeHtml(s.purpose)}</td><td>${s.groundTimeHours ?? '—'}</td></tr>`).join('')}
+        ${tripStops.map((s) => `<tr><td>${escapeHtml(s.icao)}</td><td>${escapeHtml(s.purpose)}</td><td>${s.groundTimeHours ?? (s.arrZ === null ? 'TBD' : '—')}</td></tr>`).join('')}
       </tbody>
     </table>
     <button id="rebuild-stops-btn" class="btn">Rebuild Stops</button>
@@ -1493,6 +1653,15 @@ export function renderItineraryTab(container, tripId) {
       const row = e.target.closest('tr');
       const input = row.querySelector('.etd-input');
       store.updateLegEtd(row.dataset.legId, new Date(input.value).toISOString(), 'Current User');
+    });
+  });
+
+  container.querySelectorAll('.save-eta-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const row = e.target.closest('tr');
+      const input = row.querySelector('.eta-input');
+      // Empty input means still TBD — store null rather than an empty string.
+      store.updateLegEta(row.dataset.legId, input.value ? new Date(input.value).toISOString() : null, 'Current User');
     });
   });
 
@@ -1518,6 +1687,7 @@ let activeTab = 'itinerary';
 
 const TABS = [
   { key: 'itinerary', label: 'Itinerary' },
+  { key: 'roster', label: 'Roster' },
   { key: 'services', label: 'Services' },
   { key: 'comms', label: 'Comms' },
   { key: 'history', label: 'History' },
@@ -1566,11 +1736,11 @@ store.subscribe(render);
 render();
 ```
 
-(Tasks 12-14 add `services`/`comms`/`history` branches to `renderTabContent` and their own imports.)
+(Tasks 12-15 add `roster`/`services`/`comms`/`history` branches to `renderTabContent` and their own imports.)
 
 - [ ] **Step 4: Manually verify**
 
-Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`. Expected: header shows T26-0041; Itinerary tab lists 3 legs and 4 stops. Change LEG-0041-2's ETD input to a time more than 4 hours later than its current value and click Save — expected: `SVC-0041-01`'s tolerance (2h) is exceeded, so the Re-confirm Required banner appears listing `SVC-0041-01`. Click Rebuild Stops — expected: a "Rebuild complete" summary appears below the button.
+Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`. Expected: header shows T26-0041; Itinerary tab lists 3 legs (each with its own Call Sign) and 4 stops; LEG-0041-3's ETA column shows a "TBD" badge with an empty input, and the final HTDA stop shows "TBD" for ground time. Fill in LEG-0041-3's ETA and click its Save — expected: the "TBD" badge disappears and the leg shows the entered time (no Re-confirm banner, since services key off ETD, not ETA). Change LEG-0041-2's ETD input to a time more than 4 hours later than its current value and click Save — expected: `SVC-0041-01`'s tolerance (2h) is exceeded, so the Re-confirm Required banner appears listing `SVC-0041-01`. Click Rebuild Stops — expected: a "Rebuild complete" summary appears below the button.
 
 - [ ] **Step 5: Commit**
 
@@ -1582,22 +1752,313 @@ git commit -m "Add Trip Sheet shell with Itinerary tab, leg-edit re-confirm, and
 
 ---
 
-### Task 12: Services tab + Add Service form
+### Task 12: Roster tab
 
 **Files:**
+- Create: `actuator/frontend/js/pages/trip-sheet-roster.js`
+- Modify: `actuator/frontend/js/pages/trip-sheet.js`
+
+**Interfaces:**
+- Consumes: `store` (Task 7 — `store.state.persons`, `store.state.personRoles`, `store.addPerson`, `store.removePerson`), `escapeHtml` (Task 8).
+- Produces: `renderRosterTab(container, tripId)`.
+
+No automated test for this task (DOM-rendering page module, per the plan's scope decision — verified manually).
+
+- [ ] **Step 1: Implement `trip-sheet-roster.js`**
+
+```js
+import { store } from '../lib/store.js';
+import { escapeHtml } from './ui-helpers.js';
+
+let addFormOpen = false;
+
+export function renderRosterTab(container, tripId) {
+  const tripPersons = store.state.persons.filter((p) => p.tripId === tripId && !p.removed);
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Roster</h2>
+      <button id="add-person-btn" class="btn">Add Person</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Role</th><th>Notes</th><th></th></tr></thead>
+      <tbody>
+        ${tripPersons.map((p) => {
+          const role = store.state.personRoles.find((r) => r.id === p.roleId);
+          return `
+            <tr data-person-id="${p.id}">
+              <td>${escapeHtml(p.name)}</td>
+              <td>${escapeHtml(role ? role.label : p.roleId)}</td>
+              <td>${escapeHtml(p.notes || '')}</td>
+              <td><button class="btn remove-person-btn">Remove</button></td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+    <div id="add-person-form"></div>
+  `;
+
+  container.querySelectorAll('.remove-person-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      store.removePerson(e.target.closest('tr').dataset.personId, 'Current User');
+    });
+  });
+
+  document.getElementById('add-person-btn').addEventListener('click', () => {
+    addFormOpen = true;
+    renderAddForm(tripId);
+  });
+
+  if (addFormOpen) renderAddForm(tripId);
+}
+
+function renderAddForm(tripId) {
+  const formEl = document.getElementById('add-person-form');
+  // Deliberately not re-rendered on every keystroke (unlike the Service drawer's <select>-driven
+  // re-renders elsewhere in this plan) — re-rendering a free-text <input> on 'input' resets its
+  // cursor position on every character typed. Name/role are read directly from the DOM at
+  // Add-click time instead.
+  formEl.innerHTML = `
+    <div class="drawer">
+      <div class="field">
+        <label for="person-name">Name</label>
+        <input id="person-name" />
+      </div>
+      <div class="field">
+        <label for="person-role">Role</label>
+        <select id="person-role">
+          <option value="">Select…</option>
+          ${store.state.personRoles.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('')}
+        </select>
+      </div>
+      <button id="confirm-add-person-btn" class="btn btn-primary">Add</button>
+      <button id="cancel-add-person-btn" class="btn">Cancel</button>
+    </div>
+  `;
+
+  document.getElementById('cancel-add-person-btn').addEventListener('click', () => {
+    addFormOpen = false;
+    formEl.innerHTML = '';
+  });
+  document.getElementById('confirm-add-person-btn').addEventListener('click', () => {
+    const name = document.getElementById('person-name').value.trim();
+    const roleId = document.getElementById('person-role').value;
+    if (!name || !roleId) return;
+    addFormOpen = false;
+    store.addPerson({ tripId, name, roleId });
+  });
+}
+```
+
+- [ ] **Step 2: Wire into `trip-sheet.js`**
+
+Add the import and a new branch in `renderTabContent` (from Task 11):
+
+```js
+import { renderRosterTab } from './trip-sheet-roster.js';
+```
+
+```js
+  } else if (activeTab === 'roster') {
+    renderRosterTab(container, tripId);
+```
+
+- [ ] **Step 3: Manually verify**
+
+On the Roster tab for TRIP-0041, expected: 5 seeded people (PIC, SIC, FA, Principal, Pax) with their role labels. Click Add Person, enter a name, pick "VIP", click Add — expected: the new person appears in the table. Click Remove on it — expected: it disappears and a corresponding entry appears on the History tab once Task 15 wires that tab up.
+
+- [ ] **Step 4: Commit**
+
+```bash
+cd "C:/Backups/InsiderTechSol/Aviation/actuator"
+git add frontend/js/pages/trip-sheet-roster.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Roster tab for trip-level Persons with configurable roles"
+```
+
+---
+
+### Task 13: Services tab + Add Service form + Cancel action
+
+**Files:**
+- Create: `actuator/frontend/js/lib/templates.js`
+- Test: `actuator/frontend/js/lib/templates.test.js`
 - Create: `actuator/frontend/js/pages/trip-sheet-services.js`
 - Modify: `actuator/frontend/js/pages/trip-sheet.js`
 
 **Interfaces:**
 - Consumes: `store` (Task 7), `getScopeCandidates`/`scopeTypeForServiceType` (Task 5), `computeRequiredByZ`/`computeUrgency` (Task 2).
-- Produces: `renderServicesTab(container, tripId)`.
+- Produces: `buildEmailDraft(service, trip, scopeLabel, provider, options)` in `templates.js`, returning `{ subject, body, token }` — `options.mode` is `'REQUEST'` (default) / `'REVISION'` / `'CANCEL'`; `options.previousBasedOnEtdZ`/`options.newBasedOnEtdZ` are only used in `'REVISION'` mode. `templates.js` is created here (not in Task 14) so the Cancel action below can use it without Task 13 depending on Task 14's Comms tab. `renderServicesTab(container, tripId)` in `trip-sheet-services.js`.
 
-- [ ] **Step 1: Implement `trip-sheet-services.js`**
+`templates.js` is built first, as pure framework-free logic with its own tests — matching this plan's convention that anything with real behavior lives in `js/lib/` and is unit-tested independent of the DOM.
+
+- [ ] **Step 1: Write the failing template tests**
+
+`actuator/frontend/js/lib/templates.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { buildEmailDraft } from './templates.js';
+
+const trip = { id: 'T1', tripCode: 'T26-0041', clientOperator: 'Acacia', registration: '5H-ABC', ownerName: 'X', status: 'DRAFT', notifyRecipients: [], createdAtZ: '2026-01-01T00:00:00.000Z' };
+const provider = { id: 'P1', name: 'EA Fuel', serviceType: 'FUEL', scopeIcao: 'HKJK', email: 'fuel@example.com', aogContact: '+1', workingHoursZ: '00:00-23:59' };
+const fuelSvc = { id: 'SVC-1', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'FUEL', providerId: 'P1', status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T09:00:00.000Z', assignedTo: null };
+
+describe('buildEmailDraft — REQUEST mode (default)', () => {
+  it('embeds the correlation token in the subject', () => {
+    const draft = buildEmailDraft(fuelSvc, trip, 'HKJK', provider);
+    expect(draft.token).toBe('[T26-0041/SVC-1]');
+    expect(draft.subject).toContain('[T26-0041/SVC-1]');
+  });
+
+  it('includes a numbered PENDING CONFIRMATION block naming the scope', () => {
+    const draft = buildEmailDraft(fuelSvc, trip, 'HKJK', provider);
+    expect(draft.body).toContain('PENDING CONFIRMATION');
+    expect(draft.body).toContain('HKJK');
+    expect(draft.body).toContain(trip.registration);
+  });
+});
+
+describe('buildEmailDraft — REVISION mode', () => {
+  it('shows PREVIOUS ITINERARY against NEW ITINERARY and keeps the same token', () => {
+    const draft = buildEmailDraft(fuelSvc, trip, 'HKJK', provider, {
+      mode: 'REVISION', previousBasedOnEtdZ: '2026-08-20T09:00:00.000Z', newBasedOnEtdZ: '2026-08-20T20:00:00.000Z',
+    });
+    expect(draft.token).toBe('[T26-0041/SVC-1]');
+    expect(draft.body).toContain('PREVIOUS ITINERARY');
+    expect(draft.body).toContain('2026-08-20T09:00:00.000Z');
+    expect(draft.body).toContain('NEW ITINERARY');
+    expect(draft.body).toContain('2026-08-20T20:00:00.000Z');
+  });
+});
+
+describe('buildEmailDraft — CANCEL mode', () => {
+  it('includes a CANCEL block naming the service and scope', () => {
+    const draft = buildEmailDraft(fuelSvc, trip, 'HKJK', provider, { mode: 'CANCEL' });
+    expect(draft.subject).toContain('CANCEL');
+    expect(draft.body).toContain('CANCEL');
+    expect(draft.body).toContain('HKJK');
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `npm test -- templates` (from `actuator/frontend`)
+Expected: FAIL.
+
+- [ ] **Step 3: Implement `templates.js`**
+
+```js
+const SERVICE_TYPE_LABEL = {
+  OVERFLIGHT_PERMIT: 'Overflight Permit',
+  LANDING_PERMIT: 'Landing Permit',
+  FUEL: 'Fuel',
+  HANDLING: 'Handling',
+  CATERING: 'Catering',
+  CREW_TRANSPORT: 'Crew Transport',
+  CUSTOMS: 'Customs',
+};
+
+function pendingConfirmationLine(service, scopeLabel) {
+  switch (service.serviceType) {
+    case 'OVERFLIGHT_PERMIT':
+    case 'LANDING_PERMIT':
+      return `PLEASE ASSIST WITH THE ${SERVICE_TYPE_LABEL[service.serviceType].toUpperCase()} FOR ${scopeLabel}.`;
+    case 'FUEL':
+      return `PLEASE ARRANGE FUEL UPLIFT AT ${scopeLabel}. CONFIRM INTO-PLANE AGENT AND QUANTITY.`;
+    case 'HANDLING':
+      return `PLEASE ARRANGE HANDLING AT ${scopeLabel}.`;
+    case 'CATERING':
+      return `PLEASE ARRANGE CATERING AT ${scopeLabel}.`;
+    case 'CREW_TRANSPORT':
+      return `PLEASE ARRANGE CREW TRANSPORT AT ${scopeLabel}.`;
+    case 'CUSTOMS':
+      return `PLEASE ASSIST WITH CUSTOMS AT ${scopeLabel}.`;
+    default:
+      return `PLEASE CONFIRM ${SERVICE_TYPE_LABEL[service.serviceType]}.`;
+  }
+}
+
+function referenceBlock(trip) {
+  return [`REF: ${trip.tripCode}`, `     REGISTRY ${trip.registration}`].join('\n');
+}
+
+function buildRequestBody(service, scopeLabel) {
+  return [
+    'PLEASE SPECIFICALLY CONFIRM THE FOLLOWING:',
+    '',
+    'PENDING CONFIRMATION',
+    `   1. ${SERVICE_TYPE_LABEL[service.serviceType].toUpperCase()}:`,
+    `      ${pendingConfirmationLine(service, scopeLabel)}`,
+    '',
+    'PLEASE ACKNOWLEDGE AND CONFIRM RECEIPT OF THIS MESSAGE.',
+  ].join('\n');
+}
+
+function buildRevisionBody(service, scopeLabel, previousBasedOnEtdZ, newBasedOnEtdZ) {
+  return [
+    'PREVIOUS ITINERARY:',
+    `   ETD ${previousBasedOnEtdZ}`,
+    '',
+    'NEW ITINERARY:',
+    `   ETD ${newBasedOnEtdZ}`,
+    '',
+    'PLEASE SPECIFICALLY CONFIRM THE FOLLOWING:',
+    '',
+    'CHANGES',
+    '   1. ITINERARY HAS CHANGED TO THE ABOVE.',
+    '',
+    'PENDING CONFIRMATION',
+    `   1. ${SERVICE_TYPE_LABEL[service.serviceType].toUpperCase()}:`,
+    `      PLEASE RECONFIRM — ${pendingConfirmationLine(service, scopeLabel)}`,
+    '',
+    'PLEASE ACKNOWLEDGE AND CONFIRM RECEIPT OF THIS MESSAGE.',
+  ].join('\n');
+}
+
+function buildCancelBody(service, scopeLabel) {
+  return [
+    'PLEASE CANCEL THE FOLLOWING:',
+    '',
+    'CANCEL',
+    `   1. ${SERVICE_TYPE_LABEL[service.serviceType].toUpperCase()} AT ${scopeLabel}.`,
+    '',
+    'PLEASE ACKNOWLEDGE AND CONFIRM RECEIPT OF THIS MESSAGE.',
+  ].join('\n');
+}
+
+export function buildEmailDraft(service, trip, scopeLabel, provider, options = {}) {
+  const mode = options.mode || 'REQUEST';
+  const token = `[${trip.tripCode}/${service.id}]`;
+  const subjectPrefix = mode === 'CANCEL' ? 'CANCEL' : mode === 'REVISION' ? 'REVISION' : SERVICE_TYPE_LABEL[service.serviceType];
+  const subject = `${subjectPrefix} — ${trip.registration} ${token}`;
+
+  let body;
+  if (mode === 'CANCEL') {
+    body = buildCancelBody(service, scopeLabel);
+  } else if (mode === 'REVISION') {
+    body = buildRevisionBody(service, scopeLabel, options.previousBasedOnEtdZ, options.newBasedOnEtdZ);
+  } else {
+    body = buildRequestBody(service, scopeLabel);
+  }
+
+  return { subject, body: `${referenceBlock(trip)}\n\n${body}`, token };
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npm test -- templates`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Implement `trip-sheet-services.js`**
 
 ```js
 import { store } from '../lib/store.js';
 import { getScopeCandidates, scopeTypeForServiceType } from '../lib/scope.js';
 import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
+import { buildEmailDraft } from '../lib/templates.js';
 import { escapeHtml } from './ui-helpers.js';
 
 const SERVICE_TYPES = ['OVERFLIGHT_PERMIT', 'LANDING_PERMIT', 'FUEL', 'HANDLING', 'CATERING', 'CREW_TRANSPORT', 'CUSTOMS'];
@@ -1605,6 +2066,23 @@ const SERVICE_TYPES = ['OVERFLIGHT_PERMIT', 'LANDING_PERMIT', 'FUEL', 'HANDLING'
 let drawerOpen = false;
 let drawerServiceType = 'FUEL';
 let drawerScopeId = '';
+let cancelServiceId = null;
+
+// Duplicated (in spirit) by trip-sheet-comms.js in Task 14 — each tab resolves scope labels
+// independently since there's no shared page-level helpers file in this plan's structure.
+function scopeLabelFor(scopeType, scopeId, legs, stops) {
+  if (scopeType === 'LEG') {
+    const leg = legs.find((l) => l.id === scopeId);
+    return leg ? `${leg.depIcao} → ${leg.arrIcao}` : scopeId;
+  }
+  if (scopeType === 'STOP') {
+    const stop = stops.find((s) => s.id === scopeId);
+    return stop ? stop.icao : scopeId;
+  }
+  const [legId, iso2] = scopeId.split(':');
+  const leg = legs.find((l) => l.id === legId);
+  return leg ? `${leg.depIcao} → ${leg.arrIcao} (${iso2})` : scopeId;
+}
 
 export function renderServicesTab(container, tripId) {
   const tripServices = store.state.services.filter((s) => s.tripId === tripId);
@@ -1615,12 +2093,19 @@ export function renderServicesTab(container, tripId) {
       <button id="add-service-btn" class="btn">Add Service</button>
     </div>
     <table>
-      <thead><tr><th>Service</th><th>Type</th><th>Scope</th><th>Status</th></tr></thead>
+      <thead><tr><th>Service</th><th>Type</th><th>Scope</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        ${tripServices.map((s) => `<tr><td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.serviceType)}</td><td>${escapeHtml(s.scopeType)} ${escapeHtml(s.scopeId)}</td><td>${escapeHtml(s.status)}</td></tr>`).join('')}
+        ${tripServices.map((s) => `
+          <tr data-service-id="${s.id}">
+            <td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.serviceType)}</td>
+            <td>${escapeHtml(s.scopeType)} ${escapeHtml(s.scopeId)}</td><td>${escapeHtml(s.status)}</td>
+            <td>${s.status === 'CANCELLED' ? '' : '<button class="btn cancel-service-btn">Cancel</button>'}</td>
+          </tr>
+        `).join('')}
       </tbody>
     </table>
     <div id="service-drawer"></div>
+    <div id="cancel-drawer"></div>
   `;
 
   document.getElementById('add-service-btn').addEventListener('click', () => {
@@ -1628,7 +2113,49 @@ export function renderServicesTab(container, tripId) {
     renderDrawer(tripId);
   });
 
+  container.querySelectorAll('.cancel-service-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      cancelServiceId = e.target.closest('tr').dataset.serviceId;
+      renderCancelDrawer(tripId);
+    });
+  });
+
   if (drawerOpen) renderDrawer(tripId);
+  if (cancelServiceId) renderCancelDrawer(tripId);
+}
+
+function renderCancelDrawer(tripId) {
+  const drawerEl = document.getElementById('cancel-drawer');
+  const service = store.state.services.find((s) => s.id === cancelServiceId);
+  const trip = store.state.trips.find((t) => t.id === tripId);
+  const provider = store.state.providers.find((p) => p.id === service.providerId);
+  const tripLegs = store.state.legs.filter((l) => l.tripId === tripId);
+  const tripStops = store.state.stops.filter((s) => s.tripId === tripId);
+  const scopeLabel = scopeLabelFor(service.scopeType, service.scopeId, tripLegs, tripStops);
+  const draft = buildEmailDraft(service, trip, scopeLabel, provider, { mode: 'CANCEL' });
+
+  drawerEl.innerHTML = `
+    <div class="drawer">
+      <h3>Cancel ${escapeHtml(service.id)}</h3>
+      <p style="white-space:pre-wrap; font-size:0.8rem; background:#fff; border:1px solid #e2e8f0; padding:0.5rem;">${escapeHtml(draft.subject)}\n\n${escapeHtml(draft.body)}</p>
+      <button id="confirm-cancel-btn" class="btn btn-primary">Send Cancellation</button>
+      <button id="dismiss-cancel-btn" class="btn">Back</button>
+    </div>
+  `;
+
+  document.getElementById('dismiss-cancel-btn').addEventListener('click', () => {
+    cancelServiceId = null;
+    drawerEl.innerHTML = '';
+  });
+  document.getElementById('confirm-cancel-btn').addEventListener('click', () => {
+    const commPayload = {
+      tripId, serviceId: service.id, direction: 'OUT', kind: 'CANCEL', token: draft.token,
+      from: 'ops@insider.co.tz', to: provider ? [provider.email] : [], subject: draft.subject, body: draft.body,
+    };
+    cancelServiceId = null;
+    store.addComm(commPayload);
+    store.updateServiceStatus(service.id, 'CANCELLED', 'Current User');
+  });
 }
 
 function resolveBasedOnEtdZ(serviceType, scopeId, legs, stops) {
@@ -1679,7 +2206,7 @@ function renderDrawer(tripId) {
       </div>
       ${preview ? `<p data-testid="required-by-preview">Required by ${escapeHtml(preview.requiredByZ)} — <strong>${preview.urgency}</strong></p>` : ''}
       <button id="confirm-add-service-btn" class="btn btn-primary" ${drawerScopeId ? '' : 'disabled'}>Add Service</button>
-      <button id="cancel-add-service-btn" class="btn">Cancel</button>
+      <button id="cancel-add-service-btn" class="btn">Close</button>
     </div>
   `;
 
@@ -1715,7 +2242,7 @@ function renderDrawer(tripId) {
 }
 ```
 
-- [ ] **Step 2: Wire into `trip-sheet.js`**
+- [ ] **Step 6: Wire into `trip-sheet.js`**
 
 Add the import and a new branch in `renderTabContent`:
 
@@ -1728,118 +2255,31 @@ import { renderServicesTab } from './trip-sheet-services.js';
     renderServicesTab(container, tripId);
 ```
 
-- [ ] **Step 3: Manually verify**
+- [ ] **Step 7: Manually verify**
 
-Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`, click the Services tab, click Add Service, select Service Type "FUEL" — expected: the Scope dropdown only offers `STOP-0041-HKJK` (not any leg or segment options). Select it — expected: a Required By / Urgency preview appears. Click Add Service — expected: the drawer closes and the new service row appears in the table above with status `NOT_STARTED`.
+Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`, click the Services tab, click Add Service, select Service Type "FUEL" — expected: the Scope dropdown only offers `STOP-0041-HKJK` (not any leg or segment options). Select it — expected: a Required By / Urgency preview appears. Click Add Service — expected: the drawer closes and the new service row appears in the table above with status `NOT_STARTED`. Click Cancel on `SVC-0041-05` — expected: a cancellation preview appears showing a `CANCEL` block naming the service and its scope; click Send Cancellation — expected: the row's status becomes `CANCELLED` and its Cancel button disappears.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/pages/trip-sheet-services.js frontend/js/pages/trip-sheet.js
-git commit -m "Add Services tab and type-driven Add Service drawer"
+git add frontend/js/lib/templates.js frontend/js/lib/templates.test.js frontend/js/pages/trip-sheet-services.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Services tab, type-driven Add Service drawer, and Cancel action"
 ```
 
 ---
 
-### Task 13: Composer drawer + Comms tab
+### Task 14: Composer drawer + Comms tab
 
 **Files:**
-- Create: `actuator/frontend/js/lib/templates.js`
-- Test: `actuator/frontend/js/lib/templates.test.js`
 - Create: `actuator/frontend/js/pages/trip-sheet-comms.js`
 - Modify: `actuator/frontend/js/pages/trip-sheet.js`
 
 **Interfaces:**
-- Produces: `buildEmailDraft(service, trip, scopeLabel, provider)` returning `{ subject, body, token }` (tested); `renderCommsTab(container, tripId)`.
+- Consumes: `buildEmailDraft` from `templates.js` (already built and tested in Task 13 — not recreated here).
+- Produces: `renderCommsTab(container, tripId)`.
 
-- [ ] **Step 1: Write the failing template tests**
-
-`actuator/frontend/js/lib/templates.test.js`:
-
-```js
-import { describe, it, expect } from 'vitest';
-import { buildEmailDraft } from './templates.js';
-
-const trip = { id: 'T1', tripCode: 'T26-0041', clientOperator: 'Acacia', registration: '5H-ABC', ownerName: 'X', status: 'DRAFT', notifyRecipients: [], createdAtZ: '2026-01-01T00:00:00.000Z' };
-const provider = { id: 'P1', name: 'EA Fuel', serviceType: 'FUEL', scopeIcao: 'HKJK', email: 'fuel@example.com', aogContact: '+1', workingHoursZ: '00:00-23:59' };
-
-describe('buildEmailDraft', () => {
-  it('embeds the correlation token in the subject', () => {
-    const svc = { id: 'SVC-1', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'FUEL', providerId: 'P1', status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T09:00:00.000Z', assignedTo: null };
-    const draft = buildEmailDraft(svc, trip, 'HKJK', provider);
-    expect(draft.token).toBe('[T26-0041/SVC-1]');
-    expect(draft.subject).toContain('[T26-0041/SVC-1]');
-  });
-
-  it('produces a fuel-specific body mentioning uplift and registration', () => {
-    const svc = { id: 'SVC-1', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'FUEL', providerId: 'P1', status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T09:00:00.000Z', assignedTo: null };
-    const draft = buildEmailDraft(svc, trip, 'HKJK', provider);
-    expect(draft.body).toContain('5H-ABC');
-    expect(draft.body).toContain('uplift');
-  });
-
-  it('produces a permit-specific body mentioning route and required documents', () => {
-    const svc = { id: 'SVC-2', tripId: 'T1', scopeType: 'LEG', scopeId: 'L1', serviceType: 'LANDING_PERMIT', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T09:00:00.000Z', assignedTo: null };
-    const draft = buildEmailDraft(svc, trip, 'HTDA → HKJK', undefined);
-    expect(draft.body).toContain('HTDA → HKJK');
-    expect(draft.body.toLowerCase()).toContain('documents');
-  });
-});
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `npm test -- templates` (from `actuator/frontend`)
-Expected: FAIL.
-
-- [ ] **Step 3: Implement `templates.js`**
-
-```js
-const SERVICE_TYPE_LABEL = {
-  OVERFLIGHT_PERMIT: 'Overflight permit',
-  LANDING_PERMIT: 'Landing permit',
-  FUEL: 'Fuel',
-  HANDLING: 'Handling',
-  CATERING: 'Catering',
-  CREW_TRANSPORT: 'Crew transport',
-  CUSTOMS: 'Customs',
-};
-
-function buildBody(service, trip, scopeLabel) {
-  switch (service.serviceType) {
-    case 'OVERFLIGHT_PERMIT':
-    case 'LANDING_PERMIT':
-      return `Requesting ${SERVICE_TYPE_LABEL[service.serviceType].toLowerCase()} for registration ${trip.registration}, route ${scopeLabel}, ETD ${service.basedOnEtdZ}. Please advise required documents.`;
-    case 'FUEL':
-      return `Requesting fuel uplift for ${trip.registration} at ${scopeLabel}, ETD ${service.basedOnEtdZ}. Please confirm into-plane agent and uplift quantity.`;
-    case 'HANDLING':
-      return `Requesting handling for ${trip.registration} at ${scopeLabel}, ETD ${service.basedOnEtdZ}. Please confirm PPR and pax/crew count on file.`;
-    case 'CATERING':
-      return `Requesting catering for ${trip.registration} at ${scopeLabel}, ETD ${service.basedOnEtdZ}.`;
-    case 'CREW_TRANSPORT':
-      return `Requesting crew transport for ${trip.registration} at ${scopeLabel}, ETD ${service.basedOnEtdZ}.`;
-    case 'CUSTOMS':
-      return `Requesting customs clearance for ${trip.registration} at ${scopeLabel}, ETD ${service.basedOnEtdZ}.`;
-    default:
-      return '';
-  }
-}
-
-export function buildEmailDraft(service, trip, scopeLabel, provider) {
-  const token = `[${trip.tripCode}/${service.id}]`;
-  const subject = `${SERVICE_TYPE_LABEL[service.serviceType]} request — ${trip.registration} ${token}`;
-  const body = buildBody(service, trip, scopeLabel);
-  return { subject, body, token };
-}
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `npm test -- templates`
-Expected: PASS (3 tests).
-
-- [ ] **Step 5: Implement `trip-sheet-comms.js`**
+- [ ] **Step 1: Implement `trip-sheet-comms.js`**
 
 ```js
 import { store } from '../lib/store.js';
@@ -1892,11 +2332,39 @@ export function renderCommsTab(container, tripId) {
   if (composerServiceId) renderComposer(tripId);
 }
 
+function currentEtdZFor(scopeType, scopeId) {
+  if (scopeType === 'LEG') {
+    const leg = store.state.legs.find((l) => l.id === scopeId);
+    return leg ? leg.etdZ : null;
+  }
+  if (scopeType === 'SEGMENT') {
+    const [legId] = scopeId.split(':');
+    const leg = store.state.legs.find((l) => l.id === legId);
+    return leg ? leg.etdZ : null;
+  }
+  const stop = store.state.stops.find((s) => s.id === scopeId);
+  return stop ? (stop.depZ || stop.arrZ) : null;
+}
+
 function openComposer(serviceId, tripId) {
   const service = store.state.services.find((s) => s.id === serviceId);
   const trip = store.state.trips.find((t) => t.id === tripId);
   const provider = store.state.providers.find((p) => p.id === service.providerId);
-  const draft = buildEmailDraft(service, trip, scopeLabelFor(service.scopeType, service.scopeId), provider);
+  const scopeLabel = scopeLabelFor(service.scopeType, service.scopeId);
+
+  // A service that flipped to Re-confirm Required reopens in REVISION mode, showing the
+  // provider exactly what moved — same correlation token, threading into the same conversation.
+  // (store.js's updateLegEtd cascade can flip LEG/SEGMENT/STOP-scoped services alike, so all
+  // three are handled here via currentEtdZFor rather than excluding any one of them.)
+  const isRevision = service.status === 'RECONFIRM_REQUIRED';
+  const draft = isRevision
+    ? buildEmailDraft(service, trip, scopeLabel, provider, {
+        mode: 'REVISION',
+        previousBasedOnEtdZ: service.basedOnEtdZ,
+        newBasedOnEtdZ: currentEtdZFor(service.scopeType, service.scopeId),
+      })
+    : buildEmailDraft(service, trip, scopeLabel, provider);
+
   composerServiceId = serviceId;
   draftSubject = draft.subject;
   draftBody = draft.body;
@@ -1940,7 +2408,7 @@ function renderComposer(tripId) {
 }
 ```
 
-- [ ] **Step 6: Wire into `trip-sheet.js`**
+- [ ] **Step 2: Wire into `trip-sheet.js`**
 
 Add the import and branch:
 
@@ -1953,21 +2421,21 @@ import { renderCommsTab } from './trip-sheet-comms.js';
     renderCommsTab(container, tripId);
 ```
 
-- [ ] **Step 7: Manually verify**
+- [ ] **Step 3: Manually verify**
 
-On the Comms tab for TRIP-0041, click "Compose for SVC-0041-05" — expected: subject pre-fills with `[T26-0041/SVC-0041-05]`. Click Send — expected: the composer closes, a new outbound entry appears in the comms list, and switching to the Services tab shows `SVC-0041-05` now `REQUESTED`.
+On the Comms tab for TRIP-0041, click "Compose for SVC-0041-05" — expected: subject pre-fills with `[T26-0041/SVC-0041-05]` and a REQUEST-mode body. Click Send — expected: the composer closes, a new outbound entry appears in the comms list, and switching to the Services tab shows `SVC-0041-05` now `REQUESTED`. Now click "Compose for SVC-0041-04" (seeded `RECONFIRM_REQUIRED`, `LEG` scope) — expected: the body shows `PREVIOUS ITINERARY` (`2026-08-20T01:00:00.000Z`, from its `basedOnEtdZ`) against `NEW ITINERARY` (LEG-0041-2's current ETD).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/lib/templates.js frontend/js/lib/templates.test.js frontend/js/pages/trip-sheet-comms.js frontend/js/pages/trip-sheet.js
-git commit -m "Add Composer drawer with per-type templates and correlation token, plus Comms tab"
+git add frontend/js/pages/trip-sheet-comms.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Composer drawer with REQUEST/REVISION modes and correlation token, plus Comms tab"
 ```
 
 ---
 
-### Task 14: History tab
+### Task 15: History tab
 
 **Files:**
 - Create: `actuator/frontend/js/pages/trip-sheet-history.js`
@@ -1988,6 +2456,9 @@ export function renderHistoryTab(container, tripId) {
     ...store.state.legs.filter((l) => l.tripId === tripId).map((l) => l.id),
     ...store.state.stops.filter((s) => s.tripId === tripId).map((s) => s.id),
     ...store.state.services.filter((s) => s.tripId === tripId).map((s) => s.id),
+    // Includes soft-deleted persons too (not filtered by `removed`) — a removed person's
+    // audit entry must stay visible in this trip's history.
+    ...store.state.persons.filter((p) => p.tripId === tripId).map((p) => p.id),
   ]);
   const entries = store.state.audit.filter((a) => tripRecordIds.has(a.recordId)).sort((a, b) => b.timestampZ.localeCompare(a.timestampZ));
 
@@ -2024,7 +2495,7 @@ Since every branch in `renderTabContent` is now handled explicitly, replace the 
 
 - [ ] **Step 3: Manually verify**
 
-On the History tab for TRIP-0041, expected: entries for `LEG-0041-2`'s ETD change and `SVC-0041-04`'s flip to `RECONFIRM_REQUIRED` from the seed data, plus any new entries created by Tasks 12/13's manual verification (the added service, the sent comm/status change), newest first.
+On the History tab for TRIP-0041, expected: entries for `LEG-0041-2`'s ETD change and `SVC-0041-04`'s flip to `RECONFIRM_REQUIRED` from the seed data, plus any new entries created by Tasks 12/13's manual verification (the roster add/remove, the added service, the sent comm/status change, the Cancel action) — including the removed roster person, even though they no longer appear on the Roster tab itself — newest first.
 
 - [ ] **Step 4: Commit**
 
@@ -2036,7 +2507,7 @@ git commit -m "Add History tab showing field-level audit trail per trip"
 
 ---
 
-### Task 15: Trip creation wizard
+### Task 16: Trip creation wizard
 
 **Files:**
 - Create: `actuator/frontend/trip-new.html`
@@ -2081,7 +2552,7 @@ mountNav();
 
 let step = 1;
 const header = { tripCode: '', clientOperator: '', registration: '', ownerName: '' };
-let draftLegs = [{ depIcao: '', arrIcao: '', etdZ: '', etaZ: '', pax: 0, crew: 0, overflightCountries: [] }];
+let draftLegs = [{ callSign: '', depIcao: '', arrIcao: '', etdZ: '', etaZ: '', overflightCountries: [] }];
 
 function render() {
   const container = document.getElementById('wizard-container');
@@ -2105,19 +2576,19 @@ function render() {
     container.innerHTML = `
       ${draftLegs.map((leg, i) => `
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem;">
+          <div class="field"><label for="callsign-${i}">Call Sign</label><input id="callsign-${i}" value="${escapeHtml(leg.callSign)}" /></div>
           <div class="field"><label for="dep-${i}">Dep ICAO</label><input id="dep-${i}" value="${escapeHtml(leg.depIcao)}" /></div>
           <div class="field"><label for="arr-${i}">Arr ICAO</label><input id="arr-${i}" value="${escapeHtml(leg.arrIcao)}" /></div>
           <div class="field"><label for="overflight-${i}">Overflight Countries (ISO2, comma-separated)</label><input id="overflight-${i}" value="${escapeHtml(leg.overflightCountries.join(', '))}" placeholder="e.g. ET, KE" /></div>
           <div class="field"><label for="etd-${i}">ETD (Z)</label><input id="etd-${i}" type="datetime-local" value="${leg.etdZ}" /></div>
-          <div class="field"><label for="eta-${i}">ETA (Z)</label><input id="eta-${i}" type="datetime-local" value="${leg.etaZ}" /></div>
-          <div class="field"><label for="pax-${i}">Pax</label><input id="pax-${i}" type="number" min="0" value="${leg.pax}" /></div>
-          <div class="field"><label for="crew-${i}">Crew</label><input id="crew-${i}" type="number" min="0" value="${leg.crew}" /></div>
+          <div class="field"><label for="eta-${i}">ETA (Z) — leave blank for TBD</label><input id="eta-${i}" type="datetime-local" value="${leg.etaZ}" /></div>
         </div>
       `).join('')}
       <button id="add-leg-row" class="btn">Add another leg</button>
       <div><button id="review-stops-btn" class="btn btn-primary">Review Stops</button></div>
     `;
     draftLegs.forEach((_, i) => {
+      document.getElementById(`callsign-${i}`).addEventListener('input', (e) => { draftLegs[i].callSign = e.target.value.toUpperCase(); });
       document.getElementById(`dep-${i}`).addEventListener('input', (e) => { draftLegs[i].depIcao = e.target.value.toUpperCase(); });
       document.getElementById(`arr-${i}`).addEventListener('input', (e) => { draftLegs[i].arrIcao = e.target.value.toUpperCase(); });
       document.getElementById(`overflight-${i}`).addEventListener('input', (e) => {
@@ -2125,33 +2596,32 @@ function render() {
       });
       document.getElementById(`etd-${i}`).addEventListener('input', (e) => { draftLegs[i].etdZ = e.target.value; });
       document.getElementById(`eta-${i}`).addEventListener('input', (e) => { draftLegs[i].etaZ = e.target.value; });
-      document.getElementById(`pax-${i}`).addEventListener('input', (e) => { draftLegs[i].pax = Number(e.target.value) || 0; });
-      document.getElementById(`crew-${i}`).addEventListener('input', (e) => { draftLegs[i].crew = Number(e.target.value) || 0; });
     });
     document.getElementById('add-leg-row').addEventListener('click', () => {
-      draftLegs.push({ depIcao: '', arrIcao: '', etdZ: '', etaZ: '', pax: 0, crew: 0, overflightCountries: [] });
+      draftLegs.push({ callSign: '', depIcao: '', arrIcao: '', etdZ: '', etaZ: '', overflightCountries: [] });
       render();
     });
     document.getElementById('review-stops-btn').addEventListener('click', () => { step = 3; render(); });
     return;
   }
 
+  // ETA is optional at this step (TBD) — only depIcao/arrIcao/etdZ/callSign are required to preview a leg.
   const previewLegs = draftLegs
-    .filter((l) => l.depIcao && l.arrIcao && l.etdZ && l.etaZ)
-    .map((l, i) => ({ ...l, id: `preview-${i}`, tripId: 'preview', sequence: i + 1, revision: 0, etdZ: new Date(l.etdZ).toISOString(), etaZ: new Date(l.etaZ).toISOString() }));
+    .filter((l) => l.callSign && l.depIcao && l.arrIcao && l.etdZ)
+    .map((l, i) => ({ ...l, id: `preview-${i}`, tripId: 'preview', sequence: i + 1, revision: 0, etdZ: new Date(l.etdZ).toISOString(), etaZ: l.etaZ ? new Date(l.etaZ).toISOString() : null }));
   const previewStops = deriveStopsFromLegs('preview', previewLegs);
 
   container.innerHTML = `
     <h3>Derived Stops</h3>
-    <ul>${previewStops.map((s) => `<li>${escapeHtml(s.icao)} — ${escapeHtml(s.purpose)}</li>`).join('')}</ul>
+    <ul>${previewStops.map((s) => `<li>${escapeHtml(s.icao)} — ${escapeHtml(s.purpose)}${s.arrZ === null && s.depZ !== null ? ' (arrival TBD)' : ''}</li>`).join('')}</ul>
     <button id="confirm-trip-btn" class="btn btn-primary">Confirm Trip</button>
   `;
   document.getElementById('confirm-trip-btn').addEventListener('click', () => {
     const trip = store.addTrip({ ...header, status: 'DRAFT', notifyRecipients: [] });
     const createdLegs = draftLegs.map((l, i) => store.addLeg({
-      tripId: trip.id, sequence: i + 1, depIcao: l.depIcao, arrIcao: l.arrIcao,
-      etdZ: new Date(l.etdZ).toISOString(), etaZ: new Date(l.etaZ).toISOString(),
-      pax: l.pax, crew: l.crew, overflightCountries: l.overflightCountries,
+      tripId: trip.id, sequence: i + 1, callSign: l.callSign, depIcao: l.depIcao, arrIcao: l.arrIcao,
+      etdZ: new Date(l.etdZ).toISOString(), etaZ: l.etaZ ? new Date(l.etaZ).toISOString() : null,
+      overflightCountries: l.overflightCountries,
     }));
     store.addStops(deriveStopsFromLegs(trip.id, createdLegs));
     window.location.href = `trip-sheet.html?id=${encodeURIComponent(trip.id)}`;
@@ -2163,7 +2633,7 @@ render();
 
 - [ ] **Step 3: Manually verify**
 
-Visit `http://localhost:8080/trip-new.html`. Fill in header fields, click Next: Legs, enter `HTDA` → `HKJK` with an ETD/ETA a few hours apart, click Review Stops — expected: derived stops list shows `HTDA — TURNAROUND` and `HKJK — TURNAROUND`. Click Confirm Trip — expected: the browser navigates to the new trip's Trip Sheet, and its Itinerary tab shows the entered leg.
+Visit `http://localhost:8080/trip-new.html`. Fill in header fields, click Next: Legs, enter Call Sign `TST001`, `HTDA` → `HKJK` with an ETD a few hours before an ETA, click Review Stops — expected: derived stops list shows `HTDA — TURNAROUND` and `HKJK — TURNAROUND`. Click Confirm Trip — expected: the browser navigates to the new trip's Trip Sheet, and its Itinerary tab shows the entered leg with its Call Sign. Repeat leaving the ETA field blank — expected: the stop-review list shows "(arrival TBD)" and the resulting leg's Itinerary row shows the TBD badge.
 
 - [ ] **Step 4: Commit**
 
@@ -2175,14 +2645,14 @@ git commit -m "Add trip creation wizard (header, legs, derived-stops review)"
 
 ---
 
-### Task 16: Reference Data pages
+### Task 17: Reference Data pages
 
 **Files:**
 - Create: `actuator/frontend/js/pages/reference.js`
 - Create: `actuator/frontend/reference-airports.html`, `reference-aircraft.html`, `reference-providers.html`, `reference-country-rules.html`
 
 **Interfaces:**
-- Produces: `renderReferencePage({ title, columns, rowsSelector })` where `columns` is `{ key, label }[]` and `rowsSelector` is `(state) => row[]`. Each of the 4 HTML pages calls this with its own config via an inline `<script type="module">`.
+- Produces: `renderReferencePage({ title, columns, rowsSelector })` where `columns` is `{ key, label }[]` and `rowsSelector` is `(state) => row[]`. Each of the 5 HTML pages calls this with its own config via an inline `<script type="module">`. Also renders a small sub-nav linking across all 5 reference pages — `nav.js`'s top-level "Reference Data" link only reaches `reference-airports.html`, so without this a page like `reference-country-rules.html` would otherwise be reachable only by typing its URL.
 
 - [ ] **Step 1: Implement `reference.js`**
 
@@ -2191,10 +2661,21 @@ import { store } from '../lib/store.js';
 import { mountNav } from './nav.js';
 import { escapeHtml } from './ui-helpers.js';
 
+const REFERENCE_PAGES = [
+  { href: 'reference-airports.html', label: 'Airports' },
+  { href: 'reference-aircraft.html', label: 'Aircraft' },
+  { href: 'reference-providers.html', label: 'Providers' },
+  { href: 'reference-country-rules.html', label: 'Country Rules' },
+  { href: 'reference-person-roles.html', label: 'Person Roles' },
+];
+
 export function renderReferencePage({ title, columns, rowsSelector }) {
   function render() {
     mountNav();
     document.getElementById('reference-title').textContent = title;
+    document.getElementById('reference-subnav').innerHTML = REFERENCE_PAGES.map((p) =>
+      `<a href="${p.href}" style="margin-right:1rem; ${p.label === title ? 'font-weight:600;' : ''}">${escapeHtml(p.label)}</a>`
+    ).join('');
     const rows = rowsSelector(store.state);
     document.getElementById('reference-table').innerHTML = `
       <table>
@@ -2220,6 +2701,7 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
   <div id="app-nav"></div>
   <main class="page">
     <h1 id="reference-title">Airports</h1>
+    <nav id="reference-subnav" style="margin-bottom:1rem; font-size:0.875rem;"></nav>
     <div id="reference-table"></div>
   </main>
   <script type="module">
@@ -2247,6 +2729,7 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
   <div id="app-nav"></div>
   <main class="page">
     <h1 id="reference-title">Aircraft</h1>
+    <nav id="reference-subnav" style="margin-bottom:1rem; font-size:0.875rem;"></nav>
     <div id="reference-table"></div>
   </main>
   <script type="module">
@@ -2274,6 +2757,7 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
   <div id="app-nav"></div>
   <main class="page">
     <h1 id="reference-title">Providers</h1>
+    <nav id="reference-subnav" style="margin-bottom:1rem; font-size:0.875rem;"></nav>
     <div id="reference-table"></div>
   </main>
   <script type="module">
@@ -2301,6 +2785,7 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
   <div id="app-nav"></div>
   <main class="page">
     <h1 id="reference-title">Country Rules</h1>
+    <nav id="reference-subnav" style="margin-bottom:1rem; font-size:0.875rem;"></nav>
     <div id="reference-table"></div>
   </main>
   <script type="module">
@@ -2319,30 +2804,55 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
 </html>
 ```
 
-- [ ] **Step 6: Run the full logic-layer test suite**
+- [ ] **Step 6: Create `reference-person-roles.html`**
+
+```html
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><title>Trip Platform — Person Roles</title><link rel="stylesheet" href="css/styles.css" /></head>
+<body>
+  <div id="app-nav"></div>
+  <main class="page">
+    <h1 id="reference-title">Person Roles</h1>
+    <nav id="reference-subnav" style="margin-bottom:1rem; font-size:0.875rem;"></nav>
+    <div id="reference-table"></div>
+  </main>
+  <script type="module">
+    import { renderReferencePage } from './js/pages/reference.js';
+    renderReferencePage({
+      title: 'Person Roles',
+      columns: [{ key: 'id', label: 'ID' }, { key: 'label', label: 'Label' }],
+      rowsSelector: (state) => state.personRoles,
+    });
+  </script>
+</body>
+</html>
+```
+
+- [ ] **Step 7: Run the full logic-layer test suite**
 
 Run: `npm test` (from `actuator/frontend`)
-Expected: PASS across every suite from Tasks 2-10, 13 (core-logic, reference, trips, scope, stops, store, trips-filter, templates).
+Expected: PASS across every suite from Tasks 2-14 (core-logic, reference, trips, scope, stops, store, trips-filter, templates).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/pages/reference.js frontend/reference-airports.html frontend/reference-aircraft.html frontend/reference-providers.html frontend/reference-country-rules.html
-git commit -m "Add Reference Data pages for Airports, Aircraft, Providers, Country Rules"
+git add frontend/js/pages/reference.js frontend/reference-airports.html frontend/reference-aircraft.html frontend/reference-providers.html frontend/reference-country-rules.html frontend/reference-person-roles.html
+git commit -m "Add Reference Data pages for Airports, Aircraft, Providers, Country Rules, Person Roles"
 ```
 
 ---
 
 ## Post-plan verification
 
-After Task 16, with the static server still running (`npx http-server actuator/frontend -p 8080` from Task 9), walk the full golden path:
+After Task 17, with the static server still running (`npx http-server actuator/frontend -p 8080` from Task 9), walk the full golden path:
 
 1. `http://localhost:8080/index.html` — Action Board shows unconfirmed seeded services, sorted by urgency, excluding the two `CONFIRMED` ones.
 2. `http://localhost:8080/trips.html` — both seeded trips listed; search and status filter both work; "New Trip" link present.
-3. `http://localhost:8080/trip-sheet.html?id=TRIP-0041` — all 4 tabs render; editing LEG-0041-2's ETD by more than its tightest attached service's tolerance flips that service to Re-confirm Required and it reappears on the Action Board; Rebuild Stops runs without error; Add Service on the Services tab only offers valid scope candidates per selected type; Composer pre-fills the correlation token and Send logs a Comm and flips the service to Requested; History tab shows all of the above as audit entries, newest first.
-4. `http://localhost:8080/trip-new.html` — wizard completes header → legs → derived-stops review → Confirm Trip, and lands on the new trip's Trip Sheet with the entered leg visible.
-5. All four `reference-*.html` pages render their seeded rows with the shared nav present.
+3. `http://localhost:8080/trip-sheet.html?id=TRIP-0041` — all 5 tabs render. **Itinerary:** each leg shows its Call Sign; LEG-0041-3's ETA shows TBD; filling it in clears the badge; editing LEG-0041-2's ETD by more than its tightest attached service's tolerance flips that service to Re-confirm Required and it reappears on the Action Board; Rebuild Stops runs without error. **Roster:** 5 seeded people with role labels; add and remove both work. **Services:** Add Service only offers valid scope candidates per selected type; Cancel on a service shows a CANCEL-mode preview and sets it to Cancelled on send. **Comms:** Composer pre-fills the correlation token in REQUEST mode by default, and REVISION mode (previous vs. new itinerary) when opened for the seeded `RECONFIRM_REQUIRED` service; Send logs a Comm and updates the service's status. **History:** shows all of the above as audit entries, newest first — including the removed roster person, whose entry stays visible even though they're gone from the Roster tab.
+4. `http://localhost:8080/trip-new.html` — wizard completes header → legs (Call Sign, ETA optional) → derived-stops review → Confirm Trip, and lands on the new trip's Trip Sheet with the entered leg visible, TBD badge included if ETA was left blank.
+5. All five `reference-*.html` pages render their seeded rows with the shared nav present, and each page's sub-nav links to the other four.
 
 ## Follow-up: Next.js conversion
 
