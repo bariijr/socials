@@ -688,7 +688,7 @@ export const persons = [
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `npm test -- trips`
-Expected: PASS (8 tests).
+Expected: PASS (9 tests).
 
 - [ ] **Step 6: Commit**
 
