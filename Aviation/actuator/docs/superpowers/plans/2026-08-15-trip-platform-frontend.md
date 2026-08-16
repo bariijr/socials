@@ -449,9 +449,9 @@ export const countryRules = [
 
 ```js
 export const aircraft = [
-  { registration: '5H-ABC', icaoType: 'GLF6', manufacturer: 'Gulfstream', series: 'G650', mtowKg: 45178, noiseCert: 'Chapter 4' },
-  { registration: '5Y-XYZ', icaoType: 'C56X', manufacturer: 'Cessna', series: 'Citation Excel', mtowKg: 9163, noiseCert: 'Chapter 4' },
-  { registration: 'A6-DEF', icaoType: 'GLEX', manufacturer: 'Bombardier', series: 'Global 6000', mtowKg: 45132, noiseCert: 'Chapter 4' },
+  { registration: '5HABC', icaoType: 'GLF6', manufacturer: 'Gulfstream', series: 'G650', mtowKg: 45178, noiseCert: 'Chapter 4' },
+  { registration: '5YXYZ', icaoType: 'C56X', manufacturer: 'Cessna', series: 'Citation Excel', mtowKg: 9163, noiseCert: 'Chapter 4' },
+  { registration: 'A6DEF', icaoType: 'GLEX', manufacturer: 'Bombardier', series: 'Global 6000', mtowKg: 45132, noiseCert: 'Chapter 4' },
 ];
 ```
 
@@ -607,18 +607,18 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement `trips.js`**
 
-Two trips: **T26-0041** (Dar → Nairobi → Addis → Dar, exercising a confirmed handling+fuel stop, a requested overflight-permit segment, and a landing permit deliberately stale relative to its leg's current ETD to demonstrate `RECONFIRM_REQUIRED`), and **T26-0052** (Johannesburg → Dubai, exercising a `CHASING` Saudi overflight permit and a not-started catering service).
+Two trips: **2608001** (Dar → Nairobi → Addis → Dar, exercising a confirmed handling+fuel stop, a requested overflight-permit segment, and a landing permit deliberately stale relative to its leg's current ETD to demonstrate `RECONFIRM_REQUIRED`), and **2608002** (Johannesburg → Dubai, exercising a `CHASING` Saudi overflight permit and a not-started catering service).
 
 ```js
 export const trips = [
   {
-    id: 'TRIP-0041', tripCode: 'T26-0041', clientOperator: 'Acacia Charters', registration: '5H-ABC',
+    id: 'TRIP-0041', tripCode: '2608001', clientOperator: 'Acacia Charters', registration: '5HABC',
     ownerName: 'B. Minja', status: 'CONFIRMED',
     notifyRecipients: ['crew.5habc@example.com', 'flightdept@acaciacharters.example'],
     createdAtZ: '2026-08-01T09:00:00.000Z',
   },
   {
-    id: 'TRIP-0052', tripCode: 'T26-0052', clientOperator: 'Kilimanjaro Air', registration: 'A6-DEF',
+    id: 'TRIP-0052', tripCode: '2608002', clientOperator: 'Kilimanjaro Air', registration: 'A6DEF',
     ownerName: 'B. Minja', status: 'DRAFT', notifyRecipients: ['crew.a6def@example.com'],
     createdAtZ: '2026-08-10T11:00:00.000Z',
   },
@@ -655,9 +655,9 @@ export const services = [
 ];
 
 export const comms = [
-  { id: 'COMM-0041-01', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'OUT', kind: 'REQUEST', token: '[T26-0041/SVC-0041-01]', from: 'ops@insider.co.tz', to: ['ops@nbohandling.example'], subject: 'Handling request — 5H-ABC [T26-0041/SVC-0041-01]', body: 'Requesting handling for 5H-ABC arriving HKJK 2026-08-20T06:15Z, departing 2026-08-20T09:00Z. Full crew and pax per manifest.', timestampZ: '2026-08-02T08:00:00.000Z' },
-  { id: 'COMM-0041-02', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'IN', kind: 'REQUEST', token: '[T26-0041/SVC-0041-01]', from: 'ops@nbohandling.example', to: ['ops@insider.co.tz'], subject: 'RE: Handling request — 5H-ABC [T26-0041/SVC-0041-01]', body: 'Confirmed, ref HKJK-HDL-8823.', timestampZ: '2026-08-02T10:30:00.000Z' },
-  { id: 'COMM-0041-03', tripId: 'TRIP-0041', serviceId: null, direction: 'OUT', kind: 'NOTIFICATION', token: null, from: 'ops@insider.co.tz', to: ['crew.5habc@example.com', 'flightdept@acaciacharters.example'], subject: 'Trip T26-0041 confirmed', body: 'Trip T26-0041 (HTDA-HKJK-HAAB-HTDA) is now confirmed.', timestampZ: '2026-08-05T12:00:00.000Z' },
+  { id: 'COMM-0041-01', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'OUT', kind: 'REQUEST', token: '[2608001/SVC-0041-01]', from: 'ops@insider.co.tz', to: ['ops@nbohandling.example'], subject: 'Handling request — 5HABC [2608001/SVC-0041-01]', body: 'Requesting handling for 5HABC arriving HKJK 2026-08-20T06:15Z, departing 2026-08-20T09:00Z. Full crew and pax per manifest.', timestampZ: '2026-08-02T08:00:00.000Z' },
+  { id: 'COMM-0041-02', tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'IN', kind: 'REQUEST', token: '[2608001/SVC-0041-01]', from: 'ops@nbohandling.example', to: ['ops@insider.co.tz'], subject: 'RE: Handling request — 5HABC [2608001/SVC-0041-01]', body: 'Confirmed, ref HKJK-HDL-8823.', timestampZ: '2026-08-02T10:30:00.000Z' },
+  { id: 'COMM-0041-03', tripId: 'TRIP-0041', serviceId: null, direction: 'OUT', kind: 'NOTIFICATION', token: null, from: 'ops@insider.co.tz', to: ['crew.5habc@example.com', 'flightdept@acaciacharters.example'], subject: 'Trip 2608001 confirmed', body: 'Trip 2608001 (HTDA-HKJK-HAAB-HTDA) is now confirmed.', timestampZ: '2026-08-05T12:00:00.000Z' },
 ];
 
 export const auditEntries = [
@@ -670,7 +670,7 @@ export const auditEntries = [
 
 - [ ] **Step 4: Implement `persons.js`**
 
-A five-person roster for T26-0041 (crew + a principal + a pax) and a three-person roster for T26-0052 — including a named crew-transport contact, matching how real handling telexes name a specific individual rather than just a headcount.
+A five-person roster for 2608001 (crew + a principal + a pax) and a three-person roster for 2608002 — including a named crew-transport contact, matching how real handling telexes name a specific individual rather than just a headcount.
 
 ```js
 export const persons = [
@@ -1000,9 +1000,9 @@ describe('store', () => {
   it('addTrip appends a new trip with a generated id and createdAtZ', () => {
     const store = createStore();
     const before = store.state.trips.length;
-    store.addTrip({ tripCode: 'T26-9999', clientOperator: 'Test Op', registration: '5H-ABC', ownerName: 'Tester', status: 'DRAFT', notifyRecipients: [] });
+    store.addTrip({ tripCode: '2608999', clientOperator: 'Test Op', registration: '5HABC', ownerName: 'Tester', status: 'DRAFT', notifyRecipients: [] });
     expect(store.state.trips.length).toBe(before + 1);
-    const created = store.state.trips.find((t) => t.tripCode === 'T26-9999');
+    const created = store.state.trips.find((t) => t.tripCode === '2608999');
     expect(created.id).toBeTruthy();
     expect(created.createdAtZ).toBeTruthy();
   });
@@ -1062,7 +1062,7 @@ describe('store', () => {
   it('addComm appends a comm with a generated id and timestamp', () => {
     const store = createStore();
     const before = store.state.comms.length;
-    store.addComm({ tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'OUT', kind: 'REQUEST', token: '[T26-0041/SVC-0041-01]', from: 'ops@insider.co.tz', to: ['x@example.com'], subject: 'Test', body: 'Body' });
+    store.addComm({ tripId: 'TRIP-0041', serviceId: 'SVC-0041-01', direction: 'OUT', kind: 'REQUEST', token: '[2608001/SVC-0041-01]', from: 'ops@insider.co.tz', to: ['x@example.com'], subject: 'Test', body: 'Body' });
     expect(store.state.comms.length).toBe(before + 1);
   });
 
@@ -1078,7 +1078,7 @@ describe('store', () => {
     const store = createStore();
     let calls = 0;
     store.subscribe(() => { calls += 1; });
-    store.addTrip({ tripCode: 'T26-8888', clientOperator: 'X', registration: '5H-ABC', ownerName: 'X', status: 'DRAFT', notifyRecipients: [] });
+    store.addTrip({ tripCode: '2608888', clientOperator: 'X', registration: '5HABC', ownerName: 'X', status: 'DRAFT', notifyRecipients: [] });
     expect(calls).toBe(1);
   });
 });
@@ -1559,7 +1559,7 @@ render();
 
 - [ ] **Step 7: Manually verify**
 
-With the static server from Task 9 still running, visit `http://localhost:8080/trips.html`. Expected: both seeded trips listed; typing "acacia" in search narrows to T26-0041; selecting "Confirmed" in the status dropdown also narrows to T26-0041.
+With the static server from Task 9 still running, visit `http://localhost:8080/trips.html`. Expected: both seeded trips listed; typing "acacia" in search narrows to 2608001; selecting "Confirmed" in the status dropdown also narrows to 2608001.
 
 - [ ] **Step 8: Commit**
 
@@ -1743,7 +1743,7 @@ render();
 
 - [ ] **Step 4: Manually verify**
 
-Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`. Expected: header shows T26-0041; Itinerary tab lists 3 legs (each with its own Call Sign) and 4 stops; LEG-0041-3's ETA column shows a "TBD" badge with an empty input, and the final HTDA stop shows "TBD" for ground time. Fill in LEG-0041-3's ETA and click its Save — expected: the "TBD" badge disappears and the leg shows the entered time (no Re-confirm banner, since services key off ETD, not ETA). Change LEG-0041-2's ETD input to a time more than 4 hours later than its current value and click Save — expected: `SVC-0041-01`'s tolerance (2h) is exceeded, so the Re-confirm Required banner appears listing `SVC-0041-01`. Click Rebuild Stops — expected: a "Rebuild complete" summary appears below the button.
+Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`. Expected: header shows 2608001; Itinerary tab lists 3 legs (each with its own Call Sign) and 4 stops; LEG-0041-3's ETA column shows a "TBD" badge with an empty input, and the final HTDA stop shows "TBD" for ground time. Fill in LEG-0041-3's ETA and click its Save — expected: the "TBD" badge disappears and the leg shows the entered time (no Re-confirm banner, since services key off ETD, not ETA). Change LEG-0041-2's ETD input to a time more than 4 hours later than its current value and click Save — expected: `SVC-0041-01`'s tolerance (2h) is exceeded, so the Re-confirm Required banner appears listing `SVC-0041-01`. Click Rebuild Stops — expected: a "Rebuild complete" summary appears below the button.
 
 - [ ] **Step 5: Commit**
 
@@ -1903,15 +1903,15 @@ git commit -m "Add Roster tab for trip-level Persons with configurable roles"
 import { describe, it, expect } from 'vitest';
 import { buildEmailDraft } from './templates.js';
 
-const trip = { id: 'T1', tripCode: 'T26-0041', clientOperator: 'Acacia', registration: '5H-ABC', ownerName: 'X', status: 'DRAFT', notifyRecipients: [], createdAtZ: '2026-01-01T00:00:00.000Z' };
+const trip = { id: 'T1', tripCode: '2608001', clientOperator: 'Acacia', registration: '5HABC', ownerName: 'X', status: 'DRAFT', notifyRecipients: [], createdAtZ: '2026-01-01T00:00:00.000Z' };
 const provider = { id: 'P1', name: 'EA Fuel', serviceType: 'FUEL', scopeIcao: 'HKJK', email: 'fuel@example.com', aogContact: '+1', workingHoursZ: '00:00-23:59' };
 const fuelSvc = { id: 'SVC-1', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'FUEL', providerId: 'P1', status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T09:00:00.000Z', assignedTo: null };
 
 describe('buildEmailDraft — REQUEST mode (default)', () => {
   it('embeds the correlation token in the subject', () => {
     const draft = buildEmailDraft(fuelSvc, trip, 'HKJK', provider);
-    expect(draft.token).toBe('[T26-0041/SVC-1]');
-    expect(draft.subject).toContain('[T26-0041/SVC-1]');
+    expect(draft.token).toBe('[2608001/SVC-1]');
+    expect(draft.subject).toContain('[2608001/SVC-1]');
   });
 
   it('includes a numbered PENDING CONFIRMATION block naming the scope', () => {
@@ -1927,7 +1927,7 @@ describe('buildEmailDraft — REVISION mode', () => {
     const draft = buildEmailDraft(fuelSvc, trip, 'HKJK', provider, {
       mode: 'REVISION', previousBasedOnEtdZ: '2026-08-20T09:00:00.000Z', newBasedOnEtdZ: '2026-08-20T20:00:00.000Z',
     });
-    expect(draft.token).toBe('[T26-0041/SVC-1]');
+    expect(draft.token).toBe('[2608001/SVC-1]');
     expect(draft.body).toContain('PREVIOUS ITINERARY');
     expect(draft.body).toContain('2026-08-20T09:00:00.000Z');
     expect(draft.body).toContain('NEW ITINERARY');
@@ -2426,7 +2426,7 @@ import { renderCommsTab } from './trip-sheet-comms.js';
 
 - [ ] **Step 3: Manually verify**
 
-On the Comms tab for TRIP-0041, click "Compose for SVC-0041-05" — expected: subject pre-fills with `[T26-0041/SVC-0041-05]` and a REQUEST-mode body. Click Send — expected: the composer closes, a new outbound entry appears in the comms list, and switching to the Services tab shows `SVC-0041-05` now `REQUESTED`. Now click "Compose for SVC-0041-04" (seeded `RECONFIRM_REQUIRED`, `LEG` scope) — expected: the body shows `PREVIOUS ITINERARY` (`2026-08-20T01:00:00.000Z`, from its `basedOnEtdZ`) against `NEW ITINERARY` (LEG-0041-2's current ETD).
+On the Comms tab for TRIP-0041, click "Compose for SVC-0041-05" — expected: subject pre-fills with `[2608001/SVC-0041-05]` and a REQUEST-mode body. Click Send — expected: the composer closes, a new outbound entry appears in the comms list, and switching to the Services tab shows `SVC-0041-05` now `REQUESTED`. Now click "Compose for SVC-0041-04" (seeded `RECONFIRM_REQUIRED`, `LEG` scope) — expected: the body shows `PREVIOUS ITINERARY` (`2026-08-20T01:00:00.000Z`, from its `basedOnEtdZ`) against `NEW ITINERARY` (LEG-0041-2's current ETD).
 
 - [ ] **Step 4: Commit**
 
