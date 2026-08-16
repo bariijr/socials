@@ -36,9 +36,33 @@ SMTP/IMAP worker.
   no per-trip assignment gating. `AssignedTo` on a service is a label, not
   an access-control mechanism.
 
+## Display and input conventions
+
+Cross-cutting rules that apply everywhere in the UI (not per-field exceptions
+— a formatting/validation layer every page task routes through):
+
+- **Dates** render as `DD-Mon-YYYY` (e.g. `18-Aug-2026`); **times** render as
+  `HH:MM` with a `Z` suffix. Storage stays full ISO 8601 UTC — this is a
+  display-only transform, applied everywhere a timestamp is shown (Route,
+  Action Board, Composer, deadline rail, History).
+- **All text input and generated service-request bodies render UPPERCASE** —
+  matches the real telex convention already used for Composer output; now
+  applies to trip/person/provider names and free-text fields generally, not
+  just the request body.
+- **ICAO before IATA**, and **country names before ISO2 codes**, in every
+  visible label. ISO2 remains the internal join key (`Countries.iso2`,
+  `CountryRules.countryIso2`) — never shown to staff directly; a segment
+  label reads "overflying Ethiopia," not "overflying ET."
+- **Aircraft registrations store and display with no separating dash**
+  (`5HABC`, not `5H-ABC`).
+- **Trip codes are numeric-only**, format `YYMMNNN` — two-digit year,
+  two-digit month, three-digit sequence within that month, e.g. `2608001`
+  for the first trip created in August 2026. Replaces the earlier
+  `T26-0041`-style code.
+
 ## Data model
 
-Thirteen tables. Reference tables are seeded with real data for the operator's
+Fifteen tables. Reference tables are seeded with real data for the operator's
 region; transactional tables start empty (seed data for page-flow work comes
 from hardcoded mock fixtures in the frontend, not these tables).
 
@@ -61,9 +85,12 @@ from hardcoded mock fixtures in the frontend, not these tables).
   didn't anticipate.
 
 **Transactional spine**
-- `Trips` — TripID, client/operator, registration, status (Draft/Confirmed/
-  Cancelled/Completed), owner, notify recipients (crew/flight-dept emails),
-  created timestamp
+- `Trips` — TripID, TripCode (numeric `YYMMNNN`, see Display and input
+  conventions), client/operator, registration (no-dash format), status
+  (Draft/Confirmed/Cancelled/Completed/**Enquiry** — `Enquiry` is the status
+  a trip is created with when it originates from the public Viability IQ
+  tool's "Request Quote" action, see below), owner, notify recipients
+  (crew/flight-dept emails), created timestamp
 - `Persons` — PersonID, TripID, Name, RoleID (→ `PersonRoles`), Notes. A
   trip-level roster, not per-leg — real trips fly the same crew across
   multiple legs, and pax composition changes are the exception, not
@@ -89,7 +116,17 @@ from hardcoded mock fixtures in the frontend, not these tables).
   time this service was requested against), RequiredByZ (computed), Urgency
   (computed), AssignedTo (label only). One polymorphic table, not one table
   per service type — one status board, one SLA clock, one email queue, one
-  audit trail.
+  audit trail. `ServiceType` splits into two families that the Trip Sheet
+  surfaces as separate tabs (Permits vs. Services) even though they share
+  this one table — see Page flow.
+- `Documents` — DocumentID, TripID, Name, DocType (AOC / Insurance / Permit
+  Application / Other — same free-extend pattern as `PersonRoles`, no
+  hardcoded enum), UploadedAtZ. Metadata only in this phase — no file
+  storage/upload; a real file-attach mechanism is backend-phase work.
+- `Billing` — LineItemID, TripID, Description, Amount, Currency, Status
+  (Pending/Invoiced/Paid). Flat line items only — no invoice generation,
+  tax handling, or provider-cost linkage in this phase; that's real backend
+  work this spec doesn't attempt to design yet.
 
 **Ledgers**
 - `Comms` — CommID, direction (in/out), TripID, ServiceID, correlation
@@ -188,34 +225,94 @@ staff review rather than silently deleting data.
   Confirmed/Cancelled. Recipients come from a simple email list attached to
   the Trip, not a separate contacts table.
 
+## Two front doors
+
+This platform has two distinct entry points, built and specced separately —
+they share the data model above but serve different audiences with
+different trust levels:
+
+1. **Internal Trip Manager** — authenticated (in the sense that this
+   phase has no login yet, but is the ops-staff-only surface), full detail,
+   no leg cap, single-flat-role. This is what the rest of this spec and the
+   implementation plan describe.
+2. **Public Viability IQ** — unauthenticated, public-facing, rate-limited.
+   Staff never touch it directly; it's a self-serve feasibility check for
+   people outside the operator's own team. **Fully out of scope for this
+   phase** — a separate future spec/plan — but documented here so the two
+   don't contradict each other:
+   - Input: a proposed single- or multi-leg itinerary (origin/destination
+     ICAO pairs, dates), no vendor or cost data collected.
+   - Computes **approximate** navdata itself (great-circle distance, a
+     rough EET from distance ÷ an assumed cruise speed) — this is
+     deliberately different from the Internal Trip Manager, where
+     overflight countries stay staff-entered per leg (see below); the
+     public tool has no staff behind it to enter them, so it approximates.
+   - Collects each traveler's **role and nationality only** — never a
+     passport number — matching the Persons/PersonRoles model above, minus
+     any document data.
+   - Returns: route, distance, EET, states overflown (by name, not ISO2,
+     per the display conventions above), permits required by country,
+     services with lead times (read from the same `CountryRules`/
+     `Providers` reference data the internal tool uses), and a verdict.
+   - "Request Quote" creates a `Trip` with status `Enquiry` — the same
+     `Trips` table, not a separate one; it lands in the Internal Trip
+     Manager as an ordinary trip for staff to pick up.
+
 ## Page flow (frontend-first, hardcoded seed data)
 
 Static HTML pages + vanilla JS (ES modules), mock-data only for this phase —
-no backend calls.
+no backend calls. This section covers the **Internal Trip Manager** only —
+the Public Viability IQ tool is a separate future build (see above).
 
 **Navigation**: Action Board (default) · Trips · Reference Data. No
-standalone pages for Legs/Stops/Services/Comms/Persons — always edited in
-context.
+standalone pages for Legs/Stops/Services/Documents/Billing/Messages/Persons
+— always edited in context, inside a Trip Sheet tab.
 
 1. **Action Board** — every Service not `Confirmed`, sorted by
    `RequiredByZ`, urgency-colored. The default landing page.
 2. **Trips** — searchable/filterable list (status, date range,
    registration).
-3. **Trip Sheet** (`/trips/:id`) — hub for one trip, tabs: *Itinerary*
-   (legs/stops/segments, each leg showing its Call Sign and ETA — "TBD" when
-   null), *Roster* (the trip's `Persons` list — name + role, add/remove
-   inline), *Services*, *Comms*, *History*. Trip header includes the Notify
-   recipient list.
+3. **Trip Sheet** (`/trips/:id`) — hub for one trip, eight tabs:
+   - **Route** (legs/stops/segments, each leg showing its Call Sign and
+     ETA — "TBD" when null; overflight countries stay staff-entered per
+     leg here — no great-circle computation in the Internal Trip Manager,
+     that's the public tool's job).
+   - **Permits** — Services filtered to the permit `ServiceType`s
+     (Overflight, Landing/Departure) — SEGMENT/LEG scoped only.
+   - **Services** — the remaining `ServiceType`s (Fuel, Handling, Catering,
+     Crew Transport, Customs) — STOP scoped only. Permits and Services
+     share one underlying `Services` table and one Add-Service/Composer/
+     Cancel mechanism (see below); the tab split is presentation only, a
+     type filter on the same data.
+   - **Crew & Pax** (the trip's `Persons` list — name + role, add/remove
+     inline).
+   - **Documents** — the trip's `Documents` list — name, type, uploaded
+     date; add/remove metadata rows only, no file upload in this phase.
+   - **Billing** — the trip's `Billing` line items — description, amount,
+     currency, status; add/remove/edit only, no invoice generation.
+   - **Messages** (the trip's `Comms` thread — was "Comms" in the earlier
+     draft of this spec, renamed to match the tab list).
+   - **History** — field-level audit trail for this trip. Not in the
+     tab list this requirement arrived with, but audit trail was an
+     explicit earlier requirement — kept as its own tab rather than
+     dropped or folded into Messages; flag if that's wrong.
+
+   Trip header includes the Notify recipient list and a **live deadline
+   rail**: a persistent, always-visible strip (not its own tab) showing
+   this trip's own unconfirmed Services sorted by urgency — the Action
+   Board's logic, scoped to one trip, visible regardless of which tab is
+   open.
 4. **Trip creation wizard**: Step 1 header (client/operator, registration,
    owner) → Step 2 legs (repeatable rows: Call Sign, ICAO autocomplete
    against `Airports`, overflight country list per leg, ETD required/ETA
    optional — leave blank for TBD) → Step 3 review system-derived stops
-   before confirming. No forced "add services" or "add roster" step —
-   both get added later from the Trip Sheet.
-5. **Service drawer** (opened from Trip Sheet's Services tab): Add Service
-   form with type-driven scope picker, live `RequiredByZ`/`Urgency` preview,
-   default Provider from scope+type. Each Service row also has a **Cancel**
-   action that opens the Composer in `CANCEL` mode.
+   before confirming. No forced "add services"/"add crew"/"add documents"/
+   "add billing" step — all of those get added later from the Trip Sheet.
+5. **Service drawer** (opened from the Permits or Services tab, same
+   component filtered differently per tab): Add Service form with
+   type-driven scope picker, live `RequiredByZ`/`Urgency` preview, default
+   Provider from scope+type. Each Service row also has a **Cancel** action
+   that opens the Composer in `CANCEL` mode.
 6. **Composer drawer** (opened from a Service row): per-type, per-mode
    (`REQUEST`/`REVISION`/`CANCEL`) template in the telex-style format
    described under Comms, token-tagged subject, Send / logged history.
@@ -230,5 +327,12 @@ context.
 - Backend implementation (NestJS + Postgres + SMTP/IMAP worker) — separate
   future spec/plan.
 - RBAC / multi-role permissions.
-- Great-circle overflight-country computation (stays staff-entered).
+- The Public Viability IQ front door in full (see "Two front doors" above)
+  — separate future spec/plan.
+- Great-circle overflight-country computation **in the Internal Trip
+  Manager** (stays staff-entered per leg) — the Public Viability IQ tool
+  does compute approximate navdata, but that's a different, separate build.
+- Real document file storage/upload (Documents tab is metadata rows only).
+- Invoice generation, tax handling, or provider-cost linkage (Billing tab
+  is flat line items only).
 - Any Excel/Office-add-in artifact — fully superseded by this design.
