@@ -1,0 +1,17 @@
+export const providers = [
+  { id: 'PRV-TZ-HANDLE', name: 'Dar Ground Services', serviceType: 'HANDLING', scopeIcao: 'HTDA', email: 'ops@dargroundservices.example', aogContact: '+255700000001', workingHoursZ: '04:00-18:00' },
+  { id: 'PRV-KE-HANDLE', name: 'Nairobi Executive Handling', serviceType: 'HANDLING', scopeIcao: 'HKJK', email: 'ops@nbohandling.example', aogContact: '+254700000002', workingHoursZ: '00:00-23:59' },
+  { id: 'PRV-KE-FUEL', name: 'EA Fuel Services', serviceType: 'FUEL', scopeIcao: 'HKJK', email: 'fuel@eafuel.example', aogContact: '+254700000003', workingHoursZ: '05:00-20:00' },
+  { id: 'PRV-ET-PERMIT', name: 'Addis Permit Bureau', serviceType: 'OVERFLIGHT_PERMIT', scopeIso2: 'ET', email: 'permits@addispermits.example', aogContact: '+251700000004', workingHoursZ: '06:00-15:00' },
+  { id: 'PRV-EG-PERMIT', name: 'Cairo Overflight Desk', serviceType: 'OVERFLIGHT_PERMIT', scopeIso2: 'EG', email: 'permits@cairodesk.example', aogContact: '+201000000005', workingHoursZ: '08:00-16:00' },
+  { id: 'PRV-EG-LAND', name: 'Cairo Landing Permits', serviceType: 'LANDING_PERMIT', scopeIcao: 'HECA', email: 'landing@cairodesk.example', aogContact: '+201000000006', workingHoursZ: '08:00-16:00' },
+  { id: 'PRV-ZA-HANDLE', name: 'Johannesburg Jet Centre', serviceType: 'HANDLING', scopeIcao: 'FAOR', email: 'ops@jhbjetcentre.example', aogContact: '+27700000007', workingHoursZ: '00:00-23:59' },
+  { id: 'PRV-AE-FUEL', name: 'Dubai Into-Plane', serviceType: 'FUEL', scopeIcao: 'OMDB', email: 'fuel@dxbintoplane.example', aogContact: '+971500000008', workingHoursZ: '00:00-23:59' },
+  { id: 'PRV-AE-CATER', name: 'Emirates Flight Catering', serviceType: 'CATERING', scopeIcao: 'OMDB', email: 'orders@efc.example', aogContact: '+971500000009', workingHoursZ: '00:00-23:59' },
+  { id: 'PRV-SA-LAND', name: 'GACA Landing Desk', serviceType: 'LANDING_PERMIT', scopeIso2: 'SA', email: 'landing@gaca.example', aogContact: '+966500000010', workingHoursZ: '07:00-15:00' },
+  { id: 'PRV-SA-OVERFLIGHT', name: 'GACA Overflight Desk', serviceType: 'OVERFLIGHT_PERMIT', scopeIso2: 'SA', email: 'overflight@gaca.example', aogContact: '+966500000011', workingHoursZ: '07:00-15:00' },
+  { id: 'PRV-TZ-OVERFLIGHT', name: 'TCAA Overflight Desk', serviceType: 'OVERFLIGHT_PERMIT', scopeIso2: 'TZ', email: 'overflight@tcaa.example', aogContact: '+255700000012', workingHoursZ: '07:30-16:00' },
+  { id: 'PRV-TZ-LAND', name: 'TCAA Landing Desk', serviceType: 'LANDING_PERMIT', scopeIso2: 'TZ', email: 'landing@tcaa.example', aogContact: '+255700000013', workingHoursZ: '07:30-16:00' },
+  { id: 'PRV-UG-CUSTOMS', name: 'Entebbe Customs Agent', serviceType: 'CUSTOMS', scopeIcao: 'HUEN', email: 'customs@entebbeagent.example', aogContact: '+256700000014', workingHoursZ: '06:00-20:00' },
+  { id: 'PRV-KE-CREW', name: 'Nairobi Crew Cars', serviceType: 'CREW_TRANSPORT', scopeIcao: 'HKJK', email: 'dispatch@nbocrewcars.example', aogContact: '+254700000015', workingHoursZ: '00:00-23:59' },
+];

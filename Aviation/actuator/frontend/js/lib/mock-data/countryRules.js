@@ -1,0 +1,16 @@
+export const countryRules = [
+  { id: 'CR-TZ-LAND', countryIso2: 'TZ', serviceType: 'LANDING_PERMIT', leadTimeHours: 48, workingDaysOnly: false, toleranceHours: 3, docsRequired: ['AOC', 'Insurance'], escalationContact: 'ops.tz@example.com' },
+  { id: 'CR-TZ-OVERFLIGHT', countryIso2: 'TZ', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 4, docsRequired: ['AOC'], escalationContact: 'ops.tz@example.com' },
+  { id: 'CR-KE-HANDLING', countryIso2: 'KE', serviceType: 'HANDLING', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 2, docsRequired: ['GenDec'], escalationContact: 'ops.ke@example.com' },
+  { id: 'CR-KE-FUEL', countryIso2: 'KE', serviceType: 'FUEL', leadTimeHours: 12, workingDaysOnly: false, toleranceHours: 2, docsRequired: [], escalationContact: 'ops.ke@example.com' },
+  { id: 'CR-ET-OVERFLIGHT', countryIso2: 'ET', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 6, docsRequired: ['AOC', 'Insurance'], escalationContact: 'ops.et@example.com' },
+  { id: 'CR-EG-OVERFLIGHT', countryIso2: 'EG', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 96, workingDaysOnly: true, toleranceHours: 6, docsRequired: ['AOC', 'Insurance', 'Crew List'], escalationContact: 'ops.eg@example.com' },
+  { id: 'CR-EG-LAND', countryIso2: 'EG', serviceType: 'LANDING_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 4, docsRequired: ['AOC', 'Insurance'], escalationContact: 'ops.eg@example.com' },
+  { id: 'CR-ZA-HANDLING', countryIso2: 'ZA', serviceType: 'HANDLING', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 2, docsRequired: [], escalationContact: 'ops.za@example.com' },
+  { id: 'CR-AE-FUEL', countryIso2: 'AE', serviceType: 'FUEL', leadTimeHours: 12, workingDaysOnly: false, toleranceHours: 1, docsRequired: [], escalationContact: 'ops.ae@example.com' },
+  { id: 'CR-AE-CATERING', countryIso2: 'AE', serviceType: 'CATERING', leadTimeHours: 18, workingDaysOnly: false, toleranceHours: 3, docsRequired: [], escalationContact: 'ops.ae@example.com' },
+  { id: 'CR-SA-LAND', countryIso2: 'SA', serviceType: 'LANDING_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 2, docsRequired: ['AOC', 'Insurance', 'Overflight Clearance'], escalationContact: 'ops.sa@example.com' },
+  { id: 'CR-SA-OVERFLIGHT', countryIso2: 'SA', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 2, docsRequired: ['AOC'], escalationContact: 'ops.sa@example.com' },
+  { id: 'CR-UG-CUSTOMS', countryIso2: 'UG', serviceType: 'CUSTOMS', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 4, docsRequired: ['GenDec', 'Cargo Manifest'], escalationContact: 'ops.ug@example.com' },
+  { id: 'CR-KE-CREW', countryIso2: 'KE', serviceType: 'CREW_TRANSPORT', leadTimeHours: 6, workingDaysOnly: false, toleranceHours: 2, docsRequired: [], escalationContact: 'ops.ke@example.com' },
+];
