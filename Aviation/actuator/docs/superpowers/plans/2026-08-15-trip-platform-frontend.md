@@ -235,8 +235,10 @@ describe('computeRequiredByZ', () => {
 
   it('skips weekends when workingDaysOnly is true', () => {
     const rule48hWorkingDays = { ...rule24h, leadTimeHours: 48, workingDaysOnly: true };
-    // ETD Monday 2026-08-24T10:00Z; 48 working hours back, skipping Sat 22 / Sun 23, lands Wed 2026-08-19T10:00Z.
-    expect(computeRequiredByZ('2026-08-24T10:00:00.000Z', rule48hWorkingDays)).toBe('2026-08-19T10:00:00.000Z');
+    // ETD Monday 2026-08-24T10:00Z; walking back 48 working hours skips all of Sat 22 / Sun 23
+    // (0 working hours consumed there), then counts every hour of Fri 21 (24) and Thu 20 (24) =
+    // 48, landing exactly on Thu 2026-08-20T10:00Z.
+    expect(computeRequiredByZ('2026-08-24T10:00:00.000Z', rule48hWorkingDays)).toBe('2026-08-20T10:00:00.000Z');
   });
 });
 
