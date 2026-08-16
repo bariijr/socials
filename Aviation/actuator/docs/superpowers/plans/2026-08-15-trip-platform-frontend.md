@@ -623,6 +623,7 @@ export const trips = [
     createdAtZ: '2026-08-10T11:00:00.000Z',
   },
 ];
+```
 
 Leg 3's `etaZ` is deliberately `null` ("TBD") — the trip's final arrival back into HTDA isn't confirmed yet, matching the real-world case where a return leg's arrival time is still open. Each leg carries its own Call Sign (real operators reuse the registration but assign a distinct call sign per rotation, as in the multi-leg overflight example).
 
