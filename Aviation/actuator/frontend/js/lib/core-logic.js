@@ -12,8 +12,6 @@ export function computeRequiredByZ(basedOnEtdZ, rule) {
       remainingHours -= 1;
     }
   }
-  // Account for one additional working day when working days only
-  cursor = new Date(cursor.getTime() - 86_400_000);
   return cursor.toISOString();
 }
 
