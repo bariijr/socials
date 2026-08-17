@@ -5,6 +5,7 @@ import { formatDateTimeZ } from '../lib/format.js';
 import { computeRequiredByZ, computeUrgency, resolveCountryRuleForService } from '../lib/core-logic.js';
 import { renderRouteTab } from './trip-sheet-route.js';
 import { renderCrewPaxTab } from './trip-sheet-crew-pax.js';
+import { renderServiceGroupTab } from './trip-sheet-service-group.js';
 
 const tripId = new URLSearchParams(window.location.search).get('id');
 let activeTab = 'route';
@@ -20,7 +21,7 @@ const TABS = [
   { key: 'history', label: 'History' },
 ];
 
-const PLACEHOLDER_TABS = new Set(['permits', 'services', 'documents', 'billing', 'messages', 'history']);
+const PLACEHOLDER_TABS = new Set(['documents', 'billing', 'messages', 'history']);
 
 function renderHeader() {
   const trip = store.state.trips.find((t) => t.id === tripId);
@@ -70,6 +71,10 @@ function renderTabContent() {
     renderRouteTab(container, tripId);
   } else if (activeTab === 'crew-pax') {
     renderCrewPaxTab(container, tripId);
+  } else if (activeTab === 'permits') {
+    renderServiceGroupTab(container, tripId, { title: 'Permits', serviceTypes: ['OVERFLIGHT_PERMIT', 'LANDING_PERMIT'] });
+  } else if (activeTab === 'services') {
+    renderServiceGroupTab(container, tripId, { title: 'Services', serviceTypes: ['FUEL', 'HANDLING', 'CATERING', 'CREW_TRANSPORT', 'CUSTOMS'] });
   } else if (PLACEHOLDER_TABS.has(activeTab)) {
     container.innerHTML = `<p>${escapeHtml(activeTab)} tab — implemented in a later task.</p>`;
   }
