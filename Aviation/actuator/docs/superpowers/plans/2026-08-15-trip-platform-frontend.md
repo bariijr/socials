@@ -984,6 +984,7 @@ store.addStops(newStops) -> Stop[]                // stops without id
 store.rebuildStops(tripId, user) -> { kept, added, orphaned }
 store.addService(service) -> Service              // service without id
 store.updateServiceStatus(serviceId, status, user)
+store.updateServiceProvider(serviceId, providerId, user)  // providerId may be null ("None"); audits old -> new providerId
 store.addComm(comm) -> Comm                       // comm without id/timestampZ
 store.addAuditEntry(entry)                        // entry without id/timestampZ
 store.addDocument(doc) -> Document                // doc without id/uploadedAtZ
@@ -1078,6 +1079,17 @@ describe('store', () => {
     const before = store.state.services.length;
     store.addService({ tripId: 'TRIP-0041', scopeType: 'STOP', scopeId: 'STOP-0041-HKJK', serviceType: 'CATERING', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T09:00:00.000Z', assignedTo: null });
     expect(store.state.services.length).toBe(before + 1);
+  });
+
+  it('updateServiceProvider changes a service\'s provider (including to null) and audits', () => {
+    const store = createStore();
+    const svc = store.state.services.find((s) => s.id === 'SVC-0041-05'); // seeded providerId: null
+    const auditBefore = store.state.audit.length;
+    store.updateServiceProvider('SVC-0041-05', 'PRV-ET-PERMIT', 'Tester');
+    expect(store.state.services.find((s) => s.id === 'SVC-0041-05').providerId).toBe('PRV-ET-PERMIT');
+    expect(store.state.audit.length).toBe(auditBefore + 1);
+    store.updateServiceProvider('SVC-0041-05', null, 'Tester');
+    expect(store.state.services.find((s) => s.id === 'SVC-0041-05').providerId).toBeNull();
   });
 
   it('addComm appends a comm with a generated id and timestamp', () => {
@@ -1294,6 +1306,14 @@ export function createStore() {
     notify();
   }
 
+  function updateServiceProvider(serviceId, providerId, user) {
+    const svc = state.services.find((s) => s.id === serviceId);
+    if (!svc) return;
+    addAuditEntry({ user, table: 'Service', recordId: serviceId, field: 'providerId', oldValue: svc.providerId ?? 'none', newValue: providerId ?? 'none' });
+    svc.providerId = providerId;
+    notify();
+  }
+
   function addComm(comm) {
     const created = { ...comm, id: nextId('COMM'), timestampZ: new Date().toISOString() };
     state.comms.push(created);
@@ -1341,7 +1361,7 @@ export function createStore() {
 
   return {
     state, subscribe, addTrip, addPerson, removePerson, addLeg, updateLegEtd, updateLegEta, addStops, rebuildStops,
-    addService, updateServiceStatus, addComm, addAuditEntry,
+    addService, updateServiceStatus, updateServiceProvider, addComm, addAuditEntry,
     addDocument, removeDocument, addBillingLineItem, removeBillingLineItem, updateBillingLineItemStatus,
   };
 }
@@ -1352,7 +1372,7 @@ export const store = createStore();
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- store`
-Expected: PASS (12 tests).
+Expected: PASS (13 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -2279,15 +2299,20 @@ import { getScopeCandidates, scopeTypeForServiceType } from '../lib/scope.js';
 import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
 import { buildEmailDraft } from '../lib/templates.js';
 import { escapeHtml } from './ui-helpers.js';
-import { formatDateTimeZ } from '../lib/format.js';
+import { formatDateTimeZ, countryNameFor } from '../lib/format.js';
 
 let drawerOpen = false;
 let drawerServiceType = null;
 let drawerScopeId = '';
 let cancelServiceId = null;
+let providerServiceId = null;
 
 // Duplicated (in spirit) by trip-sheet-messages.js in Task 14 — each tab resolves scope labels
 // independently since there's no shared page-level helpers file in this plan's structure.
+// Shows the country NAME for SEGMENT scope, not the raw ISO2 — `getScopeCandidates` (Task 5,
+// already built before this task) still returns a raw-ISO2 label internally, but every page-level
+// consumer resolves it to a name at render time instead, since scope.js has no access to
+// `countries` and wasn't worth retrofitting after the fact — see this task's ledger note.
 function scopeLabelFor(scopeType, scopeId, legs, stops) {
   if (scopeType === 'LEG') {
     const leg = legs.find((l) => l.id === scopeId);
@@ -2299,7 +2324,7 @@ function scopeLabelFor(scopeType, scopeId, legs, stops) {
   }
   const [legId, iso2] = scopeId.split(':');
   const leg = legs.find((l) => l.id === legId);
-  return leg ? `${leg.depIcao} → ${leg.arrIcao} (${iso2})` : scopeId;
+  return leg ? `${leg.depIcao} → ${leg.arrIcao} (${countryNameFor(iso2, store.state.countries)})` : scopeId;
 }
 
 export function renderServiceGroupTab(container, tripId, { title, serviceTypes }) {
@@ -2319,19 +2344,27 @@ export function renderServiceGroupTab(container, tripId, { title, serviceTypes }
       <button id="add-service-btn" class="btn">Add ${escapeHtml(title.replace(/s$/, ''))}</button>
     </div>
     <table>
-      <thead><tr><th>Service</th><th>Type</th><th>Scope</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Service</th><th>Type</th><th>Scope</th><th>Provider</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        ${tripServices.map((s) => `
+        ${tripServices.map((s) => {
+          const provider = store.state.providers.find((p) => p.id === s.providerId);
+          return `
           <tr data-service-id="${s.id}">
             <td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.serviceType)}</td>
-            <td>${escapeHtml(s.scopeType)} ${escapeHtml(s.scopeId)}</td><td>${escapeHtml(s.status)}</td>
-            <td>${s.status === 'CANCELLED' ? '' : '<button class="btn cancel-service-btn">Cancel</button>'}</td>
+            <td>${escapeHtml(s.scopeType)} ${escapeHtml(s.scopeId)}</td>
+            <td>${escapeHtml(provider ? provider.name : 'None')}</td>
+            <td>${escapeHtml(s.status)}</td>
+            <td>
+              ${s.status === 'CANCELLED' ? '' : '<button class="btn change-provider-btn">Change Provider</button> <button class="btn cancel-service-btn">Cancel</button>'}
+            </td>
           </tr>
-        `).join('')}
+        `;
+        }).join('')}
       </tbody>
     </table>
     <div id="service-drawer"></div>
     <div id="cancel-drawer"></div>
+    <div id="provider-drawer"></div>
   `;
 
   document.getElementById('add-service-btn').addEventListener('click', () => {
@@ -2346,8 +2379,52 @@ export function renderServiceGroupTab(container, tripId, { title, serviceTypes }
     });
   });
 
+  container.querySelectorAll('.change-provider-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      providerServiceId = e.target.closest('tr').dataset.serviceId;
+      renderProviderDrawer();
+    });
+  });
+
   if (drawerOpen) renderDrawer(tripId, serviceTypes);
   if (cancelServiceId) renderCancelDrawer(tripId);
+  if (providerServiceId) renderProviderDrawer();
+}
+
+// "Alter permit vendor" — changing an existing service's provider after creation (e.g. the
+// first vendor doesn't respond, switch to a backup). Doesn't send anything itself; use Compose
+// (Task 14) afterward to notify the new provider — this action only updates the assignment.
+function renderProviderDrawer() {
+  const drawerEl = document.getElementById('provider-drawer');
+  const service = store.state.services.find((s) => s.id === providerServiceId);
+  const candidateProviders = store.state.providers.filter((p) => p.serviceType === service.serviceType);
+
+  drawerEl.innerHTML = `
+    <div class="drawer">
+      <h3>Change Provider — ${escapeHtml(service.id)}</h3>
+      <div class="field">
+        <label for="provider-select">Provider</label>
+        <select id="provider-select">
+          <option value="">None</option>
+          ${candidateProviders.map((p) => `<option value="${p.id}" ${p.id === service.providerId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <button id="confirm-change-provider-btn" class="btn btn-primary">Save</button>
+      <button id="cancel-change-provider-btn" class="btn">Close</button>
+    </div>
+  `;
+
+  document.getElementById('cancel-change-provider-btn').addEventListener('click', () => {
+    providerServiceId = null;
+    drawerEl.innerHTML = '';
+  });
+  document.getElementById('confirm-change-provider-btn').addEventListener('click', () => {
+    const newProviderId = document.getElementById('provider-select').value || null;
+    // Local drawer state closed BEFORE calling the store mutator, per the store re-render
+    // ordering convention.
+    providerServiceId = null;
+    store.updateServiceProvider(service.id, newProviderId, 'Current User');
+  });
 }
 
 function renderCancelDrawer(tripId) {
