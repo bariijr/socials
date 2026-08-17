@@ -21,11 +21,16 @@ describe('store', () => {
   it('updateLegEtd changes the leg, bumps revision, and records an audit entry', () => {
     const store = createStore();
     const leg = store.state.legs.find((l) => l.id === 'LEG-0041-1');
+    // Snapshot as a primitive, not a live reference — updateLegEtd mutates the found leg object
+    // in place (same pattern as updateServiceStatus/removePerson elsewhere in this store), so
+    // `leg` and `updated` below end up being the SAME object; comparing `leg.revision` after the
+    // call would compare the post-mutation value against itself.
+    const revisionBefore = leg.revision;
     const before = store.state.audit.length;
     store.updateLegEtd('LEG-0041-1', '2026-09-01T00:00:00.000Z', 'Tester');
     const updated = store.state.legs.find((l) => l.id === 'LEG-0041-1');
     expect(updated.etdZ).toBe('2026-09-01T00:00:00.000Z');
-    expect(updated.revision).toBe(leg.revision + 1);
+    expect(updated.revision).toBe(revisionBefore + 1);
     expect(store.state.audit.length).toBe(before + 1);
   });
 
@@ -40,11 +45,12 @@ describe('store', () => {
     const store = createStore();
     const leg = store.state.legs.find((l) => l.id === 'LEG-0041-3');
     expect(leg.etaZ).toBeNull();
+    const revisionBefore = leg.revision; // primitive snapshot — see the comment on the updateLegEtd test above.
     const confirmedBefore = store.state.services.filter((s) => s.status === 'CONFIRMED').map((s) => s.id);
     store.updateLegEta('LEG-0041-3', '2026-08-21T09:30:00.000Z', 'Tester');
     const updated = store.state.legs.find((l) => l.id === 'LEG-0041-3');
     expect(updated.etaZ).toBe('2026-08-21T09:30:00.000Z');
-    expect(updated.revision).toBe(leg.revision + 1);
+    expect(updated.revision).toBe(revisionBefore + 1);
     const confirmedAfter = store.state.services.filter((s) => s.status === 'CONFIRMED').map((s) => s.id);
     expect(confirmedAfter).toEqual(confirmedBefore);
   });

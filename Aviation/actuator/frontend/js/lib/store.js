@@ -78,9 +78,8 @@ export function createStore() {
     const leg = state.legs.find((l) => l.id === legId);
     if (!leg) return;
     addAuditEntry({ user, table: 'Leg', recordId: legId, field: 'etaZ', oldValue: leg.etaZ === null ? 'TBD' : leg.etaZ, newValue: newEtaZ });
-    // Replace with a new object (rather than mutating `leg` in place) so any reference a caller
-    // captured before this call — e.g. for a before/after revision comparison — isn't retroactively changed.
-    state.legs = state.legs.map((l) => (l.id === legId ? { ...l, etaZ: newEtaZ, revision: l.revision + 1 } : l));
+    leg.etaZ = newEtaZ;
+    leg.revision += 1;
     notify();
   }
 
@@ -104,9 +103,8 @@ export function createStore() {
       }
     }
 
-    // Replace with a new object (rather than mutating `leg` in place) so any reference a caller
-    // captured before this call — e.g. for a before/after revision comparison — isn't retroactively changed.
-    state.legs = state.legs.map((l) => (l.id === legId ? { ...l, etdZ: newEtdZ, revision: l.revision + 1 } : l));
+    leg.etdZ = newEtdZ;
+    leg.revision += 1;
     notify();
   }
 
