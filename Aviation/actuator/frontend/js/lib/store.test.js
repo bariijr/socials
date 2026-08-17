@@ -41,6 +41,25 @@ describe('store', () => {
     expect(svc.status).toBe('RECONFIRM_REQUIRED');
   });
 
+  it("updateLegEtd resolves each affected service's own country tolerance, not a shared same-serviceType rule", () => {
+    // CountryRule is keyed by (countryIso2, serviceType) — there are multiple OVERFLIGHT_PERMIT
+    // rules in the seed data, one per country, with different toleranceHours (SA: 2h, ET: 6h — see
+    // mock-data/countryRules.js). A lookup that filters by serviceType alone would silently grab
+    // whichever OVERFLIGHT_PERMIT rule sorts first in the array (TZ, toleranceHours: 4) for BOTH
+    // services below, producing a wrong reconfirm decision. This is the regression test that would
+    // have caught that bug.
+    const store = createStore();
+    const leg = store.addLeg({ tripId: 'TRIP-0041', sequence: 99, callSign: 'TEST99', depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: null, overflightCountries: ['SA', 'ET'] });
+    const svcSA = store.addService({ tripId: 'TRIP-0041', scopeType: 'SEGMENT', scopeId: `${leg.id}:SA`, serviceType: 'OVERFLIGHT_PERMIT', providerId: 'PRV-SA-OVERFLIGHT', status: 'CONFIRMED', refNumber: 'SA-OVF-1', basedOnEtdZ: leg.etdZ, assignedTo: 'Tester' });
+    const svcET = store.addService({ tripId: 'TRIP-0041', scopeType: 'SEGMENT', scopeId: `${leg.id}:ET`, serviceType: 'OVERFLIGHT_PERMIT', providerId: 'PRV-ET-PERMIT', status: 'CONFIRMED', refNumber: 'ET-OVF-1', basedOnEtdZ: leg.etdZ, assignedTo: 'Tester' });
+
+    // Shift ETD by 3 hours: exceeds SA's 2h tolerance (must flip), stays within ET's 6h tolerance (must not flip).
+    store.updateLegEtd(leg.id, '2026-08-20T08:00:00.000Z', 'Tester');
+
+    expect(store.state.services.find((s) => s.id === svcSA.id).status).toBe('RECONFIRM_REQUIRED');
+    expect(store.state.services.find((s) => s.id === svcET.id).status).toBe('CONFIRMED');
+  });
+
   it('updateLegEta fills in a TBD ETA, bumps revision, and audits, without touching any service status', () => {
     const store = createStore();
     const leg = store.state.legs.find((l) => l.id === 'LEG-0041-3');

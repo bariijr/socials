@@ -6,7 +6,7 @@ import { providers } from './mock-data/providers.js';
 import { personRoles } from './mock-data/personRoles.js';
 import { trips as seedTrips, legs as seedLegs, stops as seedStops, services as seedServices, comms as seedComms, auditEntries as seedAudit } from './mock-data/trips.js';
 import { persons as seedPersons } from './mock-data/persons.js';
-import { needsReconfirm } from './core-logic.js';
+import { needsReconfirm, resolveCountryRuleForService } from './core-logic.js';
 import { diffStopsForRebuild } from './stops.js';
 
 let idCounter = 0;
@@ -91,7 +91,7 @@ export function createStore() {
 
     for (const svc of state.services) {
       if (svc.status !== 'CONFIRMED') continue;
-      const rule = state.countryRules.find((r) => r.serviceType === svc.serviceType);
+      const rule = resolveCountryRuleForService(svc, state.countryRules, state.legs, state.stops, state.airports);
       const tolerance = rule ? rule.toleranceHours : 0;
       const affects =
         (svc.scopeType === 'LEG' && svc.scopeId === legId) ||

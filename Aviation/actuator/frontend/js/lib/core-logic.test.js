@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeRequiredByZ, computeUrgency, needsReconfirm } from './core-logic.js';
+import { computeRequiredByZ, computeUrgency, needsReconfirm, resolveCountryRuleForService } from './core-logic.js';
 
 const rule24h = { id: 'r1', countryIso2: 'KE', serviceType: 'HANDLING', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 2, docsRequired: [], escalationContact: 'ops@example.com' };
 
@@ -36,5 +36,49 @@ describe('needsReconfirm', () => {
   });
   it('is true when the ETD shift exceeds tolerance', () => {
     expect(needsReconfirm('2026-08-20T12:00:00.000Z', '2026-08-20T15:30:00.000Z', 2)).toBe(true);
+  });
+});
+
+describe('resolveCountryRuleForService', () => {
+  const countryRules = [
+    { id: 'CR-TZ-OVERFLIGHT', countryIso2: 'TZ', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 4, docsRequired: [], escalationContact: 'x@example.com' },
+    { id: 'CR-ET-OVERFLIGHT', countryIso2: 'ET', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 6, docsRequired: [], escalationContact: 'x@example.com' },
+    { id: 'CR-EG-LAND', countryIso2: 'EG', serviceType: 'LANDING_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 4, docsRequired: [], escalationContact: 'x@example.com' },
+    { id: 'CR-KE-FUEL', countryIso2: 'KE', serviceType: 'FUEL', leadTimeHours: 12, workingDaysOnly: false, toleranceHours: 2, docsRequired: [], escalationContact: 'x@example.com' },
+  ];
+  const airports = [
+    { icao: 'HTDA', iata: 'DAR', name: 'Julius Nyerere Intl', country: 'Tanzania', iso2: 'TZ', tz: 'Africa/Dar_es_Salaam' },
+    { icao: 'HKJK', iata: 'NBO', name: 'Jomo Kenyatta Intl', country: 'Kenya', iso2: 'KE', tz: 'Africa/Nairobi' },
+    { icao: 'HECA', iata: 'CAI', name: 'Cairo Intl', country: 'Egypt', iso2: 'EG', tz: 'Africa/Cairo' },
+  ];
+  const legs = [
+    { id: 'L1', tripId: 'T1', sequence: 1, callSign: 'X', depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', overflightCountries: ['ET'], revision: 0 },
+    { id: 'L2', tripId: 'T1', sequence: 2, callSign: 'X', depIcao: 'HKJK', arrIcao: 'HECA', etdZ: '2026-08-21T05:00:00.000Z', etaZ: '2026-08-21T08:00:00.000Z', overflightCountries: [], revision: 0 },
+  ];
+  const stops = [
+    { id: 'S1', tripId: 'T1', icao: 'HKJK', arrZ: '2026-08-20T06:15:00.000Z', depZ: '2026-08-21T05:00:00.000Z', groundTimeHours: 22.75, purpose: 'NIGHT_STOP' },
+  ];
+
+  it('resolves a SEGMENT-scoped service by the country embedded in scopeId (not the first same-serviceType rule)', () => {
+    const svc = { id: 'SVC-1', tripId: 'T1', scopeType: 'SEGMENT', scopeId: 'L1:ET', serviceType: 'OVERFLIGHT_PERMIT', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T05:00:00.000Z', assignedTo: null };
+    const rule = resolveCountryRuleForService(svc, countryRules, legs, stops, airports);
+    expect(rule.id).toBe('CR-ET-OVERFLIGHT');
+  });
+
+  it('resolves a LEG-scoped service by the arrival airport\'s country', () => {
+    const svc = { id: 'SVC-2', tripId: 'T1', scopeType: 'LEG', scopeId: 'L2', serviceType: 'LANDING_PERMIT', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-21T05:00:00.000Z', assignedTo: null };
+    const rule = resolveCountryRuleForService(svc, countryRules, legs, stops, airports);
+    expect(rule.id).toBe('CR-EG-LAND');
+  });
+
+  it('resolves a STOP-scoped service by the stop\'s airport country', () => {
+    const svc = { id: 'SVC-3', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'FUEL', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-21T05:00:00.000Z', assignedTo: null };
+    const rule = resolveCountryRuleForService(svc, countryRules, legs, stops, airports);
+    expect(rule.id).toBe('CR-KE-FUEL');
+  });
+
+  it('returns null when no rule matches the resolved country/serviceType pair, rather than falling back to an unrelated rule', () => {
+    const svc = { id: 'SVC-4', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'CUSTOMS', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-21T05:00:00.000Z', assignedTo: null };
+    expect(resolveCountryRuleForService(svc, countryRules, legs, stops, airports)).toBeNull();
   });
 });
