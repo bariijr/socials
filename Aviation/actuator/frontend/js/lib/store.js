@@ -146,6 +146,14 @@ export function createStore() {
     notify();
   }
 
+  function updateServiceProvider(serviceId, providerId, user) {
+    const svc = state.services.find((s) => s.id === serviceId);
+    if (!svc) return;
+    addAuditEntry({ user, table: 'Service', recordId: serviceId, field: 'providerId', oldValue: svc.providerId ?? 'none', newValue: providerId ?? 'none' });
+    svc.providerId = providerId;
+    notify();
+  }
+
   function addComm(comm) {
     const created = { ...comm, id: nextId('COMM'), timestampZ: new Date().toISOString() };
     state.comms.push(created);
@@ -193,7 +201,7 @@ export function createStore() {
 
   return {
     state, subscribe, addTrip, addPerson, removePerson, addLeg, updateLegEtd, updateLegEta, addStops, rebuildStops,
-    addService, updateServiceStatus, addComm, addAuditEntry,
+    addService, updateServiceStatus, updateServiceProvider, addComm, addAuditEntry,
     addDocument, removeDocument, addBillingLineItem, removeBillingLineItem, updateBillingLineItemStatus,
   };
 }

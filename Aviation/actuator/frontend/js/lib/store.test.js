@@ -76,6 +76,17 @@ describe('store', () => {
     expect(store.state.services.length).toBe(before + 1);
   });
 
+  it('updateServiceProvider changes a service\'s provider (including to null) and audits', () => {
+    const store = createStore();
+    const svc = store.state.services.find((s) => s.id === 'SVC-0041-05'); // seeded providerId: null
+    const auditBefore = store.state.audit.length;
+    store.updateServiceProvider('SVC-0041-05', 'PRV-ET-PERMIT', 'Tester');
+    expect(store.state.services.find((s) => s.id === 'SVC-0041-05').providerId).toBe('PRV-ET-PERMIT');
+    expect(store.state.audit.length).toBe(auditBefore + 1);
+    store.updateServiceProvider('SVC-0041-05', null, 'Tester');
+    expect(store.state.services.find((s) => s.id === 'SVC-0041-05').providerId).toBeNull();
+  });
+
   it('addComm appends a comm with a generated id and timestamp', () => {
     const store = createStore();
     const before = store.state.comms.length;
