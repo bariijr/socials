@@ -2482,6 +2482,7 @@ function renderDrawer(tripId, serviceTypes) {
   const tripLegs = store.state.legs.filter((l) => l.tripId === tripId);
   const tripStops = store.state.stops.filter((s) => s.tripId === tripId);
   const candidates = getScopeCandidates(drawerServiceType, tripLegs, tripStops);
+  const candidateScopeType = scopeTypeForServiceType(drawerServiceType);
   const basedOnEtdZ = resolveBasedOnEtdZ(drawerServiceType, drawerScopeId, tripLegs, tripStops);
   const rule = store.state.countryRules.find((r) => r.serviceType === drawerServiceType);
 
@@ -2504,7 +2505,7 @@ function renderDrawer(tripId, serviceTypes) {
         <label for="scope-select">Scope</label>
         <select id="scope-select">
           <option value="">Select…</option>
-          ${candidates.map((c) => `<option value="${c.scopeId}" ${c.scopeId === drawerScopeId ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+          ${candidates.map((c) => `<option value="${c.scopeId}" ${c.scopeId === drawerScopeId ? 'selected' : ''}>${escapeHtml(scopeLabelFor(candidateScopeType, c.scopeId, tripLegs, tripStops))}</option>`).join('')}
         </select>
       </div>
       ${preview ? `<p data-testid="required-by-preview">Required by ${escapeHtml(formatDateTimeZ(preview.requiredByZ))} — <strong>${preview.urgency}</strong></p>` : ''}
@@ -2562,7 +2563,7 @@ import { renderServiceGroupTab } from './trip-sheet-service-group.js';
 
 - [ ] **Step 7: Manually verify**
 
-Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`, click the Permits tab — expected: `SVC-0041-03`, `SVC-0041-04`, `SVC-0041-05` listed (the three permit-type services), none of the STOP-scoped ones. Click the Services tab — expected: `SVC-0041-01`, `SVC-0041-02` listed instead. On Services, click Add Service, select Service Type "FUEL" — expected: the Scope dropdown only offers `STOP-0041-HKJK` (not any leg or segment options, and the Service Type dropdown itself only offers the 5 non-permit types — no Overflight/Landing Permit options here). Select it — expected: a Required By / Urgency preview appears in the formatted `DD-Mon-YYYY HH:MM`Z style. Click Add Service — expected: the drawer closes and the new service row appears in the table above with status `NOT_STARTED`. Switch to Permits, click Add Service — expected: the Service Type dropdown now only offers the 2 permit types (confirms the drawer-state guard resets correctly across tabs). Back on Services, click Cancel on `SVC-0041-05`... — wait, `SVC-0041-05` is a permit type (OVERFLIGHT_PERMIT), so click Cancel on it from the **Permits** tab instead — expected: a cancellation preview appears showing a `CANCEL` block naming the service and its scope; click Send Cancellation — expected: the row's status becomes `CANCELLED` and its Cancel button disappears.
+Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`, click the Permits tab — expected: `SVC-0041-03`, `SVC-0041-04`, `SVC-0041-05` listed (the three permit-type services), none of the STOP-scoped ones; the Scope column for the SEGMENT-scoped ones shows a country **name** (e.g. "Ethiopia"), never a raw ISO2 code. Click the Services tab — expected: `SVC-0041-01`, `SVC-0041-02` listed instead. On Services, click Add Service, select Service Type "FUEL" — expected: the Scope dropdown only offers `STOP-0041-HKJK` (not any leg or segment options, and the Service Type dropdown itself only offers the 5 non-permit types — no Overflight/Landing Permit options here). Select it — expected: a Required By / Urgency preview appears in the formatted `DD-Mon-YYYY HH:MM`Z style. Click Add Service — expected: the drawer closes and the new service row appears in the table above with status `NOT_STARTED` and Provider "EA Fuel Services" (the default provider for FUEL at HKJK). Switch to Permits, click Add Service — expected: the Service Type dropdown now only offers the 2 permit types (confirms the drawer-state guard resets correctly across tabs), and any SEGMENT scope options show a country name, not an ISO2 code. Click Change Provider on `SVC-0041-05` (seeded with no provider) — expected: the dropdown offers only OVERFLIGHT_PERMIT providers; pick one and Save — expected: the row's Provider column updates immediately. Click Cancel on `SVC-0041-05` — expected: a cancellation preview appears showing a `CANCEL` block naming the service and its scope; click Send Cancellation — expected: the row's status becomes `CANCELLED` and both its Cancel and Change Provider buttons disappear.
 
 - [ ] **Step 8: Commit**
 
@@ -2590,12 +2591,14 @@ git commit -m "Add Permits and Services tabs (shared component), type-driven Add
 import { store } from '../lib/store.js';
 import { buildEmailDraft } from '../lib/templates.js';
 import { escapeHtml } from './ui-helpers.js';
-import { formatDateTimeZ } from '../lib/format.js';
+import { formatDateTimeZ, countryNameFor } from '../lib/format.js';
 
 let composerServiceId = null;
 let draftSubject = '';
 let draftBody = '';
 
+// Country NAME for SEGMENT scope, not raw ISO2 — see the matching comment on Task 13's
+// scopeLabelFor for why this isn't resolved inside scope.js itself.
 function scopeLabelFor(scopeType, scopeId) {
   if (scopeType === 'LEG') {
     const leg = store.state.legs.find((l) => l.id === scopeId);
@@ -2607,7 +2610,7 @@ function scopeLabelFor(scopeType, scopeId) {
   }
   const [legId, iso2] = scopeId.split(':');
   const leg = store.state.legs.find((l) => l.id === legId);
-  return leg ? `${leg.depIcao} → ${leg.arrIcao} (${iso2})` : scopeId;
+  return leg ? `${leg.depIcao} → ${leg.arrIcao} (${countryNameFor(iso2, store.state.countries)})` : scopeId;
 }
 
 export function renderMessagesTab(container, tripId) {
