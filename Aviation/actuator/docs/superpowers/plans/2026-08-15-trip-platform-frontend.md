@@ -25,6 +25,7 @@
 - `js/lib/` modules must have zero DOM dependency (no `document`, no `window`) so they run under Vitest's `node` environment unmodified.
 - All page modules interpolating any string that could contain user-entered or seeded text into `innerHTML` must pass it through `escapeHtml()` (Task 8) first.
 - Every logic-layer task's tests must actually run and pass before its commit step. Page/DOM tasks have no automated test step (per explicit scope decision) — they're implemented directly and verified via the Post-plan verification checklist.
+- **Display/input conventions** (per the spec's "Display and input conventions"): every displayed timestamp goes through `formatDateTimeZ`/`formatDateOnlyZ` (Task 8), never a raw ISO string; every displayed country goes through `countryNameFor` (Task 8), never a raw ISO2 code; every free-text input a person types (trip/person/provider names, reference numbers, document/billing descriptions) is upper-cased at the point it's captured (`e.target.value.toUpperCase()`), matching the real telex convention already used for Composer bodies; aircraft registrations never contain a dash; trip codes are numeric-only, format `YYMMNNN`.
 
 ---
 
@@ -48,6 +49,7 @@ actuator/frontend/
   js/
     lib/
       core-logic.js                     — RequiredByZ / Urgency / re-confirm math (Task 2)
+      format.js                         — date/time/country display conventions (Task 8)
       scope.js                          — service-type -> scope-type filtering (Task 5)
       stops.js                          — stop derivation + rebuild diffing (Task 6)
       templates.js                      — Composer email draft generation, REQUEST/REVISION/CANCEL modes (Task 13)
@@ -57,19 +59,23 @@ actuator/frontend/
         airports.js, countries.js, countryRules.js, aircraft.js, providers.js, personRoles.js   (Task 3)
         trips.js                        — seeded trips/legs/stops/services/comms/audit (Task 4)
         persons.js                      — seeded trip roster (Task 4)
+        documents.js                    — seeded trip documents (Task 18)
+        billing.js                      — seeded trip billing line items (Task 19)
     pages/
       nav.js                            — shared nav bar (Task 8)
       ui-helpers.js                     — escapeHtml, urgencyBadgeHtml (Task 8)
       action-board.js                   (Task 9)
       trips-list.js                     (Task 10)
-      trip-sheet.js                     — shell: header, tabs, routes to per-tab renderers (Task 11)
-      trip-sheet-itinerary.js           (Task 11)
-      trip-sheet-roster.js              (Task 12)
-      trip-sheet-services.js            (Task 13)
-      trip-sheet-comms.js               (Task 14)
+      trip-sheet.js                     — shell: header, deadline rail, all 8 tabs defined upfront, routes to per-tab renderers (Task 11)
+      trip-sheet-route.js               — was "Itinerary" (Task 11)
+      trip-sheet-crew-pax.js            — was "Roster" (Task 12)
+      trip-sheet-service-group.js       — shared by the Permits and Services tabs, parameterized by which ServiceTypes to show (Task 13)
+      trip-sheet-messages.js            — was "Comms" (Task 14)
       trip-sheet-history.js             (Task 15)
       trip-wizard.js                    (Task 16)
       reference.js                      — generic renderer reused by all 5 reference pages (Task 17)
+      trip-sheet-documents.js           (Task 18)
+      trip-sheet-billing.js             (Task 19)
 ```
 
 ---
@@ -190,7 +196,7 @@ git commit -m "Scaffold static HTML frontend with Vitest tooling for the logic l
 - Test: `actuator/frontend/js/lib/core-logic.test.js`
 
 **Interfaces:**
-- Produces: `computeRequiredByZ(basedOnEtdZ, rule)`, `computeUrgency(requiredByZ, nowZ)`, `needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours)`. `rule` is `{ leadTimeHours: number, workingDaysOnly: boolean }` (a country-rule object — see Task 3's shape). Consumed by `store.js` (Task 7), `action-board.js` (Task 9), `trip-sheet-services.js` (Task 13).
+- Produces: `computeRequiredByZ(basedOnEtdZ, rule)`, `computeUrgency(requiredByZ, nowZ)`, `needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours)`. `rule` is `{ leadTimeHours: number, workingDaysOnly: boolean }` (a country-rule object — see Task 3's shape). Consumed by `store.js` (Task 7), `action-board.js` (Task 9), `trip-sheet-service-group.js` (Task 13).
 
 Domain shapes used across this plan (documented once here, not re-declared per file — plain JS, no compile-time enforcement, but every mock-data and store file below conforms to these):
 
@@ -707,7 +713,7 @@ git commit -m "Add seeded trips/legs/stops/services/comms/audit/persons fixtures
 - Test: `actuator/frontend/js/lib/scope.test.js`
 
 **Interfaces:**
-- Produces: `scopeTypeForServiceType(serviceType)`, `getScopeCandidates(serviceType, legs, stops)` returning `{ scopeId, label }[]`. Consumed by `store.js`, `trip-sheet-services.js` (Task 13).
+- Produces: `scopeTypeForServiceType(serviceType)`, `getScopeCandidates(serviceType, legs, stops)` returning `{ scopeId, label }[]`. Consumed by `store.js`, `trip-sheet-service-group.js` (Task 13).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -964,7 +970,7 @@ git commit -m "Add stop derivation and rebuild-diff logic"
 - Produces: `createStore()` factory (used directly by tests to avoid singleton cross-test pollution) and `export const store = createStore()` (the singleton every page module imports). Shape:
 
 ```
-store.state = { airports, countries, countryRules, aircraft, providers, personRoles, trips, persons, legs, stops, services, comms, audit }
+store.state = { airports, countries, countryRules, aircraft, providers, personRoles, trips, persons, legs, stops, services, comms, audit, documents, billing }
 store.subscribe(listener) -> unsubscribe function
 store.addTrip(trip) -> Trip                       // trip without id/createdAtZ
 store.addPerson(person) -> Person                 // person without id
@@ -978,7 +984,14 @@ store.addService(service) -> Service              // service without id
 store.updateServiceStatus(serviceId, status, user)
 store.addComm(comm) -> Comm                       // comm without id/timestampZ
 store.addAuditEntry(entry)                        // entry without id/timestampZ
+store.addDocument(doc) -> Document                // doc without id/uploadedAtZ
+store.removeDocument(documentId, user)            // soft-delete (sets removed: true), audits
+store.addBillingLineItem(item) -> BillingLineItem // item without id
+store.removeBillingLineItem(lineItemId, user)     // soft-delete (sets removed: true), audits
+store.updateBillingLineItemStatus(lineItemId, status, user)
 ```
+
+`documents`/`billing` start as **empty arrays** in this task — no `mock-data/documents.js`/`billing.js` seed files exist yet (they're created in Tasks 18-19, which run after this one). Tasks 18-19 each do a small, separate modification to this file: add an import line and swap the empty-array initializer for a seeded one — they do NOT add new mutator functions, all of those (`addDocument`, `removeDocument`, `addBillingLineItem`, `removeBillingLineItem`, `updateBillingLineItemStatus`) are built here, in this task, against the empty arrays, so the store's full action surface is defined in one place from the start.
 
 Every mutator calls `notify()` synchronously before returning — see the Global Constraints "store re-render ordering convention."
 
@@ -1074,6 +1087,39 @@ describe('store', () => {
     expect(diff.orphaned).toBeDefined();
   });
 
+  it('starts with empty documents/billing arrays (no seed data exists until Tasks 18-19)', () => {
+    const store = createStore();
+    expect(store.state.documents).toEqual([]);
+    expect(store.state.billing).toEqual([]);
+  });
+
+  it('addDocument appends a document; removeDocument soft-deletes it (kept, flagged) and audits', () => {
+    const store = createStore();
+    const created = store.addDocument({ tripId: 'TRIP-0041', name: 'AOC Certificate', docType: 'AOC' });
+    expect(store.state.documents.length).toBe(1);
+    expect(created.id).toBeTruthy();
+    expect(created.uploadedAtZ).toBeTruthy();
+    const auditBefore = store.state.audit.length;
+    store.removeDocument(created.id, 'Tester');
+    expect(store.state.documents.length).toBe(1);
+    expect(store.state.documents.find((d) => d.id === created.id).removed).toBe(true);
+    expect(store.state.audit.length).toBe(auditBefore + 1);
+  });
+
+  it('addBillingLineItem appends a line item; removeBillingLineItem soft-deletes it; updateBillingLineItemStatus changes status and audits', () => {
+    const store = createStore();
+    const created = store.addBillingLineItem({ tripId: 'TRIP-0041', description: 'Handling fee', amount: 500, currency: 'USD', status: 'PENDING' });
+    expect(store.state.billing.length).toBe(1);
+    expect(created.id).toBeTruthy();
+    store.updateBillingLineItemStatus(created.id, 'INVOICED', 'Tester');
+    expect(store.state.billing.find((b) => b.id === created.id).status).toBe('INVOICED');
+    const auditBefore = store.state.audit.length;
+    store.removeBillingLineItem(created.id, 'Tester');
+    expect(store.state.billing.length).toBe(1);
+    expect(store.state.billing.find((b) => b.id === created.id).removed).toBe(true);
+    expect(store.state.audit.length).toBe(auditBefore + 1);
+  });
+
   it('notifies subscribers on every mutation', () => {
     const store = createStore();
     let calls = 0;
@@ -1119,6 +1165,8 @@ export function createStore() {
     services: seedServices.map((s) => ({ ...s })),
     comms: seedComms.map((c) => ({ ...c })),
     audit: seedAudit.map((a) => ({ ...a })),
+    documents: [],
+    billing: [],
   };
   const listeners = new Set();
 
@@ -1245,7 +1293,49 @@ export function createStore() {
     return created;
   }
 
-  return { state, subscribe, addTrip, addPerson, removePerson, addLeg, updateLegEtd, updateLegEta, addStops, rebuildStops, addService, updateServiceStatus, addComm, addAuditEntry };
+  function addDocument(doc) {
+    const created = { ...doc, id: nextId('DOC'), uploadedAtZ: new Date().toISOString() };
+    state.documents.push(created);
+    notify();
+    return created;
+  }
+
+  function removeDocument(documentId, user) {
+    const doc = state.documents.find((d) => d.id === documentId);
+    if (!doc) return;
+    addAuditEntry({ user, table: 'Document', recordId: documentId, field: 'removed', oldValue: 'false', newValue: 'true' });
+    doc.removed = true;
+    notify();
+  }
+
+  function addBillingLineItem(item) {
+    const created = { ...item, id: nextId('BILL') };
+    state.billing.push(created);
+    notify();
+    return created;
+  }
+
+  function removeBillingLineItem(lineItemId, user) {
+    const item = state.billing.find((b) => b.id === lineItemId);
+    if (!item) return;
+    addAuditEntry({ user, table: 'Billing', recordId: lineItemId, field: 'removed', oldValue: 'false', newValue: 'true' });
+    item.removed = true;
+    notify();
+  }
+
+  function updateBillingLineItemStatus(lineItemId, status, user) {
+    const item = state.billing.find((b) => b.id === lineItemId);
+    if (!item) return;
+    addAuditEntry({ user, table: 'Billing', recordId: lineItemId, field: 'status', oldValue: item.status, newValue: status });
+    item.status = status;
+    notify();
+  }
+
+  return {
+    state, subscribe, addTrip, addPerson, removePerson, addLeg, updateLegEtd, updateLegEta, addStops, rebuildStops,
+    addService, updateServiceStatus, addComm, addAuditEntry,
+    addDocument, removeDocument, addBillingLineItem, removeBillingLineItem, updateBillingLineItemStatus,
+  };
 }
 
 export const store = createStore();
@@ -1254,7 +1344,7 @@ export const store = createStore();
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- store`
-Expected: PASS (9 tests).
+Expected: PASS (12 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1266,18 +1356,105 @@ git commit -m "Add in-memory store with re-confirm invalidation and rebuild-stop
 
 ---
 
-### Task 8: Shared page chrome — nav, UI helpers
+### Task 8: Shared page chrome — nav, UI helpers, display-format conventions
 
 **Files:**
+- Create: `actuator/frontend/js/lib/format.js`
+- Test: `actuator/frontend/js/lib/format.test.js`
 - Create: `actuator/frontend/js/pages/nav.js`
 - Create: `actuator/frontend/js/pages/ui-helpers.js`
 
 **Interfaces:**
-- Produces: `mountNav()` — finds `#app-nav` in the current document and fills it with the nav bar; `escapeHtml(value)` — HTML-escapes any value before `innerHTML` interpolation; `urgencyBadgeHtml(urgency)` — returns a `<span>` badge for a given urgency string. Every page module from Task 9 onward imports these.
+- Produces (`format.js`, pure logic, tested): `formatDateTimeZ(iso)` — `null`/`undefined` → `'TBD'`, otherwise ISO string → `'DD-Mon-YYYY HH:MM'Z'` (e.g. `'18-Aug-2026 06:00Z'`); `formatDateOnlyZ(iso)` — same but date only (`'18-Aug-2026'`), `null` → `'TBD'`; `countryNameFor(iso2, countries)` — looks up `countries` (Task 3's array) by `iso2` and returns the country's `name`, or the raw `iso2` string if not found (never throws on an unknown code). Consumed by every later page task that displays a timestamp or a country: Action Board (Task 9), Route/Itinerary (Task 11), Services/Permits (Task 13), Composer/Messages (Task 14), History (Task 15), Wizard (Task 16), Country Rules reference page (Task 17).
+- Produces (`nav.js`/`ui-helpers.js`, DOM helpers, untested): `mountNav()` — finds `#app-nav` in the current document and fills it with the nav bar; `escapeHtml(value)` — HTML-escapes any value before `innerHTML` interpolation; `urgencyBadgeHtml(urgency)` — returns a `<span>` badge for a given urgency string. Every page module from Task 9 onward imports these.
 
-No automated test for this task (pure DOM-manipulation helpers, no logic to unit test without a DOM — verified visually once wired into a real page in Task 9).
+Per the spec's "Display and input conventions": every place a leg/service/comm/audit timestamp is shown must go through `formatDateTimeZ`/`formatDateOnlyZ` instead of interpolating the raw ISO string directly, and every place a country appears in a label must go through `countryNameFor` instead of showing the raw ISO2 code. This task's two format-logic functions are the single place that convention is implemented — later tasks call them, they don't reimplement date/country formatting themselves.
 
-- [ ] **Step 1: Implement `nav.js`**
+- [ ] **Step 1: Write the failing tests for `format.js`**
+
+`actuator/frontend/js/lib/format.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { formatDateTimeZ, formatDateOnlyZ, countryNameFor } from './format.js';
+
+describe('formatDateTimeZ', () => {
+  it('formats an ISO timestamp as DD-Mon-YYYY HH:MMZ', () => {
+    expect(formatDateTimeZ('2026-08-18T06:00:00.000Z')).toBe('18-Aug-2026 06:00Z');
+  });
+  it('returns TBD for null', () => {
+    expect(formatDateTimeZ(null)).toBe('TBD');
+  });
+});
+
+describe('formatDateOnlyZ', () => {
+  it('formats an ISO timestamp as DD-Mon-YYYY', () => {
+    expect(formatDateOnlyZ('2026-08-18T06:00:00.000Z')).toBe('18-Aug-2026');
+  });
+  it('returns TBD for null', () => {
+    expect(formatDateOnlyZ(null)).toBe('TBD');
+  });
+});
+
+describe('countryNameFor', () => {
+  const countries = [
+    { name: 'Kenya', iso2: 'KE', region: 'East Africa', overflightPermitRequired: true, landingPermitRequired: true, aocDocsRequired: true, defaultEscalationContact: 'x@example.com' },
+  ];
+  it('resolves a known ISO2 code to its country name', () => {
+    expect(countryNameFor('KE', countries)).toBe('Kenya');
+  });
+  it('falls back to the raw code for an unknown ISO2', () => {
+    expect(countryNameFor('ZZ', countries)).toBe('ZZ');
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `npm test -- format` (from `actuator/frontend`)
+Expected: FAIL — module does not exist.
+
+- [ ] **Step 3: Implement `format.js`**
+
+```js
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+export function formatDateOnlyZ(iso) {
+  if (!iso) return 'TBD';
+  const d = new Date(iso);
+  return `${pad2(d.getUTCDate())}-${MONTHS[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+}
+
+export function formatDateTimeZ(iso) {
+  if (!iso) return 'TBD';
+  const d = new Date(iso);
+  return `${formatDateOnlyZ(iso)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}Z`;
+}
+
+export function countryNameFor(iso2, countries) {
+  const country = countries.find((c) => c.iso2 === iso2);
+  return country ? country.name : iso2;
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npm test -- format`
+Expected: PASS (6 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd "C:/Backups/InsiderTechSol/Aviation/actuator"
+git add frontend/js/lib/format.js frontend/js/lib/format.test.js
+git commit -m "Add date/time/country display-format conventions"
+```
+
+- [ ] **Step 6: Implement `nav.js`**
 
 ```js
 export function mountNav() {
@@ -1293,7 +1470,7 @@ export function mountNav() {
 }
 ```
 
-- [ ] **Step 2: Implement `ui-helpers.js`**
+- [ ] **Step 7: Implement `ui-helpers.js`**
 
 ```js
 const URGENCY_CLASS = {
@@ -1315,7 +1492,7 @@ export function escapeHtml(value) {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
@@ -1571,16 +1748,16 @@ git commit -m "Add Trips list page with search/status filtering"
 
 ---
 
-### Task 11: Trip Sheet shell + Itinerary tab
+### Task 11: Trip Sheet shell + Route tab + live deadline rail
 
 **Files:**
 - Create: `actuator/frontend/trip-sheet.html`
 - Create: `actuator/frontend/js/pages/trip-sheet.js`
-- Create: `actuator/frontend/js/pages/trip-sheet-itinerary.js`
+- Create: `actuator/frontend/js/pages/trip-sheet-route.js`
 
 **Interfaces:**
-- Consumes: `store` (Task 7), `mountNav`/`escapeHtml` (Task 8).
-- Produces: `trip-sheet.js` reads `?id=` from `window.location.search`, renders the header + 5-tab strip into `#trip-header`/`#trip-tabs`, and delegates active-tab content to `#trip-tab-content` via `renderItineraryTab(container, tripId)` (this task) and placeholder text for the other four tabs (wired in Tasks 12-15).
+- Consumes: `store` (Task 7), `mountNav`/`escapeHtml` (Task 8), `formatDateTimeZ` (Task 8), `computeRequiredByZ`/`computeUrgency` (Task 2).
+- Produces: `trip-sheet.js` reads `?id=` from `window.location.search`, renders the header (including the live deadline rail) + full 8-tab strip into `#trip-header`/`#trip-tabs` — **all 8 tab entries are defined here, upfront, in the spec's tab order** (Route, Permits, Services, Crew & Pax, Documents, Billing, Messages, History), not added incrementally one per task the way earlier drafts of this plan did — and delegates active-tab content to `#trip-tab-content` via `renderRouteTab(container, tripId)` (this task) and placeholder text for the other seven tabs until Tasks 12-19 fill in their branches.
 
 - [ ] **Step 1: Create `trip-sheet.html`**
 
@@ -1604,15 +1781,16 @@ git commit -m "Add Trips list page with search/status filtering"
 </html>
 ```
 
-- [ ] **Step 2: Implement `trip-sheet-itinerary.js`**
+- [ ] **Step 2: Implement `trip-sheet-route.js`**
 
 ```js
 import { store } from '../lib/store.js';
 import { escapeHtml } from './ui-helpers.js';
+import { formatDateTimeZ } from '../lib/format.js';
 
 let lastRebuildResult = null;
 
-export function renderItineraryTab(container, tripId) {
+export function renderRouteTab(container, tripId) {
   const tripLegs = store.state.legs.filter((l) => l.tripId === tripId).sort((a, b) => a.sequence - b.sequence);
   const tripStops = store.state.stops.filter((s) => s.tripId === tripId);
   const reconfirmServices = store.state.services.filter((s) => s.tripId === tripId && s.status === 'RECONFIRM_REQUIRED');
@@ -1626,12 +1804,15 @@ export function renderItineraryTab(container, tripId) {
           <tr data-leg-id="${leg.id}">
             <td>${escapeHtml(leg.callSign)}</td>
             <td>${escapeHtml(leg.depIcao)} → ${escapeHtml(leg.arrIcao)}</td>
-            <td><input type="datetime-local" class="etd-input" value="${leg.etdZ.slice(0, 16)}" aria-label="ETD ${leg.id}" /></td>
+            <td>
+              <div>${escapeHtml(formatDateTimeZ(leg.etdZ))}</div>
+              <input type="datetime-local" class="etd-input" value="${leg.etdZ.slice(0, 16)}" aria-label="ETD ${leg.id}" />
+            </td>
             <td><button class="btn save-etd-btn">Save</button></td>
             <td>
               ${leg.etaZ === null
                 ? '<span class="banner-warning" style="padding:0.1rem 0.4rem;">TBD</span>'
-                : ''}
+                : `<div>${escapeHtml(formatDateTimeZ(leg.etaZ))}</div>`}
               <input type="datetime-local" class="eta-input" value="${leg.etaZ ? leg.etaZ.slice(0, 16) : ''}" aria-label="ETA ${leg.id}" />
             </td>
             <td><button class="btn save-eta-btn">Save</button></td>
@@ -1679,22 +1860,31 @@ export function renderItineraryTab(container, tripId) {
 
 - [ ] **Step 3: Implement `trip-sheet.js`**
 
+All 8 tabs are declared here, in order, from this task onward — later tasks (12-19) each replace their own placeholder branch in `renderTabContent`, they never touch the `TABS` array itself.
+
 ```js
 import { store } from '../lib/store.js';
 import { mountNav } from './nav.js';
 import { escapeHtml } from './ui-helpers.js';
-import { renderItineraryTab } from './trip-sheet-itinerary.js';
+import { formatDateTimeZ } from '../lib/format.js';
+import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
+import { renderRouteTab } from './trip-sheet-route.js';
 
 const tripId = new URLSearchParams(window.location.search).get('id');
-let activeTab = 'itinerary';
+let activeTab = 'route';
 
 const TABS = [
-  { key: 'itinerary', label: 'Itinerary' },
-  { key: 'roster', label: 'Roster' },
+  { key: 'route', label: 'Route' },
+  { key: 'permits', label: 'Permits' },
   { key: 'services', label: 'Services' },
-  { key: 'comms', label: 'Comms' },
+  { key: 'crew-pax', label: 'Crew & Pax' },
+  { key: 'documents', label: 'Documents' },
+  { key: 'billing', label: 'Billing' },
+  { key: 'messages', label: 'Messages' },
   { key: 'history', label: 'History' },
 ];
+
+const PLACEHOLDER_TABS = new Set(['permits', 'services', 'crew-pax', 'documents', 'billing', 'messages', 'history']);
 
 function renderHeader() {
   const trip = store.state.trips.find((t) => t.id === tripId);
@@ -1707,7 +1897,26 @@ function renderHeader() {
     <h1>${escapeHtml(trip.tripCode)} — ${escapeHtml(trip.clientOperator)}</h1>
     <p>Registration ${escapeHtml(trip.registration)} · Status ${escapeHtml(trip.status)}</p>
     <p>Notify: ${escapeHtml(trip.notifyRecipients.join(', ') || 'none set')}</p>
+    <div id="deadline-rail"></div>
   `;
+  renderDeadlineRail(trip);
+}
+
+function renderDeadlineRail(trip) {
+  const rows = store.state.services
+    .filter((s) => s.tripId === trip.id && !['CONFIRMED', 'CANCELLED', 'NOT_REQUIRED'].includes(s.status))
+    .map((svc) => {
+      const rule = store.state.countryRules.find((r) => r.serviceType === svc.serviceType);
+      const requiredByZ = rule ? computeRequiredByZ(svc.basedOnEtdZ, rule) : svc.basedOnEtdZ;
+      return { svc, requiredByZ, urgency: computeUrgency(requiredByZ, new Date().toISOString()) };
+    })
+    .sort((a, b) => new Date(a.requiredByZ).getTime() - new Date(b.requiredByZ).getTime());
+
+  document.getElementById('deadline-rail').innerHTML = rows.length === 0
+    ? '<p style="font-size:0.8rem; color:#64748b;">No pending deadlines.</p>'
+    : `<div style="display:flex; gap:0.5rem; flex-wrap:wrap; font-size:0.75rem;">
+        ${rows.map(({ svc, requiredByZ, urgency }) => `<span class="badge badge-${urgency.toLowerCase()}">${escapeHtml(svc.serviceType)} — ${escapeHtml(formatDateTimeZ(requiredByZ))}</span>`).join('')}
+      </div>`;
 }
 
 function renderTabs() {
@@ -1721,9 +1930,9 @@ function renderTabs() {
 
 function renderTabContent() {
   const container = document.getElementById('trip-tab-content');
-  if (activeTab === 'itinerary') {
-    renderItineraryTab(container, tripId);
-  } else {
+  if (activeTab === 'route') {
+    renderRouteTab(container, tripId);
+  } else if (PLACEHOLDER_TABS.has(activeTab)) {
     container.innerHTML = `<p>${escapeHtml(activeTab)} tab — implemented in a later task.</p>`;
   }
 }
@@ -1739,35 +1948,33 @@ store.subscribe(render);
 render();
 ```
 
-(Tasks 12-15 add `roster`/`services`/`comms`/`history` branches to `renderTabContent` and their own imports.)
-
 - [ ] **Step 4: Manually verify**
 
-Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`. Expected: header shows 2608001; Itinerary tab lists 3 legs (each with its own Call Sign) and 4 stops; LEG-0041-3's ETA column shows a "TBD" badge with an empty input, and the final HTDA stop shows "TBD" for ground time. Fill in LEG-0041-3's ETA and click its Save — expected: the "TBD" badge disappears and the leg shows the entered time (no Re-confirm banner, since services key off ETD, not ETA). Change LEG-0041-2's ETD input to a time more than 4 hours later than its current value and click Save — expected: `SVC-0041-01`'s tolerance (2h) is exceeded, so the Re-confirm Required banner appears listing `SVC-0041-01`. Click Rebuild Stops — expected: a "Rebuild complete" summary appears below the button.
+Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`. Expected: header shows `2608001`; the deadline rail shows badges for every unconfirmed service on this trip, sorted by urgency; all 8 tab buttons render (Route active by default, the other 7 showing the placeholder text). Route tab lists 3 legs (each with its own Call Sign, and a formatted `18-Aug-2026 06:00Z`-style label next to each editable ETD/ETA input) and 4 stops; `LEG-0041-3`'s ETA column shows a "TBD" badge with an empty input, and the final HTDA stop shows "TBD" for ground time. Fill in `LEG-0041-3`'s ETA and click its Save — expected: the "TBD" badge disappears and the formatted label appears with the entered time (no Re-confirm banner, since services key off ETD, not ETA). Change `LEG-0041-2`'s ETD input to a time more than 4 hours later than its current value and click Save — expected: `SVC-0041-01`'s tolerance (2h) is exceeded, so the Re-confirm Required banner appears listing `SVC-0041-01`, and the deadline rail updates to include it. Click Rebuild Stops — expected: a "Rebuild complete" summary appears below the button.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/trip-sheet.html frontend/js/pages/trip-sheet.js frontend/js/pages/trip-sheet-itinerary.js
-git commit -m "Add Trip Sheet shell with Itinerary tab, leg-edit re-confirm, and Rebuild Stops"
+git add frontend/trip-sheet.html frontend/js/pages/trip-sheet.js frontend/js/pages/trip-sheet-route.js
+git commit -m "Add Trip Sheet shell (all 8 tabs, live deadline rail) with Route tab, leg-edit re-confirm, and Rebuild Stops"
 ```
 
 ---
 
-### Task 12: Roster tab
+### Task 12: Crew & Pax tab
 
 **Files:**
-- Create: `actuator/frontend/js/pages/trip-sheet-roster.js`
+- Create: `actuator/frontend/js/pages/trip-sheet-crew-pax.js`
 - Modify: `actuator/frontend/js/pages/trip-sheet.js`
 
 **Interfaces:**
 - Consumes: `store` (Task 7 — `store.state.persons`, `store.state.personRoles`, `store.addPerson`, `store.removePerson`), `escapeHtml` (Task 8).
-- Produces: `renderRosterTab(container, tripId)`.
+- Produces: `renderCrewPaxTab(container, tripId)`.
 
 No automated test for this task (DOM-rendering page module, per the plan's scope decision — verified manually).
 
-- [ ] **Step 1: Implement `trip-sheet-roster.js`**
+- [ ] **Step 1: Implement `trip-sheet-crew-pax.js`**
 
 ```js
 import { store } from '../lib/store.js';
@@ -1775,12 +1982,12 @@ import { escapeHtml } from './ui-helpers.js';
 
 let addFormOpen = false;
 
-export function renderRosterTab(container, tripId) {
+export function renderCrewPaxTab(container, tripId) {
   const tripPersons = store.state.persons.filter((p) => p.tripId === tripId && !p.removed);
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2>Roster</h2>
+      <h2>Crew &amp; Pax</h2>
       <button id="add-person-btn" class="btn">Add Person</button>
     </div>
     <table>
@@ -1845,7 +2052,8 @@ function renderAddForm(tripId) {
     formEl.innerHTML = '';
   });
   document.getElementById('confirm-add-person-btn').addEventListener('click', () => {
-    const name = document.getElementById('person-name').value.trim();
+    // UPPERCASE at capture, per the spec's display/input conventions.
+    const name = document.getElementById('person-name').value.trim().toUpperCase();
     const roleId = document.getElementById('person-role').value;
     if (!name || !roleId) return;
     addFormOpen = false;
@@ -1856,42 +2064,42 @@ function renderAddForm(tripId) {
 
 - [ ] **Step 2: Wire into `trip-sheet.js`**
 
-Add the import and a new branch in `renderTabContent` (from Task 11):
+Add the import, and insert a new `else if` branch in `renderTabContent` (from Task 11) **before** the `PLACEHOLDER_TABS.has(activeTab)` fallback branch — every task from here on follows this same pattern: add one specific branch, leave the fallback in place for tabs not yet built:
 
 ```js
-import { renderRosterTab } from './trip-sheet-roster.js';
+import { renderCrewPaxTab } from './trip-sheet-crew-pax.js';
 ```
 
 ```js
-  } else if (activeTab === 'roster') {
-    renderRosterTab(container, tripId);
+  } else if (activeTab === 'crew-pax') {
+    renderCrewPaxTab(container, tripId);
 ```
 
 - [ ] **Step 3: Manually verify**
 
-On the Roster tab for TRIP-0041, expected: 5 seeded people (PIC, SIC, FA, Principal, Pax) with their role labels. Click Add Person, enter a name, pick "VIP", click Add — expected: the new person appears in the table. Click Remove on it — expected: it disappears and a corresponding entry appears on the History tab once Task 15 wires that tab up.
+On the Crew & Pax tab for TRIP-0041, expected: 5 seeded people (PIC, SIC, FA, Principal, Pax) with their role labels. Click Add Person, enter a name, pick "VIP", click Add — expected: the new person appears in the table, name shown UPPERCASE. Click Remove on it — expected: it disappears and a corresponding entry appears on the History tab once Task 15 wires that tab up.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/pages/trip-sheet-roster.js frontend/js/pages/trip-sheet.js
-git commit -m "Add Roster tab for trip-level Persons with configurable roles"
+git add frontend/js/pages/trip-sheet-crew-pax.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Crew & Pax tab for trip-level Persons with configurable roles"
 ```
 
 ---
 
-### Task 13: Services tab + Add Service form + Cancel action
+### Task 13: Permits tab + Services tab (shared component) + Cancel action
 
 **Files:**
 - Create: `actuator/frontend/js/lib/templates.js`
 - Test: `actuator/frontend/js/lib/templates.test.js`
-- Create: `actuator/frontend/js/pages/trip-sheet-services.js`
+- Create: `actuator/frontend/js/pages/trip-sheet-service-group.js`
 - Modify: `actuator/frontend/js/pages/trip-sheet.js`
 
 **Interfaces:**
-- Consumes: `store` (Task 7), `getScopeCandidates`/`scopeTypeForServiceType` (Task 5), `computeRequiredByZ`/`computeUrgency` (Task 2).
-- Produces: `buildEmailDraft(service, trip, scopeLabel, provider, options)` in `templates.js`, returning `{ subject, body, token }` — `options.mode` is `'REQUEST'` (default) / `'REVISION'` / `'CANCEL'`; `options.previousBasedOnEtdZ`/`options.newBasedOnEtdZ` are only used in `'REVISION'` mode. `templates.js` is created here (not in Task 14) so the Cancel action below can use it without Task 13 depending on Task 14's Comms tab. `renderServicesTab(container, tripId)` in `trip-sheet-services.js`.
+- Consumes: `store` (Task 7), `getScopeCandidates`/`scopeTypeForServiceType` (Task 5), `computeRequiredByZ`/`computeUrgency` (Task 2), `formatDateTimeZ` (Task 8).
+- Produces: `buildEmailDraft(service, trip, scopeLabel, provider, options)` in `templates.js`, returning `{ subject, body, token }` — `options.mode` is `'REQUEST'` (default) / `'REVISION'` / `'CANCEL'`; `options.previousBasedOnEtdZ`/`options.newBasedOnEtdZ` are only used in `'REVISION'` mode. `templates.js` is created here (not in Task 14) so the Cancel action below can use it without Task 13 depending on Task 14's Messages tab. `renderServiceGroupTab(container, tripId, { title, serviceTypes })` in `trip-sheet-service-group.js` — **one component, called twice**: once for the Permits tab (`serviceTypes: ['OVERFLIGHT_PERMIT', 'LANDING_PERMIT']`) and once for the Services tab (`serviceTypes: ['FUEL', 'HANDLING', 'CATERING', 'CREW_TRANSPORT', 'CUSTOMS']`) — per the spec, "Permits and Services share one underlying Services table and one Add-Service/Composer/Cancel mechanism; the tab split is presentation only, a type filter on the same data."
 
 `templates.js` is built first, as pure framework-free logic with its own tests — matching this plan's convention that anything with real behavior lives in `js/lib/` and is unit-tested independent of the DOM.
 
@@ -2055,7 +2263,7 @@ export function buildEmailDraft(service, trip, scopeLabel, provider, options = {
 Run: `npm test -- templates`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Implement `trip-sheet-services.js`**
+- [ ] **Step 5: Implement `trip-sheet-service-group.js`**
 
 ```js
 import { store } from '../lib/store.js';
@@ -2063,15 +2271,14 @@ import { getScopeCandidates, scopeTypeForServiceType } from '../lib/scope.js';
 import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
 import { buildEmailDraft } from '../lib/templates.js';
 import { escapeHtml } from './ui-helpers.js';
-
-const SERVICE_TYPES = ['OVERFLIGHT_PERMIT', 'LANDING_PERMIT', 'FUEL', 'HANDLING', 'CATERING', 'CREW_TRANSPORT', 'CUSTOMS'];
+import { formatDateTimeZ } from '../lib/format.js';
 
 let drawerOpen = false;
-let drawerServiceType = 'FUEL';
+let drawerServiceType = null;
 let drawerScopeId = '';
 let cancelServiceId = null;
 
-// Duplicated (in spirit) by trip-sheet-comms.js in Task 14 — each tab resolves scope labels
+// Duplicated (in spirit) by trip-sheet-messages.js in Task 14 — each tab resolves scope labels
 // independently since there's no shared page-level helpers file in this plan's structure.
 function scopeLabelFor(scopeType, scopeId, legs, stops) {
   if (scopeType === 'LEG') {
@@ -2087,13 +2294,21 @@ function scopeLabelFor(scopeType, scopeId, legs, stops) {
   return leg ? `${leg.depIcao} → ${leg.arrIcao} (${iso2})` : scopeId;
 }
 
-export function renderServicesTab(container, tripId) {
-  const tripServices = store.state.services.filter((s) => s.tripId === tripId);
+export function renderServiceGroupTab(container, tripId, { title, serviceTypes }) {
+  // Guard against drawer state left over from the OTHER tab that shares this module (Permits vs
+  // Services) — if the open drawer's service type isn't valid for this call's group, reset it.
+  if (drawerOpen && !serviceTypes.includes(drawerServiceType)) {
+    drawerServiceType = serviceTypes[0];
+    drawerScopeId = '';
+  }
+  if (drawerServiceType === null) drawerServiceType = serviceTypes[0];
+
+  const tripServices = store.state.services.filter((s) => s.tripId === tripId && serviceTypes.includes(s.serviceType));
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2>Services</h2>
-      <button id="add-service-btn" class="btn">Add Service</button>
+      <h2>${escapeHtml(title)}</h2>
+      <button id="add-service-btn" class="btn">Add ${escapeHtml(title.replace(/s$/, ''))}</button>
     </div>
     <table>
       <thead><tr><th>Service</th><th>Type</th><th>Scope</th><th>Status</th><th></th></tr></thead>
@@ -2113,7 +2328,7 @@ export function renderServicesTab(container, tripId) {
 
   document.getElementById('add-service-btn').addEventListener('click', () => {
     drawerOpen = true;
-    renderDrawer(tripId);
+    renderDrawer(tripId, serviceTypes);
   });
 
   container.querySelectorAll('.cancel-service-btn').forEach((btn) => {
@@ -2123,7 +2338,7 @@ export function renderServicesTab(container, tripId) {
     });
   });
 
-  if (drawerOpen) renderDrawer(tripId);
+  if (drawerOpen) renderDrawer(tripId, serviceTypes);
   if (cancelServiceId) renderCancelDrawer(tripId);
 }
 
@@ -2177,7 +2392,7 @@ function resolveBasedOnEtdZ(serviceType, scopeId, legs, stops) {
   return stop ? (stop.depZ || stop.arrZ) : null;
 }
 
-function renderDrawer(tripId) {
+function renderDrawer(tripId, serviceTypes) {
   const drawerEl = document.getElementById('service-drawer');
   const tripLegs = store.state.legs.filter((l) => l.tripId === tripId);
   const tripStops = store.state.stops.filter((s) => s.tripId === tripId);
@@ -2197,7 +2412,7 @@ function renderDrawer(tripId) {
       <div class="field">
         <label for="service-type-select">Service Type</label>
         <select id="service-type-select">
-          ${SERVICE_TYPES.map((st) => `<option value="${st}" ${st === drawerServiceType ? 'selected' : ''}>${st}</option>`).join('')}
+          ${serviceTypes.map((st) => `<option value="${st}" ${st === drawerServiceType ? 'selected' : ''}>${st}</option>`).join('')}
         </select>
       </div>
       <div class="field">
@@ -2207,7 +2422,7 @@ function renderDrawer(tripId) {
           ${candidates.map((c) => `<option value="${c.scopeId}" ${c.scopeId === drawerScopeId ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
         </select>
       </div>
-      ${preview ? `<p data-testid="required-by-preview">Required by ${escapeHtml(preview.requiredByZ)} — <strong>${preview.urgency}</strong></p>` : ''}
+      ${preview ? `<p data-testid="required-by-preview">Required by ${escapeHtml(formatDateTimeZ(preview.requiredByZ))} — <strong>${preview.urgency}</strong></p>` : ''}
       <button id="confirm-add-service-btn" class="btn btn-primary" ${drawerScopeId ? '' : 'disabled'}>Add Service</button>
       <button id="cancel-add-service-btn" class="btn">Close</button>
     </div>
@@ -2216,11 +2431,11 @@ function renderDrawer(tripId) {
   document.getElementById('service-type-select').addEventListener('change', (e) => {
     drawerServiceType = e.target.value;
     drawerScopeId = '';
-    renderDrawer(tripId);
+    renderDrawer(tripId, serviceTypes);
   });
   document.getElementById('scope-select').addEventListener('change', (e) => {
     drawerScopeId = e.target.value;
-    renderDrawer(tripId);
+    renderDrawer(tripId, serviceTypes);
   });
   document.getElementById('cancel-add-service-btn').addEventListener('click', () => {
     drawerOpen = false;
@@ -2247,47 +2462,50 @@ function renderDrawer(tripId) {
 
 - [ ] **Step 6: Wire into `trip-sheet.js`**
 
-Add the import and a new branch in `renderTabContent`:
+Add the import, and insert the `permits`/`services` branches in `renderTabContent`, both calling the same component with different `serviceTypes`:
 
 ```js
-import { renderServicesTab } from './trip-sheet-services.js';
+import { renderServiceGroupTab } from './trip-sheet-service-group.js';
 ```
 
 ```js
+  } else if (activeTab === 'permits') {
+    renderServiceGroupTab(container, tripId, { title: 'Permits', serviceTypes: ['OVERFLIGHT_PERMIT', 'LANDING_PERMIT'] });
   } else if (activeTab === 'services') {
-    renderServicesTab(container, tripId);
+    renderServiceGroupTab(container, tripId, { title: 'Services', serviceTypes: ['FUEL', 'HANDLING', 'CATERING', 'CREW_TRANSPORT', 'CUSTOMS'] });
 ```
 
 - [ ] **Step 7: Manually verify**
 
-Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`, click the Services tab, click Add Service, select Service Type "FUEL" — expected: the Scope dropdown only offers `STOP-0041-HKJK` (not any leg or segment options). Select it — expected: a Required By / Urgency preview appears. Click Add Service — expected: the drawer closes and the new service row appears in the table above with status `NOT_STARTED`. Click Cancel on `SVC-0041-05` — expected: a cancellation preview appears showing a `CANCEL` block naming the service and its scope; click Send Cancellation — expected: the row's status becomes `CANCELLED` and its Cancel button disappears.
+Visit `http://localhost:8080/trip-sheet.html?id=TRIP-0041`, click the Permits tab — expected: `SVC-0041-03`, `SVC-0041-04`, `SVC-0041-05` listed (the three permit-type services), none of the STOP-scoped ones. Click the Services tab — expected: `SVC-0041-01`, `SVC-0041-02` listed instead. On Services, click Add Service, select Service Type "FUEL" — expected: the Scope dropdown only offers `STOP-0041-HKJK` (not any leg or segment options, and the Service Type dropdown itself only offers the 5 non-permit types — no Overflight/Landing Permit options here). Select it — expected: a Required By / Urgency preview appears in the formatted `DD-Mon-YYYY HH:MM`Z style. Click Add Service — expected: the drawer closes and the new service row appears in the table above with status `NOT_STARTED`. Switch to Permits, click Add Service — expected: the Service Type dropdown now only offers the 2 permit types (confirms the drawer-state guard resets correctly across tabs). Back on Services, click Cancel on `SVC-0041-05`... — wait, `SVC-0041-05` is a permit type (OVERFLIGHT_PERMIT), so click Cancel on it from the **Permits** tab instead — expected: a cancellation preview appears showing a `CANCEL` block naming the service and its scope; click Send Cancellation — expected: the row's status becomes `CANCELLED` and its Cancel button disappears.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/lib/templates.js frontend/js/lib/templates.test.js frontend/js/pages/trip-sheet-services.js frontend/js/pages/trip-sheet.js
-git commit -m "Add Services tab, type-driven Add Service drawer, and Cancel action"
+git add frontend/js/lib/templates.js frontend/js/lib/templates.test.js frontend/js/pages/trip-sheet-service-group.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Permits and Services tabs (shared component), type-driven Add Service drawer, and Cancel action"
 ```
 
 ---
 
-### Task 14: Composer drawer + Comms tab
+### Task 14: Composer drawer + Messages tab
 
 **Files:**
-- Create: `actuator/frontend/js/pages/trip-sheet-comms.js`
+- Create: `actuator/frontend/js/pages/trip-sheet-messages.js`
 - Modify: `actuator/frontend/js/pages/trip-sheet.js`
 
 **Interfaces:**
-- Consumes: `buildEmailDraft` from `templates.js` (already built and tested in Task 13 — not recreated here).
-- Produces: `renderCommsTab(container, tripId)`.
+- Consumes: `buildEmailDraft` from `templates.js` (already built and tested in Task 13 — not recreated here), `formatDateTimeZ` (Task 8).
+- Produces: `renderMessagesTab(container, tripId)`.
 
-- [ ] **Step 1: Implement `trip-sheet-comms.js`**
+- [ ] **Step 1: Implement `trip-sheet-messages.js`**
 
 ```js
 import { store } from '../lib/store.js';
 import { buildEmailDraft } from '../lib/templates.js';
 import { escapeHtml } from './ui-helpers.js';
+import { formatDateTimeZ } from '../lib/format.js';
 
 let composerServiceId = null;
 let draftSubject = '';
@@ -2307,12 +2525,12 @@ function scopeLabelFor(scopeType, scopeId) {
   return leg ? `${leg.depIcao} → ${leg.arrIcao} (${iso2})` : scopeId;
 }
 
-export function renderCommsTab(container, tripId) {
+export function renderMessagesTab(container, tripId) {
   const tripComms = store.state.comms.filter((c) => c.tripId === tripId).sort((a, b) => a.timestampZ.localeCompare(b.timestampZ));
   const tripServices = store.state.services.filter((s) => s.tripId === tripId);
 
   container.innerHTML = `
-    <h2>Comms</h2>
+    <h2>Messages</h2>
     <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
       ${tripServices.map((s) => `<button class="btn compose-btn" data-service-id="${s.id}">Compose for ${escapeHtml(s.id)}</button>`).join('')}
     </div>
@@ -2320,7 +2538,7 @@ export function renderCommsTab(container, tripId) {
       ${tripComms.map((c) => `
         <li class="drawer">
           <p><strong>${escapeHtml(c.subject)}</strong></p>
-          <p style="font-size:0.75rem; color:#64748b;">${escapeHtml(c.direction)} · ${escapeHtml(c.kind)} · ${escapeHtml(c.timestampZ)}</p>
+          <p style="font-size:0.75rem; color:#64748b;">${escapeHtml(c.direction)} · ${escapeHtml(c.kind)} · ${escapeHtml(formatDateTimeZ(c.timestampZ))}</p>
           <p>${escapeHtml(c.body)}</p>
         </li>
       `).join('')}
@@ -2385,7 +2603,7 @@ function renderComposer(tripId) {
       <div class="field"><label for="composer-subject">Subject</label><input id="composer-subject" value="${escapeHtml(draftSubject)}" /></div>
       <div class="field"><label for="composer-body">Body</label><textarea id="composer-body" rows="5">${escapeHtml(draftBody)}</textarea></div>
       <button id="send-btn" class="btn btn-primary">Send</button>
-      <button id="cancel-composer-btn" class="btn">Cancel</button>
+      <button id="cancel-composer-btn" class="btn">Close</button>
     </div>
   `;
 
@@ -2413,27 +2631,27 @@ function renderComposer(tripId) {
 
 - [ ] **Step 2: Wire into `trip-sheet.js`**
 
-Add the import and branch:
+Add the import and branch (before the `PLACEHOLDER_TABS` fallback):
 
 ```js
-import { renderCommsTab } from './trip-sheet-comms.js';
+import { renderMessagesTab } from './trip-sheet-messages.js';
 ```
 
 ```js
-  } else if (activeTab === 'comms') {
-    renderCommsTab(container, tripId);
+  } else if (activeTab === 'messages') {
+    renderMessagesTab(container, tripId);
 ```
 
 - [ ] **Step 3: Manually verify**
 
-On the Comms tab for TRIP-0041, click "Compose for SVC-0041-05" — expected: subject pre-fills with `[2608001/SVC-0041-05]` and a REQUEST-mode body. Click Send — expected: the composer closes, a new outbound entry appears in the comms list, and switching to the Services tab shows `SVC-0041-05` now `REQUESTED`. Now click "Compose for SVC-0041-04" (seeded `RECONFIRM_REQUIRED`, `LEG` scope) — expected: the body shows `PREVIOUS ITINERARY` (`2026-08-20T01:00:00.000Z`, from its `basedOnEtdZ`) against `NEW ITINERARY` (LEG-0041-2's current ETD).
+On the Messages tab for TRIP-0041, click "Compose for SVC-0041-05" — expected: subject pre-fills with `[2608001/SVC-0041-05]` and a REQUEST-mode body. Click Send — expected: the composer closes, a new outbound entry appears in the message list, and switching to the Permits tab shows `SVC-0041-05` now `REQUESTED`. Now click "Compose for SVC-0041-04" (seeded `RECONFIRM_REQUIRED`, `LEG` scope) — expected: the body shows `PREVIOUS ITINERARY` (`2026-08-20T01:00:00.000Z`, from its `basedOnEtdZ`) against `NEW ITINERARY` (LEG-0041-2's current ETD).
 
 - [ ] **Step 4: Commit**
 
 ```bash
 cd "C:/Backups/InsiderTechSol/Aviation/actuator"
-git add frontend/js/pages/trip-sheet-comms.js frontend/js/pages/trip-sheet.js
-git commit -m "Add Composer drawer with REQUEST/REVISION modes and correlation token, plus Comms tab"
+git add frontend/js/pages/trip-sheet-messages.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Composer drawer with REQUEST/REVISION modes and correlation token, plus Messages tab"
 ```
 
 ---
@@ -2445,6 +2663,7 @@ git commit -m "Add Composer drawer with REQUEST/REVISION modes and correlation t
 - Modify: `actuator/frontend/js/pages/trip-sheet.js`
 
 **Interfaces:**
+- Consumes: `formatDateTimeZ` (Task 8).
 - Produces: `renderHistoryTab(container, tripId)`.
 
 - [ ] **Step 1: Implement `trip-sheet-history.js`**
@@ -2452,6 +2671,7 @@ git commit -m "Add Composer drawer with REQUEST/REVISION modes and correlation t
 ```js
 import { store } from '../lib/store.js';
 import { escapeHtml } from './ui-helpers.js';
+import { formatDateTimeZ } from '../lib/format.js';
 
 export function renderHistoryTab(container, tripId) {
   const tripRecordIds = new Set([
@@ -2462,6 +2682,9 @@ export function renderHistoryTab(container, tripId) {
     // Includes soft-deleted persons too (not filtered by `removed`) — a removed person's
     // audit entry must stay visible in this trip's history.
     ...store.state.persons.filter((p) => p.tripId === tripId).map((p) => p.id),
+    // Documents/Billing (Tasks 18-19) also audit under this trip's recordId set.
+    ...store.state.documents.filter((d) => d.tripId === tripId).map((d) => d.id),
+    ...store.state.billing.filter((b) => b.tripId === tripId).map((b) => b.id),
   ]);
   const entries = store.state.audit.filter((a) => tripRecordIds.has(a.recordId)).sort((a, b) => b.timestampZ.localeCompare(a.timestampZ));
 
@@ -2472,7 +2695,7 @@ export function renderHistoryTab(container, tripId) {
       <tbody>
         ${entries.map((a) => `
           <tr>
-            <td>${escapeHtml(a.timestampZ)}</td><td>${escapeHtml(a.user)}</td>
+            <td>${escapeHtml(formatDateTimeZ(a.timestampZ))}</td><td>${escapeHtml(a.user)}</td>
             <td>${escapeHtml(a.table)} ${escapeHtml(a.recordId)}</td><td>${escapeHtml(a.field)}</td>
             <td>${escapeHtml(a.oldValue)} → ${escapeHtml(a.newValue)}</td>
           </tr>
@@ -2494,11 +2717,11 @@ import { renderHistoryTab } from './trip-sheet-history.js';
     renderHistoryTab(container, tripId);
 ```
 
-Since every branch in `renderTabContent` is now handled explicitly, replace the final `else` fallback (the "implemented in a later task" placeholder from Task 11) — there should be no remaining unhandled tab.
+The `PLACEHOLDER_TABS` fallback in `renderTabContent` (from Task 11) stays in place after this — `documents` and `billing` are still unbuilt at this point (Tasks 18-19) and still need it.
 
 - [ ] **Step 3: Manually verify**
 
-On the History tab for TRIP-0041, expected: entries for `LEG-0041-2`'s ETD change and `SVC-0041-04`'s flip to `RECONFIRM_REQUIRED` from the seed data, plus any new entries created by Tasks 12/13's manual verification (the roster add/remove, the added service, the sent comm/status change, the Cancel action) — including the removed roster person, even though they no longer appear on the Roster tab itself — newest first.
+On the History tab for TRIP-0041, expected: entries for `LEG-0041-2`'s ETD change and `SVC-0041-04`'s flip to `RECONFIRM_REQUIRED` from the seed data, plus any new entries created by Tasks 12/13's manual verification (the crew/pax add/remove, the added service, the sent message/status change, the Cancel action) — including the removed Crew & Pax person, even though they no longer appear on that tab itself — newest first.
 
 - [ ] **Step 4: Commit**
 
@@ -2554,23 +2777,33 @@ import { escapeHtml } from './ui-helpers.js';
 mountNav();
 
 let step = 1;
-const header = { tripCode: '', clientOperator: '', registration: '', ownerName: '' };
+const header = { clientOperator: '', registration: '', ownerName: '' };
 let draftLegs = [{ callSign: '', depIcao: '', arrIcao: '', etdZ: '', etaZ: '', overflightCountries: [] }];
+
+// Trip codes are auto-generated (numeric YYMMNNN, per the spec's display/input conventions),
+// never user-entered — sequence number is 1-based within the current UTC year+month, counted
+// against trips already in the store.
+function generateTripCode(existingTrips) {
+  const now = new Date();
+  const prefix = `${String(now.getUTCFullYear()).slice(-2)}${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  const countThisMonth = existingTrips.filter((t) => t.tripCode.startsWith(prefix)).length;
+  return `${prefix}${String(countThisMonth + 1).padStart(3, '0')}`;
+}
 
 function render() {
   const container = document.getElementById('wizard-container');
 
   if (step === 1) {
     container.innerHTML = `
-      <div class="field"><label for="tripCode">Trip Code</label><input id="tripCode" value="${escapeHtml(header.tripCode)}" /></div>
       <div class="field"><label for="clientOperator">Client/Operator</label><input id="clientOperator" value="${escapeHtml(header.clientOperator)}" /></div>
-      <div class="field"><label for="registration">Registration</label><input id="registration" value="${escapeHtml(header.registration)}" /></div>
+      <div class="field"><label for="registration">Registration (no dashes)</label><input id="registration" value="${escapeHtml(header.registration)}" /></div>
       <div class="field"><label for="ownerName">Owner</label><input id="ownerName" value="${escapeHtml(header.ownerName)}" /></div>
       <button id="next-to-legs" class="btn btn-primary">Next: Legs</button>
     `;
-    for (const field of ['tripCode', 'clientOperator', 'registration', 'ownerName']) {
-      document.getElementById(field).addEventListener('input', (e) => { header[field] = e.target.value; });
-    }
+    document.getElementById('clientOperator').addEventListener('input', (e) => { header.clientOperator = e.target.value.toUpperCase(); });
+    document.getElementById('ownerName').addEventListener('input', (e) => { header.ownerName = e.target.value.toUpperCase(); });
+    // No-dash convention enforced here, not just uppercased — a pasted "5H-ABC" becomes "5HABC".
+    document.getElementById('registration').addEventListener('input', (e) => { header.registration = e.target.value.toUpperCase().replace(/-/g, ''); });
     document.getElementById('next-to-legs').addEventListener('click', () => { step = 2; render(); });
     return;
   }
@@ -2620,7 +2853,8 @@ function render() {
     <button id="confirm-trip-btn" class="btn btn-primary">Confirm Trip</button>
   `;
   document.getElementById('confirm-trip-btn').addEventListener('click', () => {
-    const trip = store.addTrip({ ...header, status: 'DRAFT', notifyRecipients: [] });
+    const tripCode = generateTripCode(store.state.trips);
+    const trip = store.addTrip({ ...header, tripCode, status: 'DRAFT', notifyRecipients: [] });
     const createdLegs = draftLegs.map((l, i) => store.addLeg({
       tripId: trip.id, sequence: i + 1, callSign: l.callSign, depIcao: l.depIcao, arrIcao: l.arrIcao,
       etdZ: new Date(l.etdZ).toISOString(), etaZ: l.etaZ ? new Date(l.etaZ).toISOString() : null,
@@ -2636,7 +2870,7 @@ render();
 
 - [ ] **Step 3: Manually verify**
 
-Visit `http://localhost:8080/trip-new.html`. Fill in header fields, click Next: Legs, enter Call Sign `TST001`, `HTDA` → `HKJK` with an ETD a few hours before an ETA, click Review Stops — expected: derived stops list shows `HTDA — TURNAROUND` and `HKJK — TURNAROUND`. Click Confirm Trip — expected: the browser navigates to the new trip's Trip Sheet, and its Itinerary tab shows the entered leg with its Call Sign. Repeat leaving the ETA field blank — expected: the stop-review list shows "(arrival TBD)" and the resulting leg's Itinerary row shows the TBD badge.
+Visit `http://localhost:8080/trip-new.html`. Fill in header fields (note there's no Trip Code field — it's auto-generated on confirm), type a registration with a dash (e.g. `5H-XYZ`) and confirm it displays back as `5HXYZ`. Click Next: Legs, enter Call Sign `TST001`, `HTDA` → `HKJK` with an ETD a few hours before an ETA, click Review Stops — expected: derived stops list shows `HTDA — TURNAROUND` and `HKJK — TURNAROUND`. Click Confirm Trip — expected: the browser navigates to the new trip's Trip Sheet, its header shows a numeric `YYMMNNN` trip code (the two-digit current year + two-digit current month, e.g. `2608` for August 2026 + a sequence number one higher than however many seeded/created trips already carry that same year-month prefix — `003` if run in the same year-month as the two seed trips, otherwise `001`), and its Route tab shows the entered leg with its Call Sign. Repeat leaving the ETA field blank — expected: the stop-review list shows "(arrival TBD)" and the resulting leg's Route row shows the TBD badge.
 
 - [ ] **Step 4: Commit**
 
@@ -2655,7 +2889,8 @@ git commit -m "Add trip creation wizard (header, legs, derived-stops review)"
 - Create: `actuator/frontend/reference-airports.html`, `reference-aircraft.html`, `reference-providers.html`, `reference-country-rules.html`
 
 **Interfaces:**
-- Produces: `renderReferencePage({ title, columns, rowsSelector })` where `columns` is `{ key, label }[]` and `rowsSelector` is `(state) => row[]`. Each of the 5 HTML pages calls this with its own config via an inline `<script type="module">`. Also renders a small sub-nav linking across all 5 reference pages — `nav.js`'s top-level "Reference Data" link only reaches `reference-airports.html`, so without this a page like `reference-country-rules.html` would otherwise be reachable only by typing its URL.
+- Consumes: `countryNameFor` (Task 8), for the Country Rules page's country column.
+- Produces: `renderReferencePage({ title, columns, rowsSelector })` where `columns` is `{ key, label, format? }[]` (`format(value, row, state)` is optional — when present it computes the displayed cell value instead of the raw `row[c.key]`, used by Country Rules to show a country name instead of its ISO2 code, per the spec's "country names before ISO2 codes" convention) and `rowsSelector` is `(state) => row[]`. Each of the 5 HTML pages calls this with its own config via an inline `<script type="module">`. Also renders a small sub-nav linking across all 5 reference pages — `nav.js`'s top-level "Reference Data" link only reaches `reference-airports.html`, so without this a page like `reference-country-rules.html` would otherwise be reachable only by typing its URL.
 
 - [ ] **Step 1: Implement `reference.js`**
 
@@ -2684,7 +2919,7 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
       <table>
         <thead><tr>${columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join('')}</tr></thead>
         <tbody>
-          ${rows.map((row) => `<tr>${columns.map((c) => `<td>${escapeHtml(row[c.key] ?? '')}</td>`).join('')}</tr>`).join('')}
+          ${rows.map((row) => `<tr>${columns.map((c) => `<td>${escapeHtml(c.format ? c.format(row[c.key], row, store.state) : (row[c.key] ?? ''))}</td>`).join('')}</tr>`).join('')}
         </tbody>
       </table>
     `;
@@ -2765,11 +3000,14 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
   </main>
   <script type="module">
     import { renderReferencePage } from './js/pages/reference.js';
+    import { countryNameFor } from './js/lib/format.js';
     renderReferencePage({
       title: 'Providers',
       columns: [
         { key: 'name', label: 'Name' }, { key: 'serviceType', label: 'Service Type' },
-        { key: 'scopeIcao', label: 'ICAO Scope' }, { key: 'scopeIso2', label: 'Country Scope' }, { key: 'email', label: 'Email' },
+        { key: 'scopeIcao', label: 'ICAO Scope' },
+        { key: 'scopeIso2', label: 'Country Scope', format: (iso2, row, state) => (iso2 ? countryNameFor(iso2, state.countries) : '') },
+        { key: 'email', label: 'Email' },
       ],
       rowsSelector: (state) => state.providers,
     });
@@ -2793,10 +3031,14 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
   </main>
   <script type="module">
     import { renderReferencePage } from './js/pages/reference.js';
+    import { countryNameFor } from './js/lib/format.js';
     renderReferencePage({
       title: 'Country Rules',
       columns: [
-        { key: 'countryIso2', label: 'Country' }, { key: 'serviceType', label: 'Service Type' },
+        // Country name shown, not the raw ISO2 — per the spec's "country names before ISO2 codes"
+        // display convention; countryIso2 stays the underlying join key, just not what's rendered.
+        { key: 'countryIso2', label: 'Country', format: (iso2, row, state) => countryNameFor(iso2, state.countries) },
+        { key: 'serviceType', label: 'Service Type' },
         { key: 'leadTimeHours', label: 'Lead Time (h)' }, { key: 'workingDaysOnly', label: 'Working Days Only' },
         { key: 'toleranceHours', label: 'Tolerance (h)' }, { key: 'escalationContact', label: 'Escalation Contact' },
       ],
@@ -2835,7 +3077,7 @@ export function renderReferencePage({ title, columns, rowsSelector }) {
 - [ ] **Step 7: Run the full logic-layer test suite**
 
 Run: `npm test` (from `actuator/frontend`)
-Expected: PASS across every suite from Tasks 2-14 (core-logic, reference, trips, scope, stops, store, trips-filter, templates).
+Expected: PASS across every suite built so far (core-logic, format, reference, trips, scope, stops, store, trips-filter, templates). Tasks 18-19 add two more (documents, billing) after this task.
 
 - [ ] **Step 8: Commit**
 
@@ -2847,15 +3089,399 @@ git commit -m "Add Reference Data pages for Airports, Aircraft, Providers, Count
 
 ---
 
+### Task 18: Documents tab
+
+**Files:**
+- Create: `actuator/frontend/js/lib/mock-data/documents.js`
+- Test: `actuator/frontend/js/lib/mock-data/documents.test.js`
+- Create: `actuator/frontend/js/pages/trip-sheet-documents.js`
+- Modify: `actuator/frontend/js/lib/store.js`
+- Modify: `actuator/frontend/js/pages/trip-sheet.js`
+
+**Interfaces:**
+- Consumes: `trips` (Task 4, for the seed integrity test), `store.state.documents`/`store.addDocument`/`store.removeDocument` (already built in Task 7), `formatDateTimeZ` (Task 8).
+- Produces: `export const documents` (Document shape: `{ id, tripId, name, docType, uploadedAtZ, removed? }` — `docType` is free text, not a fixed enum or a reference table, per YAGNI: a real controlled-vocabulary Document Types reference page is more surface area than this phase needs; a `<datalist>` of common values keeps entry fast without hardcoding a closed set in code). `renderDocumentsTab(container, tripId)`.
+
+- [ ] **Step 1: Write the failing integrity tests**
+
+`actuator/frontend/js/lib/mock-data/documents.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { documents } from './documents.js';
+import { trips } from './trips.js';
+
+describe('documents seed data integrity', () => {
+  const tripIds = new Set(trips.map((t) => t.id));
+
+  it('every document references a real trip', () => {
+    for (const d of documents) expect(tripIds.has(d.tripId)).toBe(true);
+  });
+
+  it('every document has a non-empty name, docType, and uploadedAtZ', () => {
+    for (const d of documents) {
+      expect(typeof d.name).toBe('string');
+      expect(d.name.length).toBeGreaterThan(0);
+      expect(typeof d.docType).toBe('string');
+      expect(d.docType.length).toBeGreaterThan(0);
+      expect(typeof d.uploadedAtZ).toBe('string');
+    }
+  });
+
+  it('has at least 2 seeded documents', () => {
+    expect(documents.length).toBeGreaterThanOrEqual(2);
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `npm test -- documents` (from `actuator/frontend`)
+Expected: FAIL.
+
+- [ ] **Step 3: Implement `documents.js`**
+
+```js
+export const documents = [
+  { id: 'DOC-0041-01', tripId: 'TRIP-0041', name: 'AOC CERTIFICATE', docType: 'AOC', uploadedAtZ: '2026-08-01T10:00:00.000Z' },
+  { id: 'DOC-0041-02', tripId: 'TRIP-0041', name: 'INSURANCE CERTIFICATE', docType: 'Insurance', uploadedAtZ: '2026-08-01T10:05:00.000Z' },
+];
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npm test -- documents`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Modify `store.js` to seed `documents` from this file**
+
+Add the import alongside the other mock-data imports:
+
+```js
+import { documents as seedDocuments } from './mock-data/documents.js';
+```
+
+Change the `documents: []` line in `createStore()`'s initial `state` object (from Task 7) to:
+
+```js
+documents: seedDocuments.map((d) => ({ ...d })),
+```
+
+No other change to `store.js` — `addDocument`/`removeDocument` already exist from Task 7.
+
+- [ ] **Step 6: Implement `trip-sheet-documents.js`**
+
+```js
+import { store } from '../lib/store.js';
+import { escapeHtml } from './ui-helpers.js';
+import { formatDateTimeZ } from '../lib/format.js';
+
+let addFormOpen = false;
+
+export function renderDocumentsTab(container, tripId) {
+  const tripDocuments = store.state.documents.filter((d) => d.tripId === tripId && !d.removed);
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Documents</h2>
+      <button id="add-document-btn" class="btn">Add Document</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Uploaded</th><th></th></tr></thead>
+      <tbody>
+        ${tripDocuments.map((d) => `
+          <tr data-document-id="${d.id}">
+            <td>${escapeHtml(d.name)}</td>
+            <td>${escapeHtml(d.docType)}</td>
+            <td>${escapeHtml(formatDateTimeZ(d.uploadedAtZ))}</td>
+            <td><button class="btn remove-document-btn">Remove</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div id="add-document-form"></div>
+  `;
+
+  container.querySelectorAll('.remove-document-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      store.removeDocument(e.target.closest('tr').dataset.documentId, 'Current User');
+    });
+  });
+
+  document.getElementById('add-document-btn').addEventListener('click', () => {
+    addFormOpen = true;
+    renderAddForm(tripId);
+  });
+
+  if (addFormOpen) renderAddForm(tripId);
+}
+
+function renderAddForm(tripId) {
+  const formEl = document.getElementById('add-document-form');
+  formEl.innerHTML = `
+    <div class="drawer">
+      <div class="field">
+        <label for="document-name">Name</label>
+        <input id="document-name" />
+      </div>
+      <div class="field">
+        <label for="document-type">Type</label>
+        <input id="document-type" list="document-type-suggestions" placeholder="e.g. AOC, Insurance, Permit Application" />
+        <datalist id="document-type-suggestions">
+          <option value="AOC"></option>
+          <option value="Insurance"></option>
+          <option value="Permit Application"></option>
+          <option value="Other"></option>
+        </datalist>
+      </div>
+      <button id="confirm-add-document-btn" class="btn btn-primary">Add</button>
+      <button id="cancel-add-document-btn" class="btn">Cancel</button>
+    </div>
+  `;
+
+  document.getElementById('cancel-add-document-btn').addEventListener('click', () => {
+    addFormOpen = false;
+    formEl.innerHTML = '';
+  });
+  document.getElementById('confirm-add-document-btn').addEventListener('click', () => {
+    // UPPERCASE at capture, per the spec's display/input conventions.
+    const name = document.getElementById('document-name').value.trim().toUpperCase();
+    const docType = document.getElementById('document-type').value.trim().toUpperCase();
+    if (!name || !docType) return;
+    addFormOpen = false;
+    store.addDocument({ tripId, name, docType });
+  });
+}
+```
+
+- [ ] **Step 7: Wire into `trip-sheet.js`**
+
+Add the import, and insert the branch before the `PLACEHOLDER_TABS` fallback:
+
+```js
+import { renderDocumentsTab } from './trip-sheet-documents.js';
+```
+
+```js
+  } else if (activeTab === 'documents') {
+    renderDocumentsTab(container, tripId);
+```
+
+- [ ] **Step 8: Manually verify**
+
+On the Documents tab for TRIP-0041, expected: 2 seeded documents (AOC Certificate, Insurance Certificate) with formatted upload dates. Click Add Document, enter a name and type, click Add — expected: the new document appears, name/type shown UPPERCASE. Click Remove on it — expected: it disappears from this tab, and a corresponding entry appears on the History tab.
+
+- [ ] **Step 9: Commit**
+
+```bash
+cd "C:/Backups/InsiderTechSol/Aviation/actuator"
+git add frontend/js/lib/mock-data/documents.js frontend/js/lib/mock-data/documents.test.js frontend/js/lib/store.js frontend/js/pages/trip-sheet-documents.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Documents tab with seeded metadata rows"
+```
+
+---
+
+### Task 19: Billing tab
+
+**Files:**
+- Create: `actuator/frontend/js/lib/mock-data/billing.js`
+- Test: `actuator/frontend/js/lib/mock-data/billing.test.js`
+- Create: `actuator/frontend/js/pages/trip-sheet-billing.js`
+- Modify: `actuator/frontend/js/lib/store.js`
+- Modify: `actuator/frontend/js/pages/trip-sheet.js`
+
+**Interfaces:**
+- Consumes: `trips` (Task 4, for the seed integrity test), `store.state.billing`/`store.addBillingLineItem`/`store.removeBillingLineItem`/`store.updateBillingLineItemStatus` (already built in Task 7).
+- Produces: `export const billing` (BillingLineItem shape: `{ id, tripId, description, amount, currency, status, removed? }`, `status` one of `PENDING`/`INVOICED`/`PAID`). `renderBillingTab(container, tripId)`.
+
+- [ ] **Step 1: Write the failing integrity tests**
+
+`actuator/frontend/js/lib/mock-data/billing.test.js`:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { billing } from './billing.js';
+import { trips } from './trips.js';
+
+describe('billing seed data integrity', () => {
+  const tripIds = new Set(trips.map((t) => t.id));
+
+  it('every line item references a real trip', () => {
+    for (const b of billing) expect(tripIds.has(b.tripId)).toBe(true);
+  });
+
+  it('every line item has a positive amount, a currency, and a valid status', () => {
+    for (const b of billing) {
+      expect(b.amount).toBeGreaterThan(0);
+      expect(typeof b.currency).toBe('string');
+      expect(['PENDING', 'INVOICED', 'PAID']).toContain(b.status);
+    }
+  });
+
+  it('has at least 2 seeded line items', () => {
+    expect(billing.length).toBeGreaterThanOrEqual(2);
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `npm test -- billing` (from `actuator/frontend`)
+Expected: FAIL.
+
+- [ ] **Step 3: Implement `billing.js`**
+
+```js
+export const billing = [
+  { id: 'BILL-0041-01', tripId: 'TRIP-0041', description: 'HANDLING FEE — HKJK', amount: 850, currency: 'USD', status: 'PENDING' },
+  { id: 'BILL-0041-02', tripId: 'TRIP-0041', description: 'FUEL UPLIFT — HKJK', amount: 4200, currency: 'USD', status: 'PENDING' },
+];
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npm test -- billing`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Modify `store.js` to seed `billing` from this file**
+
+Add the import alongside the other mock-data imports:
+
+```js
+import { billing as seedBilling } from './mock-data/billing.js';
+```
+
+Change the `billing: []` line in `createStore()`'s initial `state` object (from Task 7) to:
+
+```js
+billing: seedBilling.map((b) => ({ ...b })),
+```
+
+No other change to `store.js` — `addBillingLineItem`/`removeBillingLineItem`/`updateBillingLineItemStatus` already exist from Task 7.
+
+- [ ] **Step 6: Implement `trip-sheet-billing.js`**
+
+```js
+import { store } from '../lib/store.js';
+import { escapeHtml } from './ui-helpers.js';
+
+const STATUSES = ['PENDING', 'INVOICED', 'PAID'];
+let addFormOpen = false;
+
+export function renderBillingTab(container, tripId) {
+  const tripBilling = store.state.billing.filter((b) => b.tripId === tripId && !b.removed);
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Billing</h2>
+      <button id="add-billing-btn" class="btn">Add Line Item</button>
+    </div>
+    <table>
+      <thead><tr><th>Description</th><th>Amount</th><th>Currency</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${tripBilling.map((b) => `
+          <tr data-billing-id="${b.id}">
+            <td>${escapeHtml(b.description)}</td>
+            <td>${escapeHtml(b.amount)}</td>
+            <td>${escapeHtml(b.currency)}</td>
+            <td>
+              <select class="status-select">
+                ${STATUSES.map((s) => `<option value="${s}" ${s === b.status ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </td>
+            <td><button class="btn remove-billing-btn">Remove</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div id="add-billing-form"></div>
+  `;
+
+  container.querySelectorAll('.status-select').forEach((sel) => {
+    sel.addEventListener('change', (e) => {
+      const lineItemId = e.target.closest('tr').dataset.billingId;
+      store.updateBillingLineItemStatus(lineItemId, e.target.value, 'Current User');
+    });
+  });
+
+  container.querySelectorAll('.remove-billing-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      store.removeBillingLineItem(e.target.closest('tr').dataset.billingId, 'Current User');
+    });
+  });
+
+  document.getElementById('add-billing-btn').addEventListener('click', () => {
+    addFormOpen = true;
+    renderAddForm(tripId);
+  });
+
+  if (addFormOpen) renderAddForm(tripId);
+}
+
+function renderAddForm(tripId) {
+  const formEl = document.getElementById('add-billing-form');
+  formEl.innerHTML = `
+    <div class="drawer">
+      <div class="field"><label for="billing-description">Description</label><input id="billing-description" /></div>
+      <div class="field"><label for="billing-amount">Amount</label><input id="billing-amount" type="number" min="0" step="0.01" /></div>
+      <div class="field"><label for="billing-currency">Currency</label><input id="billing-currency" value="USD" maxlength="3" /></div>
+      <button id="confirm-add-billing-btn" class="btn btn-primary">Add</button>
+      <button id="cancel-add-billing-btn" class="btn">Cancel</button>
+    </div>
+  `;
+
+  document.getElementById('cancel-add-billing-btn').addEventListener('click', () => {
+    addFormOpen = false;
+    formEl.innerHTML = '';
+  });
+  document.getElementById('confirm-add-billing-btn').addEventListener('click', () => {
+    // UPPERCASE at capture, per the spec's display/input conventions (currency/description are text; amount is not).
+    const description = document.getElementById('billing-description').value.trim().toUpperCase();
+    const amount = Number(document.getElementById('billing-amount').value);
+    const currency = document.getElementById('billing-currency').value.trim().toUpperCase();
+    if (!description || !(amount > 0) || !currency) return;
+    addFormOpen = false;
+    store.addBillingLineItem({ tripId, description, amount, currency, status: 'PENDING' });
+  });
+}
+```
+
+- [ ] **Step 7: Wire into `trip-sheet.js`**
+
+Add the import, and insert the branch before the `PLACEHOLDER_TABS` fallback — this is the last of the 8 tab branches, so after this task `renderTabContent` has one `else if` per tab and the fallback is dead code kept only as a defensive default:
+
+```js
+import { renderBillingTab } from './trip-sheet-billing.js';
+```
+
+```js
+  } else if (activeTab === 'billing') {
+    renderBillingTab(container, tripId);
+```
+
+- [ ] **Step 8: Manually verify**
+
+On the Billing tab for TRIP-0041, expected: 2 seeded line items (Handling fee, Fuel uplift) both `PENDING`. Change one's status to `INVOICED` via the dropdown — expected: it updates immediately (re-render is triggered by `updateBillingLineItemStatus`'s `notify()`). Click Add Line Item, fill in description/amount/currency, click Add — expected: the new row appears with status `PENDING`. Click Remove on it — expected: it disappears from this tab, and a corresponding entry appears on the History tab.
+
+- [ ] **Step 9: Commit**
+
+```bash
+cd "C:/Backups/InsiderTechSol/Aviation/actuator"
+git add frontend/js/lib/mock-data/billing.js frontend/js/lib/mock-data/billing.test.js frontend/js/lib/store.js frontend/js/pages/trip-sheet-billing.js frontend/js/pages/trip-sheet.js
+git commit -m "Add Billing tab with seeded line items"
+```
+
+---
+
 ## Post-plan verification
 
-After Task 17, with the static server still running (`npx http-server actuator/frontend -p 8080` from Task 9), walk the full golden path:
+After Task 19, with the static server still running (`npx http-server actuator/frontend -p 8080` from Task 9), walk the full golden path:
 
-1. `http://localhost:8080/index.html` — Action Board shows unconfirmed seeded services, sorted by urgency, excluding the two `CONFIRMED` ones.
+1. `http://localhost:8080/index.html` — Action Board shows unconfirmed seeded services, sorted by urgency, excluding the two `CONFIRMED` ones, with formatted `DD-Mon-YYYY HH:MM`Z deadlines.
 2. `http://localhost:8080/trips.html` — both seeded trips listed; search and status filter both work; "New Trip" link present.
-3. `http://localhost:8080/trip-sheet.html?id=TRIP-0041` — all 5 tabs render. **Itinerary:** each leg shows its Call Sign; LEG-0041-3's ETA shows TBD; filling it in clears the badge; editing LEG-0041-2's ETD by more than its tightest attached service's tolerance flips that service to Re-confirm Required and it reappears on the Action Board; Rebuild Stops runs without error. **Roster:** 5 seeded people with role labels; add and remove both work. **Services:** Add Service only offers valid scope candidates per selected type; Cancel on a service shows a CANCEL-mode preview and sets it to Cancelled on send. **Comms:** Composer pre-fills the correlation token in REQUEST mode by default, and REVISION mode (previous vs. new itinerary) when opened for the seeded `RECONFIRM_REQUIRED` service; Send logs a Comm and updates the service's status. **History:** shows all of the above as audit entries, newest first — including the removed roster person, whose entry stays visible even though they're gone from the Roster tab.
-4. `http://localhost:8080/trip-new.html` — wizard completes header → legs (Call Sign, ETA optional) → derived-stops review → Confirm Trip, and lands on the new trip's Trip Sheet with the entered leg visible, TBD badge included if ETA was left blank.
-5. All five `reference-*.html` pages render their seeded rows with the shared nav present, and each page's sub-nav links to the other four.
+3. `http://localhost:8080/trip-sheet.html?id=TRIP-0041` — all 8 tabs render, plus the live deadline rail in the header. **Route:** each leg shows its Call Sign and formatted ETD/ETA labels; `LEG-0041-3`'s ETA shows TBD; filling it in clears the badge; editing `LEG-0041-2`'s ETD by more than its tightest attached service's tolerance flips that service to Re-confirm Required, it reappears on the Action Board, and the deadline rail updates. **Permits:** the 3 permit-type services only. **Services:** the 2 non-permit services only; Add Service on either tab only offers scope candidates and service types valid for that tab; Cancel on a service shows a CANCEL-mode preview and sets it to Cancelled on send. **Crew & Pax:** 5 seeded people with role labels; add and remove both work, names shown UPPERCASE. **Documents:** 2 seeded metadata rows; add/remove work. **Billing:** 2 seeded line items; status dropdown and add/remove work. **Messages:** Composer pre-fills the correlation token in REQUEST mode by default, and REVISION mode (previous vs. new itinerary) when opened for the seeded `RECONFIRM_REQUIRED` service; Send logs a message and updates the service's status. **History:** shows all of the above as audit entries, newest first, with formatted timestamps — including the removed Crew & Pax person, Document, and Billing line item, whose entries stay visible even though they're gone from their own tabs.
+4. `http://localhost:8080/trip-new.html` — wizard has no Trip Code field (auto-generated numeric `YYMMNNN`); a dash typed into Registration is stripped; wizard completes header → legs (Call Sign, ETA optional) → derived-stops review → Confirm Trip, and lands on the new trip's Trip Sheet with the entered leg visible, TBD badge included if ETA was left blank.
+5. All five `reference-*.html` pages render their seeded rows with the shared nav present, each page's sub-nav links to the other four, Country Rules shows country names (not ISO2) in its Country column, and Airports/Providers show ICAO before IATA / country names before ISO2 where applicable.
 
 ## Follow-up: Next.js conversion
 
