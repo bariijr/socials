@@ -1,7 +1,8 @@
 import { store } from '../lib/store.js';
-import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
+import { computeRequiredByZ, computeUrgency, resolveCountryRuleForService } from '../lib/core-logic.js';
 import { mountNav } from './nav.js';
 import { urgencyBadgeHtml, escapeHtml } from './ui-helpers.js';
+import { formatDateTimeZ } from '../lib/format.js';
 
 function render() {
   mountNav();
@@ -9,7 +10,9 @@ function render() {
   const rows = store.state.services
     .filter((svc) => svc.status !== 'CONFIRMED' && svc.status !== 'CANCELLED' && svc.status !== 'NOT_REQUIRED')
     .map((svc) => {
-      const rule = store.state.countryRules.find((r) => r.serviceType === svc.serviceType);
+      // resolveCountryRuleForService resolves the rule for THIS service's actual country, not
+      // just any rule sharing its serviceType — see the comment on that function (Task 2).
+      const rule = resolveCountryRuleForService(svc, store.state.countryRules, store.state.legs, store.state.stops, store.state.airports);
       const requiredByZ = rule ? computeRequiredByZ(svc.basedOnEtdZ, rule) : svc.basedOnEtdZ;
       const urgency = computeUrgency(requiredByZ, now);
       const trip = store.state.trips.find((t) => t.id === svc.tripId);
@@ -27,7 +30,7 @@ function render() {
             <td>${trip ? `<a href="trip-sheet.html?id=${encodeURIComponent(trip.id)}">${escapeHtml(trip.tripCode)}</a>` : escapeHtml(svc.tripId)}</td>
             <td>${escapeHtml(svc.serviceType)}</td>
             <td>${escapeHtml(svc.status)}</td>
-            <td>${escapeHtml(requiredByZ)}</td>
+            <td>${escapeHtml(formatDateTimeZ(requiredByZ))}</td>
             <td>${urgencyBadgeHtml(urgency)}</td>
           </tr>
         `).join('')}
