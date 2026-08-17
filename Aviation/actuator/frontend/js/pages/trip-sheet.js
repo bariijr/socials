@@ -4,6 +4,7 @@ import { escapeHtml } from './ui-helpers.js';
 import { formatDateTimeZ } from '../lib/format.js';
 import { computeRequiredByZ, computeUrgency, resolveCountryRuleForService } from '../lib/core-logic.js';
 import { renderRouteTab } from './trip-sheet-route.js';
+import { renderCrewPaxTab } from './trip-sheet-crew-pax.js';
 
 const tripId = new URLSearchParams(window.location.search).get('id');
 let activeTab = 'route';
@@ -19,7 +20,7 @@ const TABS = [
   { key: 'history', label: 'History' },
 ];
 
-const PLACEHOLDER_TABS = new Set(['permits', 'services', 'crew-pax', 'documents', 'billing', 'messages', 'history']);
+const PLACEHOLDER_TABS = new Set(['permits', 'services', 'documents', 'billing', 'messages', 'history']);
 
 function renderHeader() {
   const trip = store.state.trips.find((t) => t.id === tripId);
@@ -67,6 +68,8 @@ function renderTabContent() {
   const container = document.getElementById('trip-tab-content');
   if (activeTab === 'route') {
     renderRouteTab(container, tripId);
+  } else if (activeTab === 'crew-pax') {
+    renderCrewPaxTab(container, tripId);
   } else if (PLACEHOLDER_TABS.has(activeTab)) {
     container.innerHTML = `<p>${escapeHtml(activeTab)} tab — implemented in a later task.</p>`;
   }
