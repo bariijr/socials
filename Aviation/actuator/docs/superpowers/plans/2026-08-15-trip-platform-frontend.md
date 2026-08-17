@@ -847,10 +847,12 @@ describe('deriveStopsFromLegs', () => {
   });
 
   it('leaves arrZ and groundTimeHours null for a mid-route stop when the feeding leg has no ETA yet (TBD)', () => {
-    const tbdLegs = [legs[0], { ...legs[1], etaZ: null }];
+    // legs[0] (HTDA -> HKJK) feeds the mid-route HKJK stop (result[1]) — nulling ITS etaZ, not
+    // legs[1]'s, is what actually exercises the mid-route null-guard branch, not the final-stop one.
+    const tbdLegs = [{ ...legs[0], etaZ: null }, legs[1]];
     const result = deriveStopsFromLegs('T1', tbdLegs);
-    expect(result[2].arrZ).toBeNull();
-    expect(result[2].groundTimeHours).toBeNull();
+    expect(result[1].arrZ).toBeNull();
+    expect(result[1].groundTimeHours).toBeNull();
   });
 
   it('leaves the final stop\'s arrZ null when the last leg has no ETA yet (TBD)', () => {
