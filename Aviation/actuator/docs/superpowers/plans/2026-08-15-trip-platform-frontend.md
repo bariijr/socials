@@ -196,7 +196,7 @@ git commit -m "Scaffold static HTML frontend with Vitest tooling for the logic l
 - Test: `actuator/frontend/js/lib/core-logic.test.js`
 
 **Interfaces:**
-- Produces: `computeRequiredByZ(basedOnEtdZ, rule)`, `computeUrgency(requiredByZ, nowZ)`, `needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours)`. `rule` is `{ leadTimeHours: number, workingDaysOnly: boolean }` (a country-rule object — see Task 3's shape). Consumed by `store.js` (Task 7), `action-board.js` (Task 9), `trip-sheet-service-group.js` (Task 13).
+- Produces: `computeRequiredByZ(basedOnEtdZ, rule)`, `computeUrgency(requiredByZ, nowZ)`, `needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours)`, `resolveCountryRuleForService(service, countryRules, legs, stops, airports)`. `rule` is `{ leadTimeHours: number, workingDaysOnly: boolean }` (a country-rule object — see Task 3's shape). `resolveCountryRuleForService` finds the ONE `CountryRule` that actually applies to a given service — a `CountryRule` is keyed by `(countryIso2, serviceType)`, not `serviceType` alone (there are multiple rules per service type, one per country), so callers must resolve the specific country a service is scoped to before looking up its rule; `computeRequiredByZ`/`computeUrgency` alone can't do this because they don't know the service's scope. Consumed by `store.js` (Task 7), `action-board.js` (Task 9), `trip-sheet.js`'s deadline rail (Task 11), `trip-sheet-service-group.js` (Task 13).
 
 Domain shapes used across this plan (documented once here, not re-declared per file — plain JS, no compile-time enforcement, but every mock-data and store file below conforms to these):
 
@@ -271,6 +271,50 @@ describe('needsReconfirm', () => {
     expect(needsReconfirm('2026-08-20T12:00:00.000Z', '2026-08-20T15:30:00.000Z', 2)).toBe(true);
   });
 });
+
+describe('resolveCountryRuleForService', () => {
+  const countryRules = [
+    { id: 'CR-TZ-OVERFLIGHT', countryIso2: 'TZ', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 24, workingDaysOnly: false, toleranceHours: 4, docsRequired: [], escalationContact: 'x@example.com' },
+    { id: 'CR-ET-OVERFLIGHT', countryIso2: 'ET', serviceType: 'OVERFLIGHT_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 6, docsRequired: [], escalationContact: 'x@example.com' },
+    { id: 'CR-EG-LAND', countryIso2: 'EG', serviceType: 'LANDING_PERMIT', leadTimeHours: 72, workingDaysOnly: true, toleranceHours: 4, docsRequired: [], escalationContact: 'x@example.com' },
+    { id: 'CR-KE-FUEL', countryIso2: 'KE', serviceType: 'FUEL', leadTimeHours: 12, workingDaysOnly: false, toleranceHours: 2, docsRequired: [], escalationContact: 'x@example.com' },
+  ];
+  const airports = [
+    { icao: 'HTDA', iata: 'DAR', name: 'Julius Nyerere Intl', country: 'Tanzania', iso2: 'TZ', tz: 'Africa/Dar_es_Salaam' },
+    { icao: 'HKJK', iata: 'NBO', name: 'Jomo Kenyatta Intl', country: 'Kenya', iso2: 'KE', tz: 'Africa/Nairobi' },
+    { icao: 'HECA', iata: 'CAI', name: 'Cairo Intl', country: 'Egypt', iso2: 'EG', tz: 'Africa/Cairo' },
+  ];
+  const legs = [
+    { id: 'L1', tripId: 'T1', sequence: 1, callSign: 'X', depIcao: 'HTDA', arrIcao: 'HKJK', etdZ: '2026-08-20T05:00:00.000Z', etaZ: '2026-08-20T06:15:00.000Z', overflightCountries: ['ET'], revision: 0 },
+    { id: 'L2', tripId: 'T1', sequence: 2, callSign: 'X', depIcao: 'HKJK', arrIcao: 'HECA', etdZ: '2026-08-21T05:00:00.000Z', etaZ: '2026-08-21T08:00:00.000Z', overflightCountries: [], revision: 0 },
+  ];
+  const stops = [
+    { id: 'S1', tripId: 'T1', icao: 'HKJK', arrZ: '2026-08-20T06:15:00.000Z', depZ: '2026-08-21T05:00:00.000Z', groundTimeHours: 22.75, purpose: 'NIGHT_STOP' },
+  ];
+
+  it('resolves a SEGMENT-scoped service by the country embedded in scopeId (not the first same-serviceType rule)', () => {
+    const svc = { id: 'SVC-1', tripId: 'T1', scopeType: 'SEGMENT', scopeId: 'L1:ET', serviceType: 'OVERFLIGHT_PERMIT', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-20T05:00:00.000Z', assignedTo: null };
+    const rule = resolveCountryRuleForService(svc, countryRules, legs, stops, airports);
+    expect(rule.id).toBe('CR-ET-OVERFLIGHT');
+  });
+
+  it('resolves a LEG-scoped service by the arrival airport\'s country', () => {
+    const svc = { id: 'SVC-2', tripId: 'T1', scopeType: 'LEG', scopeId: 'L2', serviceType: 'LANDING_PERMIT', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-21T05:00:00.000Z', assignedTo: null };
+    const rule = resolveCountryRuleForService(svc, countryRules, legs, stops, airports);
+    expect(rule.id).toBe('CR-EG-LAND');
+  });
+
+  it('resolves a STOP-scoped service by the stop\'s airport country', () => {
+    const svc = { id: 'SVC-3', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'FUEL', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-21T05:00:00.000Z', assignedTo: null };
+    const rule = resolveCountryRuleForService(svc, countryRules, legs, stops, airports);
+    expect(rule.id).toBe('CR-KE-FUEL');
+  });
+
+  it('returns null when no rule matches the resolved country/serviceType pair, rather than falling back to an unrelated rule', () => {
+    const svc = { id: 'SVC-4', tripId: 'T1', scopeType: 'STOP', scopeId: 'S1', serviceType: 'CUSTOMS', providerId: null, status: 'NOT_STARTED', refNumber: null, basedOnEtdZ: '2026-08-21T05:00:00.000Z', assignedTo: null };
+    expect(resolveCountryRuleForService(svc, countryRules, legs, stops, airports)).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -313,12 +357,35 @@ export function needsReconfirm(basedOnEtdZ, currentEtdZ, toleranceHours) {
   const diffHours = Math.abs(new Date(currentEtdZ).getTime() - new Date(basedOnEtdZ).getTime()) / 3_600_000;
   return diffHours > toleranceHours;
 }
+
+// A CountryRule is keyed by (countryIso2, serviceType) — there are multiple rules per
+// serviceType, one per country, so a lookup that filters on serviceType alone (e.g.
+// `countryRules.find(r => r.serviceType === svc.serviceType)`) silently grabs whichever rule
+// happens to be first in the array, not the one for this service's actual country. This
+// resolves the country first, from whichever entity the service is scoped to, then looks up
+// the (country, serviceType) pair.
+export function resolveCountryRuleForService(service, countryRules, legs, stops, airports) {
+  let countryIso2 = null;
+  if (service.scopeType === 'SEGMENT') {
+    countryIso2 = service.scopeId.split(':')[1];
+  } else if (service.scopeType === 'LEG') {
+    const leg = legs.find((l) => l.id === service.scopeId);
+    const airport = leg ? airports.find((a) => a.icao === leg.arrIcao) : null;
+    countryIso2 = airport ? airport.iso2 : null;
+  } else if (service.scopeType === 'STOP') {
+    const stop = stops.find((s) => s.id === service.scopeId);
+    const airport = stop ? airports.find((a) => a.icao === stop.icao) : null;
+    countryIso2 = airport ? airport.iso2 : null;
+  }
+  if (!countryIso2) return null;
+  return countryRules.find((r) => r.countryIso2 === countryIso2 && r.serviceType === service.serviceType) ?? null;
+}
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- core-logic`
-Expected: PASS (6 tests).
+Expected: PASS (12 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1166,7 +1233,7 @@ import { providers } from './mock-data/providers.js';
 import { personRoles } from './mock-data/personRoles.js';
 import { trips as seedTrips, legs as seedLegs, stops as seedStops, services as seedServices, comms as seedComms, auditEntries as seedAudit } from './mock-data/trips.js';
 import { persons as seedPersons } from './mock-data/persons.js';
-import { needsReconfirm } from './core-logic.js';
+import { needsReconfirm, resolveCountryRuleForService } from './core-logic.js';
 import { diffStopsForRebuild } from './stops.js';
 
 let idCounter = 0;
@@ -1251,7 +1318,7 @@ export function createStore() {
 
     for (const svc of state.services) {
       if (svc.status !== 'CONFIRMED') continue;
-      const rule = state.countryRules.find((r) => r.serviceType === svc.serviceType);
+      const rule = resolveCountryRuleForService(svc, state.countryRules, state.legs, state.stops, state.airports);
       const tolerance = rule ? rule.toleranceHours : 0;
       const affects =
         (svc.scopeType === 'LEG' && svc.scopeId === legId) ||
@@ -1537,7 +1604,7 @@ git commit -m "Add shared nav bar and escapeHtml/urgencyBadgeHtml page helpers"
 - Create: `actuator/frontend/js/pages/action-board.js`
 
 **Interfaces:**
-- Consumes: `store` (Task 7), `computeRequiredByZ`/`computeUrgency` (Task 2), `mountNav`/`escapeHtml`/`urgencyBadgeHtml` (Task 8).
+- Consumes: `store` (Task 7), `computeRequiredByZ`/`computeUrgency`/`resolveCountryRuleForService` (Task 2), `mountNav`/`escapeHtml`/`urgencyBadgeHtml` (Task 8), `formatDateTimeZ` (Task 8).
 - Produces: renders into `#action-board-table` on `index.html`. No exported functions — this is a page entry script.
 
 - [ ] **Step 1: Replace `index.html`**
@@ -1565,9 +1632,10 @@ git commit -m "Add shared nav bar and escapeHtml/urgencyBadgeHtml page helpers"
 
 ```js
 import { store } from '../lib/store.js';
-import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
+import { computeRequiredByZ, computeUrgency, resolveCountryRuleForService } from '../lib/core-logic.js';
 import { mountNav } from './nav.js';
 import { urgencyBadgeHtml, escapeHtml } from './ui-helpers.js';
+import { formatDateTimeZ } from '../lib/format.js';
 
 function render() {
   mountNav();
@@ -1575,7 +1643,9 @@ function render() {
   const rows = store.state.services
     .filter((svc) => svc.status !== 'CONFIRMED' && svc.status !== 'CANCELLED' && svc.status !== 'NOT_REQUIRED')
     .map((svc) => {
-      const rule = store.state.countryRules.find((r) => r.serviceType === svc.serviceType);
+      // resolveCountryRuleForService resolves the rule for THIS service's actual country, not
+      // just any rule sharing its serviceType — see the comment on that function (Task 2).
+      const rule = resolveCountryRuleForService(svc, store.state.countryRules, store.state.legs, store.state.stops, store.state.airports);
       const requiredByZ = rule ? computeRequiredByZ(svc.basedOnEtdZ, rule) : svc.basedOnEtdZ;
       const urgency = computeUrgency(requiredByZ, now);
       const trip = store.state.trips.find((t) => t.id === svc.tripId);
@@ -1593,7 +1663,7 @@ function render() {
             <td>${trip ? `<a href="trip-sheet.html?id=${encodeURIComponent(trip.id)}">${escapeHtml(trip.tripCode)}</a>` : escapeHtml(svc.tripId)}</td>
             <td>${escapeHtml(svc.serviceType)}</td>
             <td>${escapeHtml(svc.status)}</td>
-            <td>${escapeHtml(requiredByZ)}</td>
+            <td>${escapeHtml(formatDateTimeZ(requiredByZ))}</td>
             <td>${urgencyBadgeHtml(urgency)}</td>
           </tr>
         `).join('')}
@@ -1895,7 +1965,7 @@ import { store } from '../lib/store.js';
 import { mountNav } from './nav.js';
 import { escapeHtml } from './ui-helpers.js';
 import { formatDateTimeZ } from '../lib/format.js';
-import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
+import { computeRequiredByZ, computeUrgency, resolveCountryRuleForService } from '../lib/core-logic.js';
 import { renderRouteTab } from './trip-sheet-route.js';
 
 const tripId = new URLSearchParams(window.location.search).get('id');
@@ -1934,7 +2004,7 @@ function renderDeadlineRail(trip) {
   const rows = store.state.services
     .filter((s) => s.tripId === trip.id && !['CONFIRMED', 'CANCELLED', 'NOT_REQUIRED'].includes(s.status))
     .map((svc) => {
-      const rule = store.state.countryRules.find((r) => r.serviceType === svc.serviceType);
+      const rule = resolveCountryRuleForService(svc, store.state.countryRules, store.state.legs, store.state.stops, store.state.airports);
       const requiredByZ = rule ? computeRequiredByZ(svc.basedOnEtdZ, rule) : svc.basedOnEtdZ;
       return { svc, requiredByZ, urgency: computeUrgency(requiredByZ, new Date().toISOString()) };
     })
@@ -2296,7 +2366,7 @@ Expected: PASS (4 tests).
 ```js
 import { store } from '../lib/store.js';
 import { getScopeCandidates, scopeTypeForServiceType } from '../lib/scope.js';
-import { computeRequiredByZ, computeUrgency } from '../lib/core-logic.js';
+import { computeRequiredByZ, computeUrgency, resolveCountryRuleForService } from '../lib/core-logic.js';
 import { buildEmailDraft } from '../lib/templates.js';
 import { escapeHtml } from './ui-helpers.js';
 import { formatDateTimeZ, countryNameFor } from '../lib/format.js';
@@ -2484,7 +2554,14 @@ function renderDrawer(tripId, serviceTypes) {
   const candidates = getScopeCandidates(drawerServiceType, tripLegs, tripStops);
   const candidateScopeType = scopeTypeForServiceType(drawerServiceType);
   const basedOnEtdZ = resolveBasedOnEtdZ(drawerServiceType, drawerScopeId, tripLegs, tripStops);
-  const rule = store.state.countryRules.find((r) => r.serviceType === drawerServiceType);
+  // No full Service object exists yet at preview time — pass a minimal pseudo-object carrying
+  // only the 3 fields resolveCountryRuleForService reads (scopeType/scopeId/serviceType), so the
+  // preview resolves the rule for the country the candidate scope actually points at, not just
+  // whichever rule happens to share this serviceType (see the resolver's doc comment, Task 2).
+  const rule = resolveCountryRuleForService(
+    { scopeType: candidateScopeType, scopeId: drawerScopeId, serviceType: drawerServiceType },
+    store.state.countryRules, tripLegs, tripStops, store.state.airports,
+  );
 
   let preview = null;
   if (basedOnEtdZ && rule) {
