@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { LegsModule } from './legs/legs.module';
+import { PermitsModule } from './permits/permits.module';
 
 @Controller('health')
 class HealthController {
@@ -25,6 +26,7 @@ class HealthController {
     UsersModule,
     AuthModule,
     LegsModule,
+    PermitsModule,
   ],
   controllers: [HealthController],
 })
