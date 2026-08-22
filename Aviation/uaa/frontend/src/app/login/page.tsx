@@ -23,18 +23,39 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>UAA Coordinator — Sign in</h1>
-      <label>
-        Username
-        <input value={username} onChange={(e) => setUsername(e.target.value)} />
-      </label>
-      <label>
-        Password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit">Sign in</button>
-    </form>
+    <div className="login-shell">
+      <form className="login-card" onSubmit={handleSubmit}>
+        <p className="login-eyebrow">UAA Coordinator</p>
+        <h1 className="login-title">Sign in</h1>
+        <div className="runway-rule" />
+        <div className="field">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {error && (
+          <p className="login-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="btn-primary" type="submit">
+          Sign in
+        </button>
+      </form>
+    </div>
   );
 }
