@@ -437,16 +437,17 @@ git commit -m "Scaffold NestJS backend, Next.js frontend, and Docker Compose for
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { User } from '../users/user.entity';
-import { Leg } from '../legs/leg.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [User, Leg],
+  entities: [User],
   migrations: ['migrations/*.ts'],
   synchronize: false,
 });
 ```
+
+Note: this does **not** yet import `Leg` — that entity doesn't exist until Task 4, which adds it via an explicit modify step (see Task 4 Step 2). Do not import `Leg` here; it would fail to compile against Task 2's own file tree.
 
 - [ ] **Step 2: Create the User entity**
 
@@ -792,7 +793,7 @@ git commit -m "Add JWT auth: login endpoint, password verification, guard"
 **Files:**
 - Create: `backend/src/legs/leg.entity.ts`
 - Create: `backend/migrations/1755820800001-CreateLegs.ts`
-- Modify: `backend/src/database/data-source.ts:1-11` (already imports `Leg` from Task 2 Step 1 — no change needed, confirmed in Step 1 below)
+- Modify: `backend/src/database/data-source.ts` (Task 2 created this importing only `User`; this task adds the `Leg` import and adds it to the `entities` array — see Step 2)
 
 **Interfaces:**
 - Produces: `Leg` entity with the full MAYFLY-mirrored column set (see spec's Data model section) — every field name below is what later tasks (Legs service/controller, seed script, frontend) reference verbatim.
@@ -942,7 +943,27 @@ export class Leg {
 }
 ```
 
-- [ ] **Step 2: Write the Legs migration**
+- [ ] **Step 2: Modify `data-source.ts` to register the `Leg` entity**
+
+Task 2 created this file importing only `User` (see the note on Task 2 Step 1 — `Leg` didn't exist yet). Now that it does, update it:
+
+`backend/src/database/data-source.ts`:
+```typescript
+import 'reflect-metadata';
+import { DataSource } from 'typeorm';
+import { User } from '../users/user.entity';
+import { Leg } from '../legs/leg.entity';
+
+export const AppDataSource = new DataSource({
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
+  entities: [User, Leg],
+  migrations: ['migrations/*.ts'],
+  synchronize: false,
+});
+```
+
+- [ ] **Step 3: Write the Legs migration**
 
 `backend/migrations/1755820800001-CreateLegs.ts`:
 ```typescript
@@ -1010,7 +1031,7 @@ export class CreateLegs1755820800001 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 3: Run the migration and verify the table exists**
+- [ ] **Step 4: Run the migration and verify the table exists**
 
 Run:
 ```bash
@@ -1020,10 +1041,10 @@ docker compose exec postgres psql -U uaa -d uaa -c '\d legs'
 ```
 Expected: `\d legs` prints all 41 columns above plus `id`, `created_at`, `updated_at`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add backend/src/legs/leg.entity.ts backend/migrations/1755820800001-CreateLegs.ts
+git add backend/src/legs/leg.entity.ts backend/migrations/1755820800001-CreateLegs.ts backend/src/database/data-source.ts
 git commit -m "Add Leg entity and migration, mirroring MAYFLY's column grain"
 ```
 
