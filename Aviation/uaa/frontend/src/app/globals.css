@@ -329,3 +329,62 @@ table.legs-table {
   font-size: 12px;
   background: rgba(255, 176, 32, 0.05);
 }
+
+/* ---------- Leg detail ---------- */
+
+.leg-detail-summary {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.leg-detail-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.leg-detail-summary .col-muted {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.permits-section {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 16px 20px 20px;
+  margin: 0;
+}
+
+.permits-section legend {
+  padding: 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.permits-table {
+  margin-top: 16px;
+}
+
+.permits-table input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}

@@ -85,3 +85,53 @@ export async function createLeg(token: string, input: CreateLegInput): Promise<L
   if (!response.ok) throw new Error('Failed to create leg');
   return response.json();
 }
+
+export interface PermitRequest {
+  id: string;
+  legId: string;
+  country: string;
+  status: 'NOT_STARTED' | 'REQUESTED' | 'CHASING' | 'CONFIRMED' | 'RECONFIRM_REQUIRED' | 'CANCELLED';
+  requiredByZ: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  clearanceNumber: string | null;
+}
+
+export interface UpdatePermitRequestInput {
+  status?: PermitRequest['status'];
+  clearanceNumber?: string;
+  validFrom?: string;
+  validTo?: string;
+}
+
+export async function listPermitRequests(token: string, legId: string): Promise<PermitRequest[]> {
+  const response = await fetch(`${API_URL}/legs/${legId}/permit-requests`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to load permit requests');
+  return response.json();
+}
+
+export async function createPermitRequest(token: string, legId: string, country: string): Promise<PermitRequest> {
+  const response = await fetch(`${API_URL}/legs/${legId}/permit-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ country }),
+  });
+  if (!response.ok) throw new Error('Failed to create permit request');
+  return response.json();
+}
+
+export async function updatePermitRequest(
+  token: string,
+  id: string,
+  input: UpdatePermitRequestInput,
+): Promise<PermitRequest> {
+  const response = await fetch(`${API_URL}/permit-requests/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error('Failed to update permit request');
+  return response.json();
+}

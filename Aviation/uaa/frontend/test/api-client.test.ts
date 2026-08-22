@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { login, getLegs, createLeg, getLeg } from '../src/lib/api-client';
+import { login, getLegs, createLeg, getLeg, listPermitRequests, createPermitRequest, updatePermitRequest } from '../src/lib/api-client';
 
 describe('api-client', () => {
   beforeEach(() => {
@@ -75,5 +75,52 @@ describe('api-client', () => {
       expect.objectContaining({ headers: { Authorization: 'Bearer token-123' } }),
     );
     expect(result).toEqual(leg);
+  });
+
+  it('listPermitRequests fetches permit requests for a leg', async () => {
+    const requests = [{ id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED' }];
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => requests });
+
+    const result = await listPermitRequests('token-123', '1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/1/permit-requests'),
+      expect.objectContaining({ headers: { Authorization: 'Bearer token-123' } }),
+    );
+    expect(result).toEqual(requests);
+  });
+
+  it('createPermitRequest posts the country and returns the created request', async () => {
+    const created = { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED' };
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => created });
+
+    const result = await createPermitRequest('token-123', '1', 'Egypt');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/1/permit-requests'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-123' },
+        body: JSON.stringify({ country: 'Egypt' }),
+      }),
+    );
+    expect(result).toEqual(created);
+  });
+
+  it('updatePermitRequest patches status and confirmation fields', async () => {
+    const updated = { id: 'pr-1', status: 'CONFIRMED' };
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => updated });
+
+    const result = await updatePermitRequest('token-123', 'pr-1', { status: 'CONFIRMED', clearanceNumber: 'EG-4471' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/permit-requests/pr-1'),
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-123' },
+        body: JSON.stringify({ status: 'CONFIRMED', clearanceNumber: 'EG-4471' }),
+      }),
+    );
+    expect(result).toEqual(updated);
   });
 });
