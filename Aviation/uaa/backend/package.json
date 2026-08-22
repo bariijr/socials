@@ -28,7 +28,8 @@
     "class-validator": "^0.14.1",
     "class-transformer": "^0.5.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
@@ -44,5 +45,14 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.0"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": ".",
+    "testRegex": "test/.*\\.spec\\.ts$",
+    "testPathIgnorePatterns": ["/node_modules/", "\\.e2e-spec\\.ts$"],
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    }
   }
 }

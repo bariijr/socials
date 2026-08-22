@@ -8,8 +8,10 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strict": true,
+    "strictPropertyInitialization": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "baseUrl": "./"
-  }
+  },
+  "include": ["src/**/*.ts"]
 }
