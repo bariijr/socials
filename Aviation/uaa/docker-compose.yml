@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: uaa
+      POSTGRES_PASSWORD: uaa
+      POSTGRES_DB: uaa
+    volumes:
+      - uaa_pg_data:/var/lib/postgresql/data
+    networks:
+      - web-proxy
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    depends_on:
+      - postgres
+    networks:
+      - web-proxy
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    networks:
+      - web-proxy
+
+networks:
+  web-proxy:
+    external: true
+
+volumes:
+  uaa_pg_data:
