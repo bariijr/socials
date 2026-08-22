@@ -64,7 +64,7 @@ uaa/
 └── frontend/
     ├── Dockerfile
     ├── package.json
-    ├── next.config.ts
+    ├── next.config.mjs
     ├── tsconfig.json
     ├── vitest.config.ts
     ├── src/
@@ -88,12 +88,12 @@ uaa/
 **Files:**
 - Create: `docker-compose.yml`
 - Create: `backend/package.json`, `backend/tsconfig.json`, `backend/nest-cli.json`, `backend/Dockerfile`, `backend/.env.example`, `backend/src/main.ts`, `backend/src/app.module.ts`
-- Create: `frontend/package.json`, `frontend/tsconfig.json`, `frontend/next.config.ts`, `frontend/Dockerfile`, `frontend/src/app/layout.tsx`, `frontend/src/app/page.tsx`
+- Create: `frontend/package.json`, `frontend/tsconfig.json`, `frontend/next.config.mjs`, `frontend/Dockerfile`, `frontend/src/app/layout.tsx`, `frontend/src/app/page.tsx`
 
 **Interfaces:**
 - Produces: backend listens on `PORT` env var (default `3011`) with a `GET /health` route returning `{ status: 'ok' }`. Frontend listens on port `3012`, served by `next start`.
 
-- [ ] **Step 1: Create the backend NestJS project files**
+- [x] **Step 1: Create the backend NestJS project files**
 
 `backend/package.json`:
 ```json
@@ -143,9 +143,20 @@ uaa/
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.0"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": ".",
+    "testRegex": "test/.*\\.spec\\.ts$",
+    "testPathIgnorePatterns": ["/node_modules/", "\\.e2e-spec\\.ts$"],
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    }
   }
 }
 ```
+
+Note: the `jest` config block is required — without it, Jest has no transform wired up for `.ts` files and fails every spec with a syntax error before any test logic runs. `testPathIgnorePatterns` excludes `*.e2e-spec.ts` files (those run separately via `test:e2e` / `test/jest-e2e.json`, added in Task 6).
 
 `backend/tsconfig.json`:
 ```json
@@ -159,12 +170,18 @@ uaa/
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strict": true,
+    "strictPropertyInitialization": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "baseUrl": "./"
-  }
+  },
+  "include": ["src/**/*.ts"]
 }
 ```
+
+Note: `strictPropertyInitialization` must be disabled — TypeORM entity classes (Task 2's `User`, Task 4's `Leg`) declare properties the ORM assigns at runtime, not in a constructor, which `strict: true` alone rejects at compile time (`error TS2564`).
+
+Note: `include: ["src/**/*.ts"]` is required — without it, `tsc` (via `nest build`) has no bound on which files it compiles and picks up every `.ts` file under `backend/` once Tasks 2–9 add `migrations/`, `scripts/`, and `test/`. TypeScript then infers `rootDir` as the common ancestor of all included files (the `backend/` root itself, since `migrations/`, `scripts/`, `src/`, and `test/` are now siblings), so `outDir: ./dist` mirrors that full structure and the real entry point lands at `dist/src/main.js`, not `dist/main.js` — silently breaking the Dockerfile's `CMD ["node", "dist/main"]` in a fresh (no build-cache) image, while a local incremental rebuild can mask it by leaving a stale `dist/main.js` from back when `src/` was the only directory. This surfaced in Task 10's from-scratch verification, not in any single task's own `npm run build` check — every earlier task's build succeeded locally on a dist/ directory carrying that stale leftover.
 
 `backend/nest-cli.json`:
 ```json
@@ -248,7 +265,7 @@ EXPOSE 3011
 CMD ["node", "dist/main"]
 ```
 
-- [ ] **Step 2: Create the frontend Next.js project files**
+- [x] **Step 2: Create the frontend Next.js project files**
 
 `frontend/package.json`:
 ```json
@@ -273,12 +290,15 @@ CMD ["node", "dist/main"]
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
     "jsdom": "^24.1.1",
     "typescript": "^5.5.0",
     "vitest": "^2.0.5"
   }
 }
 ```
+
+Note: `@vitejs/plugin-react` is required even though Next.js itself uses SWC, not Vite — Vitest runs its own Vite pipeline independent of Next's bundler, and without this plugin JSX in `.tsx` files transforms without the automatic React-runtime import, failing every rendered-component test with `ReferenceError: React is not defined`. This surfaced in Task 9 (the first test that actually renders a component), not Task 8.
 
 `frontend/tsconfig.json`:
 ```json
@@ -298,16 +318,17 @@ CMD ["node", "dist/main"]
 }
 ```
 
-`frontend/next.config.ts`:
-```typescript
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+`frontend/next.config.mjs`:
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   output: 'standalone',
 };
 
 export default nextConfig;
 ```
+
+Note: `next.config.ts` was tried first but Next.js 14.2.x (the pinned version) does not support TypeScript config files — that support only landed in Next.js 15. Use `.mjs` instead.
 
 `frontend/src/app/layout.tsx`:
 ```tsx
@@ -339,6 +360,7 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+ENV PORT=3012
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
@@ -346,7 +368,9 @@ EXPOSE 3012
 CMD ["node", "server.js"]
 ```
 
-- [ ] **Step 3: Create Docker Compose wiring Postgres + backend + frontend on `web-proxy`**
+Note: the standalone server (`node server.js`) reads its port from the `PORT` env var, not from the `dev`/`start` npm scripts' `-p 3012` flag (those only apply to `next dev`/`next start`, which aren't used in the production image) — without `ENV PORT=3012` it silently defaults to 3000.
+
+- [x] **Step 3: Create Docker Compose wiring Postgres + backend + frontend on `web-proxy`**
 
 `docker-compose.yml`:
 ```yaml
@@ -385,7 +409,7 @@ volumes:
   uaa_pg_data:
 ```
 
-- [ ] **Step 4: Install dependencies and verify the backend boots**
+- [x] **Step 4: Install dependencies and verify the backend boots**
 
 Run:
 ```bash
@@ -397,7 +421,7 @@ npm run build
 ```
 Expected: compiles with no TypeScript errors (0 exit code). Runtime boot is verified in Step 5 once Postgres is actually up via Compose.
 
-- [ ] **Step 5: Verify the full stack boots via Docker Compose**
+- [x] **Step 5: Verify the full stack boots via Docker Compose**
 
 Run:
 ```bash
@@ -409,12 +433,7 @@ curl -s http://localhost:3011/health
 ```
 Expected: `{"status":"ok"}` (backend port isn't published in the compose file above for prod-parity with `web-proxy`-routed services; for this local verification step only, temporarily add `ports: ["3011:3011"]` under the `backend` service, curl, confirm, then remove it again — the real deployment routes through `web-proxy`'s reverse proxy, not a published host port).
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add docker-compose.yml backend frontend
-git commit -m "Scaffold NestJS backend, Next.js frontend, and Docker Compose for UAA webapp"
-```
+- [ ] **Step 6: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project. Changes are left in the working tree uncommitted.
 
 ---
 
@@ -430,7 +449,7 @@ git commit -m "Scaffold NestJS backend, Next.js frontend, and Docker Compose for
 **Interfaces:**
 - Produces: `User` entity — `id: string (uuid)`, `username: string (unique)`, `fullName: string`, `jobTitle: string | null`, `mobile: string | null`, `fromEmail: string`, `ccDefault: string | null`, `passwordHash: string`, `createdAt: Date`, `updatedAt: Date`. Registered under `TypeOrmModule.forFeature([User])` in `UsersModule`, exported for `AuthModule` to inject `Repository<User>`.
 
-- [ ] **Step 1: Create the TypeORM DataSource used by both the app and the migration CLI**
+- [x] **Step 1: Create the TypeORM DataSource used by both the app and the migration CLI**
 
 `backend/src/database/data-source.ts`:
 ```typescript
@@ -449,7 +468,7 @@ export const AppDataSource = new DataSource({
 
 Note: this does **not** yet import `Leg` — that entity doesn't exist until Task 4, which adds it via an explicit modify step (see Task 4 Step 2). Do not import `Leg` here; it would fail to compile against Task 2's own file tree.
 
-- [ ] **Step 2: Create the User entity**
+- [x] **Step 2: Create the User entity**
 
 `backend/src/users/user.entity.ts`:
 ```typescript
@@ -489,7 +508,7 @@ export class User {
 }
 ```
 
-- [ ] **Step 3: Create the Users module**
+- [x] **Step 3: Create the Users module**
 
 `backend/src/users/users.module.ts`:
 ```typescript
@@ -504,7 +523,7 @@ import { User } from './user.entity';
 export class UsersModule {}
 ```
 
-- [ ] **Step 4: Write the Users migration**
+- [x] **Step 4: Write the Users migration**
 
 `backend/migrations/1755820800000-CreateUsers.ts`:
 ```typescript
@@ -537,7 +556,7 @@ export class CreateUsers1755820800000 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 5: Run the migration against the Compose Postgres and verify the table exists**
+- [x] **Step 5: Run the migration against the Compose Postgres and verify the table exists**
 
 Run:
 ```bash
@@ -547,12 +566,7 @@ docker compose exec postgres psql -U uaa -d uaa -c '\d users'
 ```
 Expected: `\d users` prints the 10 columns defined above.
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add backend/src/database backend/src/users backend/migrations
-git commit -m "Add User entity, migration, and Users module"
-```
+- [ ] **Step 6: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -572,7 +586,7 @@ git commit -m "Add User entity, migration, and Users module"
 - Consumes: `User` entity/repository from Task 2.
 - Produces: `AuthService.validateUser(username: string, password: string): Promise<User | null>`, `AuthService.login(user: User): Promise<{ accessToken: string }>`. `POST /auth/login` accepting `LoginDto { username: string; password: string }`, returning `{ accessToken: string }` or `401`. `JwtAuthGuard` usable as `@UseGuards(JwtAuthGuard)` on any controller — later tasks (Legs) depend on this exact class name and import path (`../auth/jwt-auth.guard`).
 
-- [ ] **Step 1: Write the failing test for password validation and token issuance**
+- [x] **Step 1: Write the failing test for password validation and token issuance**
 
 `backend/test/auth.service.spec.ts`:
 ```typescript
@@ -635,12 +649,12 @@ describe('AuthService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/auth.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/auth/auth.service'`
 
-- [ ] **Step 3: Implement AuthService, DTO, guard, strategy, controller, module**
+- [x] **Step 3: Implement AuthService, DTO, guard, strategy, controller, module**
 
 `backend/src/auth/dto/login.dto.ts`:
 ```typescript
@@ -765,7 +779,7 @@ import { JwtStrategy } from './jwt.strategy';
 export class AuthModule {}
 ```
 
-- [ ] **Step 4: Wire AuthModule and UsersModule into AppModule**
+- [x] **Step 4: Wire AuthModule and UsersModule into AppModule**
 
 Modify `backend/src/app.module.ts` — add imports:
 ```typescript
@@ -774,17 +788,12 @@ import { AuthModule } from './auth/auth.module';
 ```
 and add `UsersModule, AuthModule` to the `imports` array (after `TypeOrmModule.forRoot(...)`).
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/auth.service.spec.ts`
 Expected: PASS (4 tests)
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add backend/src/auth backend/src/app.module.ts backend/test/auth.service.spec.ts
-git commit -m "Add JWT auth: login endpoint, password verification, guard"
-```
+- [ ] **Step 6: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -798,7 +807,7 @@ git commit -m "Add JWT auth: login endpoint, password verification, guard"
 **Interfaces:**
 - Produces: `Leg` entity with the full MAYFLY-mirrored column set (see spec's Data model section) — every field name below is what later tasks (Legs service/controller, seed script, frontend) reference verbatim.
 
-- [ ] **Step 1: Create the Leg entity**
+- [x] **Step 1: Create the Leg entity**
 
 `backend/src/legs/leg.entity.ts`:
 ```typescript
@@ -893,7 +902,7 @@ export class Leg {
   @Column({ name: 'client_notified', type: 'boolean', default: false })
   clientNotified: boolean;
 
-  @Column({ name: 'agent_expenses', type: 'numeric', nullable: true })
+  @Column({ name: 'agent_expenses', type: 'varchar', nullable: true })
   agentExpenses: string | null;
 
   @Column({ name: 'ready_to_bill', type: 'boolean', default: false })
@@ -943,7 +952,9 @@ export class Leg {
 }
 ```
 
-- [ ] **Step 2: Modify `data-source.ts` to register the `Leg` entity**
+Note: `agent_expenses` is `varchar`, not `numeric` as originally planned — discovered during Task 7's real-data seeding that the real MAYFLY workbook's "Agent Expenses" column holds a `"YES"`/`"NO"` flag, not a dollar amount, across every usable row. A `numeric` column would reject that value outright. Since this was caught before any row existed in `legs`, the migration was corrected directly rather than adding a follow-up migration.
+
+- [x] **Step 2: Modify `data-source.ts` to register the `Leg` entity**
 
 Task 2 created this file importing only `User` (see the note on Task 2 Step 1 — `Leg` didn't exist yet). Now that it does, update it:
 
@@ -963,7 +974,7 @@ export const AppDataSource = new DataSource({
 });
 ```
 
-- [ ] **Step 3: Write the Legs migration**
+- [x] **Step 3: Write the Legs migration**
 
 `backend/migrations/1755820800001-CreateLegs.ts`:
 ```typescript
@@ -1004,7 +1015,7 @@ export class CreateLegs1755820800001 implements MigrationInterface {
           { name: 'clearance_number', type: 'varchar', isNullable: true },
           { name: 'tss_notified', type: 'boolean', default: false },
           { name: 'client_notified', type: 'boolean', default: false },
-          { name: 'agent_expenses', type: 'numeric', isNullable: true },
+          { name: 'agent_expenses', type: 'varchar', isNullable: true },
           { name: 'ready_to_bill', type: 'boolean', default: false },
           { name: 'invoice_received', type: 'boolean', default: false },
           { name: 'remarks', type: 'text', isNullable: true },
@@ -1031,7 +1042,7 @@ export class CreateLegs1755820800001 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 4: Run the migration and verify the table exists**
+- [x] **Step 4: Run the migration and verify the table exists**
 
 Run:
 ```bash
@@ -1041,12 +1052,7 @@ docker compose exec postgres psql -U uaa -d uaa -c '\d legs'
 ```
 Expected: `\d legs` prints all 41 columns above plus `id`, `created_at`, `updated_at`.
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add backend/src/legs/leg.entity.ts backend/migrations/1755820800001-CreateLegs.ts backend/src/database/data-source.ts
-git commit -m "Add Leg entity and migration, mirroring MAYFLY's column grain"
-```
+- [ ] **Step 5: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -1061,7 +1067,7 @@ git commit -m "Add Leg entity and migration, mirroring MAYFLY's column grain"
 - Consumes: `Leg` entity from Task 4.
 - Produces: `LegsService.create(dto: CreateLegDto): Promise<Leg>` (auto-assigns `legId` as `max(existing legId) + 1`), `LegsService.findAll(): Promise<Leg[]>`, `LegsService.findOne(id: string): Promise<Leg | null>`. Later tasks (controller, seed script) call these exact method names.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/legs.service.spec.ts`:
 ```typescript
@@ -1124,12 +1130,12 @@ describe('LegsService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/legs/legs.service'`
 
-- [ ] **Step 3: Implement CreateLegDto and LegsService**
+- [x] **Step 3: Implement CreateLegDto and LegsService**
 
 `backend/src/legs/dto/create-leg.dto.ts`:
 ```typescript
@@ -1198,17 +1204,12 @@ export class LegsService {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add backend/src/legs/dto backend/src/legs/legs.service.ts backend/test/legs.service.spec.ts
-git commit -m "Add LegsService with auto-incrementing legId, matching mod_Utils.GetNextLegID"
-```
+- [ ] **Step 5: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -1217,6 +1218,7 @@ git commit -m "Add LegsService with auto-incrementing legId, matching mod_Utils.
 **Files:**
 - Create: `backend/src/legs/legs.controller.ts`
 - Create: `backend/src/legs/legs.module.ts`
+- Create: `backend/test/jest-e2e.json` (referenced by the `test:e2e` script since Task 1, but never actually created until now — needed to run `*.e2e-spec.ts` files at all)
 - Modify: `backend/src/app.module.ts` (import `LegsModule`)
 - Test: `backend/test/legs.e2e-spec.ts`
 
@@ -1224,13 +1226,28 @@ git commit -m "Add LegsService with auto-incrementing legId, matching mod_Utils.
 - Consumes: `LegsService` from Task 5, `JwtAuthGuard` from Task 3.
 - Produces: `POST /legs` (201, requires bearer token), `GET /legs` (200, array), `GET /legs/:id` (200 or 404), all guarded by `JwtAuthGuard`.
 
-- [ ] **Step 1: Write the failing e2e test**
+Note: import supertest as a default import (`import request from 'supertest'`), not `import * as request from 'supertest'` — under this project's `esModuleInterop` + the installed `@types/supertest`, the namespace-style import isn't callable and fails to compile (`TS2349`).
+
+`backend/test/jest-e2e.json`:
+```json
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  }
+}
+```
+
+- [x] **Step 1: Write the failing e2e test**
 
 `backend/test/legs.e2e-spec.ts`:
 ```typescript
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { LegsModule } from '../src/legs/legs.module';
@@ -1294,12 +1311,12 @@ describe('Legs (e2e)', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/legs.e2e-spec.ts`
 Expected: FAIL — `Cannot find module '../src/legs/legs.module'`
 
-- [ ] **Step 3: Implement LegsController and LegsModule**
+- [x] **Step 3: Implement LegsController and LegsModule**
 
 `backend/src/legs/legs.controller.ts`:
 ```typescript
@@ -1339,10 +1356,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Leg } from './leg.entity';
 import { LegsService } from './legs.service';
 import { LegsController } from './legs.controller';
-import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Leg]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Leg])],
   providers: [LegsService],
   controllers: [LegsController],
   exports: [LegsService],
@@ -1350,21 +1366,18 @@ import { AuthModule } from '../auth/auth.module';
 export class LegsModule {}
 ```
 
-- [ ] **Step 4: Wire LegsModule into AppModule**
+Note: `LegsModule` does **not** import `AuthModule` — `JwtAuthGuard` has no constructor dependencies of its own (Passport registers the `'jwt'` strategy process-wide once `AuthModule` loads anywhere in the app, e.g. via `AppModule`), so Nest can instantiate the guard from the class reference alone. Importing `AuthModule` here would transitively pull in `UsersModule`'s `User` repository, which breaks the isolated e2e test in Step 1 (only the `Leg` repository is mocked there) and adds a coupling `LegsModule` doesn't need.
+
+- [x] **Step 4: Wire LegsModule into AppModule**
 
 Modify `backend/src/app.module.ts` — add `import { LegsModule } from './legs/legs.module';` and add `LegsModule` to the `imports` array.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/legs.e2e-spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add backend/src/legs/legs.controller.ts backend/src/legs/legs.module.ts backend/src/app.module.ts backend/test/legs.e2e-spec.ts
-git commit -m "Add JWT-protected Legs REST endpoints"
-```
+- [ ] **Step 6: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -1378,14 +1391,18 @@ git commit -m "Add JWT-protected Legs REST endpoints"
 - Consumes: `AppDataSource` from Task 2, `User`/`Leg` entities.
 - Produces: a runnable script (`npm run seed -- <path-to-xlsm>`) that inserts real `User` rows from `SETTINGS!B5:G6` and real `Leg` rows from `MAYFLY!A2:AP...`. Not a TDD unit-test target itself (it's an I/O script against a real file) — verified by Step 3's actual run against the real workbook and a row-count assertion.
 
-- [ ] **Step 1: Add the `xlsx` dependency**
+- [x] **Step 1: Add the `xlsx` dependency**
 
 Modify `backend/package.json` — add to `dependencies`: `"xlsx": "^0.18.5"`. Run:
 ```bash
 cd backend && npm install
 ```
 
-- [ ] **Step 2: Write the seed script**
+Note: the `npm install` for `xlsx` pulls in the `xlsx` package from the default npm registry, which carries known advisories (prototype pollution / ReDoS) in some versions — acceptable here since this script only reads a single trusted local file the coordinator controls, not untrusted input, but worth knowing before reusing this dependency elsewhere.
+
+Note on real-data mapping, found by inspecting the actual `UAA_Coordinator_v5.xlsm` workbook before running this script against it: boolean-flag columns (`Service Report Sent`, `TSS Notified`, etc.) mix `"Yes"` and `"YES"` casing across columns in the real sheet, so exact `=== 'YES'` matching silently drops some flags — use a case-insensitive `isYes()` helper instead. The `MTOW (LB)` column holds strings like `"49000 LB"`, not raw numbers — `Number(...)` on that yields `NaN`; use `parseInt` instead, which stops at the first non-digit character. `CLIENT NO.` mixes numeric and string cells — wrap in `String()` like `tripNo`/`icao` already do. One `DEP DATE` cell in the real sheet is a literal date string rather than an Excel serial number, so `excelDateToJsDate` needs a string fallback branch or that row's date silently becomes `null`.
+
+- [x] **Step 2: Write the seed script**
 
 `backend/scripts/seed-from-excel.ts`:
 ```typescript
@@ -1403,18 +1420,38 @@ function excelDateToJsDate(value: unknown): Date | null {
   if (typeof value === 'number') {
     return new Date(Math.round((value - 25569) * 86400 * 1000));
   }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   return null;
+}
+
+function isYes(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().toUpperCase() === 'YES';
+}
+
+function parseMtow(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const parsed = parseInt(String(value), 10);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 async function seedUsers(workbook: XLSX.WorkBook, dataSource: typeof AppDataSource) {
   const settingsSheet = workbook.Sheets['SETTINGS'];
+  // NOTE: the real SETTINGS sheet has multiple sections below the S1 COORDINATORS block
+  // (S2 FILE PATHS, etc.) with no blank-row gap large enough to rely on `range` alone —
+  // `break` below on the first row without a username/fullName is what actually bounds
+  // the read to just the coordinators block; `continue` would keep scanning into S2 and
+  // try to insert e.g. "Briefs Folder" as a coordinator username, failing on the from_email
+  // NOT NULL constraint.
   const rows = XLSX.utils.sheet_to_json<any[]>(settingsSheet, { header: 1, range: 4 });
   const userRepo = dataSource.getRepository(User);
   let created = 0;
 
   for (const row of rows) {
     const [, username, fullName, jobTitle, mobile, fromEmail, ccDefault] = row;
-    if (!username || !fullName) continue;
+    if (!username || !fullName) break;
     const exists = await userRepo.findOne({ where: { username } });
     if (exists) continue;
     const passwordHash = await bcrypt.hash(TEMP_PASSWORD, 10);
@@ -1443,10 +1480,10 @@ async function seedLegs(workbook: XLSX.WorkBook, dataSource: typeof AppDataSourc
       refNo: row[2] ?? null,
       clientName: row[3] ?? null,
       operatorName: row[4] ?? null,
-      clientNo: row[5] ?? null,
+      clientNo: row[5] != null ? String(row[5]) : null,
       agentName: row[6] ?? null,
-      serviceReportSent: row[7] === 'YES',
-      returnedInTime: row[8] === 'YES',
+      serviceReportSent: isYes(row[7]),
+      returnedInTime: isYes(row[8]),
       agentContacts: row[9] ?? null,
       tripNo: String(tripNo),
       tail: row[11] ?? null,
@@ -1460,15 +1497,15 @@ async function seedLegs(workbook: XLSX.WorkBook, dataSource: typeof AppDataSourc
       captName: row[19] ?? null,
       captEmail: row[20] ?? null,
       acType: row[21] ?? null,
-      mtowLb: row[22] ? Number(row[22]) : null,
+      mtowLb: parseMtow(row[22]),
       pgh: row[23] ?? null,
       tssTeam: row[24] ?? null,
       clearanceNumber: row[25] ?? null,
-      tssNotified: row[26] === 'YES',
-      clientNotified: row[27] === 'YES',
+      tssNotified: isYes(row[26]),
+      clientNotified: isYes(row[27]),
       agentExpenses: row[28] != null ? String(row[28]) : null,
-      readyToBill: row[29] === 'YES',
-      invoiceReceived: row[30] === 'YES',
+      readyToBill: isYes(row[29]),
+      invoiceReceived: isYes(row[30]),
       remarks: row[31] ?? null,
       a2gSupervisor: row[32] ?? null,
       driveCompleteDate: excelDateToJsDate(row[33]),
@@ -1515,7 +1552,7 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 3: Run the seed script against the real workbook and verify row counts**
+- [x] **Step 3: Run the seed script against the real workbook and verify row counts**
 
 Run:
 ```bash
@@ -1524,12 +1561,9 @@ npm run seed -- "C:/Backups/InsiderTechSol/Aviation/uaa/UAA_Coordinator_v5.xlsm"
 ```
 Expected: prints `Seeded 2 user(s), N leg(s).` where `N` matches the real MAYFLY row count (verify independently: `docker compose exec postgres psql -U uaa -d uaa -c "SELECT count(*) FROM legs;"` should return the same `N`, and `SELECT username, full_name FROM users;` should list `bminja` and `glwendo`).
 
-- [ ] **Step 4: Commit**
+Actual result: `Seeded 2 user(s), 62 leg(s).` on first run (before the `break`-vs-`continue` fix, this crashed partway through seeding users on a later SETTINGS-sheet section; the 2 real coordinators had already committed by then). Re-run after the fix seeded `0 user(s)` (both already existed) `, 62 leg(s).` — verified independently against `SELECT count(*) FROM legs` (62) and `SELECT username, full_name FROM users` (`bminja`/`glwendo`).
 
-```bash
-git add backend/package.json backend/package-lock.json backend/scripts/seed-from-excel.ts
-git commit -m "Add one-time seed script importing real coordinators and MAYFLY legs"
-```
+- [ ] **Step 4: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -1539,26 +1573,46 @@ git commit -m "Add one-time seed script importing real coordinators and MAYFLY l
 - Create: `frontend/src/lib/api-client.ts`
 - Create: `frontend/src/app/login/page.tsx`
 - Create: `frontend/vitest.config.ts`
+- Create: `frontend/test/setup.ts` (registers `@testing-library/jest-dom` matchers with Vitest — see the note after the `vitest.config.ts` snippet below)
 - Test: `frontend/test/api-client.test.ts`
 
 **Interfaces:**
 - Produces: `login(username: string, password: string): Promise<{ accessToken: string }>` and `getLegs(token: string): Promise<Leg[]>` in `api-client.ts`, both used by Task 9's Legs pages. Reads `NEXT_PUBLIC_API_URL` env var for the backend base URL.
 
-- [ ] **Step 1: Create the Vitest config**
+- [x] **Step 1: Create the Vitest config**
 
 `frontend/vitest.config.ts`:
 ```typescript
+import path from 'path';
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  plugins: [react()],
   test: {
     environment: 'jsdom',
     globals: true,
+    setupFiles: ['./test/setup.ts'],
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
   },
 });
 ```
 
-- [ ] **Step 2: Write the failing test for the API client**
+`frontend/test/setup.ts`:
+```typescript
+import '@testing-library/jest-dom/vitest';
+```
+
+Note: three gaps here, all invisible until Task 9 renders an actual component (Task 8's test imports `api-client.ts` directly — no JSX, no `@/` import, no DOM matchers):
+1. `resolve.alias` — Next.js's `tsconfig.json` `paths: { "@/*": ["./src/*"] }` is understood by Next's own bundler but not by Vitest/Vite, which needs its own alias config.
+2. `@vitejs/plugin-react` — Vitest runs its own Vite pipeline independent of Next's SWC bundler; without this plugin, JSX transforms without the automatic React-runtime import, failing with `ReferenceError: React is not defined`.
+3. `test/setup.ts` + `setupFiles` — `@testing-library/jest-dom` is in `devDependencies` but its matchers (`toBeInTheDocument()`, etc.) are never auto-registered with Vitest's `expect`; without importing `@testing-library/jest-dom/vitest` in a setup file wired via `setupFiles`, every matcher call fails with `Invalid Chai property: toBeInTheDocument`.
+
+- [x] **Step 2: Write the failing test for the API client**
 
 `frontend/test/api-client.test.ts`:
 ```typescript
@@ -1605,12 +1659,12 @@ describe('api-client', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `Cannot find module '../src/lib/api-client'`
 
-- [ ] **Step 4: Implement the API client**
+- [x] **Step 4: Implement the API client**
 
 `frontend/src/lib/api-client.ts`:
 ```typescript
@@ -1646,12 +1700,12 @@ export async function getLegs(token: string): Promise<Leg[]> {
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 6: Create the login page**
+- [x] **Step 6: Create the login page**
 
 `frontend/src/app/login/page.tsx`:
 ```tsx
@@ -1697,12 +1751,7 @@ export default function LoginPage() {
 }
 ```
 
-- [ ] **Step 7: Commit**
-
-```bash
-git add frontend/src/lib frontend/src/app/login frontend/vitest.config.ts frontend/test/api-client.test.ts
-git commit -m "Add frontend API client and login page"
-```
+- [ ] **Step 7: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -1715,7 +1764,7 @@ git commit -m "Add frontend API client and login page"
 **Interfaces:**
 - Consumes: `getLegs` from Task 8's `api-client.ts`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `frontend/test/legs-list.test.tsx`:
 ```tsx
@@ -1748,12 +1797,12 @@ describe('LegsPage', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/legs-list.test.tsx`
 Expected: FAIL — `Cannot find module '../src/app/legs/page'`
 
-- [ ] **Step 3: Implement the Legs list page**
+- [x] **Step 3: Implement the Legs list page**
 
 `frontend/src/app/legs/page.tsx`:
 ```tsx
@@ -1796,17 +1845,12 @@ export default function LegsPage() {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/legs-list.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add frontend/src/app/legs/page.tsx frontend/test/legs-list.test.tsx
-git commit -m "Add Legs list page"
-```
+- [ ] **Step 5: Commit** — SKIPPED per explicit user instruction: no `git commit` for this project.
 
 ---
 
@@ -1814,7 +1858,7 @@ git commit -m "Add Legs list page"
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh**
+- [x] **Step 1: Bring up the full stack fresh**
 
 Run:
 ```bash
@@ -1824,7 +1868,9 @@ cd backend && npx typeorm-ts-node-commonjs migration:run -d src/database/data-so
 npm run seed -- "C:/Backups/InsiderTechSol/Aviation/uaa/UAA_Coordinator_v5.xlsm"
 ```
 
-- [ ] **Step 2: Log in as a real seeded coordinator and confirm real legs render**
+This step is what actually caught the `dist/main.js` vs `dist/src/main.js` defect (see the `tsconfig.json` `include` note in Task 1) — a genuinely clean, no-build-cache `docker compose up --build` was required to expose it; every earlier task's own `npm run build` check passed because it ran against a `dist/` directory still carrying a stale top-level `main.js` from Task 1's very first build. Backend container crash-looped with `Cannot find module '/app/dist/main'` until that fix landed. Also needed a `docker compose build --no-cache backend` once, mid-debugging, to rule out stale Docker layer caching as a separate contributing factor before finding the real root cause.
+
+- [x] **Step 2: Log in as a real seeded coordinator and confirm real legs render**
 
 Using the temporary password printed by the seed script:
 ```bash
@@ -1836,11 +1882,15 @@ curl -s http://localhost:3011/legs -H "Authorization: Bearer <token-from-above>"
 ```
 Expected: a JSON array whose first entries match real MAYFLY data (e.g. an entry with `"tripNo"` and `"icao":"GMMN"` if that trip is still in the live workbook).
 
-- [ ] **Step 3: Confirm the frontend renders the same data**
+Actual: login returned a valid JWT; `/legs` returned real MAYFLY rows (Egypt/HECA/N148B/HONEYWELL INTERNATIONAL INC among the first entries). Verified with `backend`'s port temporarily published (`ports: ["3011:3011"]`, same local-verification-only pattern as Task 1 Step 5) and reverted afterward — production still routes through `web-proxy`, no host ports published in the committed compose file.
+
+- [x] **Step 3: Confirm the frontend renders the same data**
 
 Visit `http://localhost:3012/login` in a browser, sign in with `bminja` and the temporary password, confirm redirect to `/legs`, confirm the table shows the same real trip numbers/ICAOs verified in Step 2.
 
-- [ ] **Step 4: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+Actual: verified via browser automation — logged in as `bminja`, redirected to `/legs`, table rendered all 62 real seeded rows (trip `475087`/`GMMN`/`N832PJ`/Morocco matches the row spot-checked via the API in Step 2). Frontend's `3012` port was also temporarily published for this check and reverted afterward for the same reason as Step 2.
+
+- [x] **Step 4: No commit for this task** — it's verification only. (Also: no commits were made anywhere in this plan's execution — all `git commit` steps were skipped per explicit user instruction.)
 
 ---
 
