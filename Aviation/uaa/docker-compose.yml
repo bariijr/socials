@@ -13,6 +13,8 @@ services:
   backend:
     build: ./backend
     env_file: ./backend/.env
+    ports:
+      - "3011:3011"
     depends_on:
       - postgres
     networks:
@@ -20,6 +22,8 @@ services:
 
   frontend:
     build: ./frontend
+    ports:
+      - "3012:3012"
     depends_on:
       - backend
     networks:

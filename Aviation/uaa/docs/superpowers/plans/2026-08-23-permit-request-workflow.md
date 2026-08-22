@@ -92,7 +92,7 @@ frontend/
 **Interfaces:**
 - Produces: `MailService.send(input: { to: string; subject: string; body: string }): Promise<{ sent: boolean }>`. Later tasks (`PermitsService`) inject `MailService` and call `.send()`.
 
-- [ ] **Step 1: Add the `nodemailer` dependency and SMTP env vars**
+- [x] **Step 1: Add the `nodemailer` dependency and SMTP env vars**
 
 Modify `backend/package.json` — add to `dependencies`: `"nodemailer": "^6.9.14"`; add to `devDependencies`: `"@types/nodemailer": "^6.4.15"`. Run:
 ```bash
@@ -108,7 +108,7 @@ SMTP_PASS=
 SMTP_FROM=uaaafrica@univ-wea.com
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `backend/test/mail.service.spec.ts`:
 ```typescript
@@ -158,12 +158,12 @@ describe('MailService', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/mail.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/mail/mail.service'`
 
-- [ ] **Step 4: Implement MailService and MailModule**
+- [x] **Step 4: Implement MailService and MailModule**
 
 `backend/src/mail/mail.service.ts`:
 ```typescript
@@ -219,12 +219,12 @@ import { MailService } from './mail.service';
 export class MailModule {}
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/mail.service.spec.ts`
 Expected: PASS (2 tests)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/mail backend/package.json backend/package-lock.json backend/.env.example backend/test/mail.service.spec.ts
@@ -242,7 +242,7 @@ git commit -m "Add MailService: real SMTP send via nodemailer with a dry-run fal
 **Interfaces:**
 - Produces: `computeRequiredByZ(etdZ: string, rule: { leadTimeHours: number; workingDaysOnly: boolean }): string`, `computeUrgency(requiredByZ: string, nowZ: string): 'BREACH' | 'URGENT' | 'DUE' | 'OK'`, `needsReconfirm(basedOnEtdZ: string, currentEtdZ: string, toleranceHours: number): boolean`. Later tasks (`PermitsService`, frontend) call these exact names.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/permit-deadline.spec.ts` (test cases and expected values ported directly from `actuator/frontend/js/lib/core-logic.test.js`, which already validated this formula against real scheduling behavior):
 ```typescript
@@ -287,12 +287,12 @@ describe('needsReconfirm', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/permit-deadline.spec.ts`
 Expected: FAIL — `Cannot find module '../src/permits/permit-deadline'`
 
-- [ ] **Step 3: Implement the deadline logic**
+- [x] **Step 3: Implement the deadline logic**
 
 `backend/src/permits/permit-deadline.ts`:
 ```typescript
@@ -337,12 +337,12 @@ export function needsReconfirm(basedOnEtdZ: string, currentEtdZ: string, toleran
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/permit-deadline.spec.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/permits/permit-deadline.ts backend/test/permit-deadline.spec.ts
@@ -361,7 +361,7 @@ git commit -m "Port permit deadline/urgency formulas from actuator's validated c
 **Interfaces:**
 - Produces: `CountryRequirement` entity — `id: string (uuid)`, `country: string (unique)`, `leadTimeHours: number`, `workingDaysOnly: boolean`, `toleranceHours: number`, `requiredDocs: string[]`, `submissionEmail: string | null`, `createdAt: Date`, `updatedAt: Date`. Registered under `TypeOrmModule.forFeature([CountryRequirement])` in `CountryRequirementsModule`, exported for `PermitsModule` to inject `Repository<CountryRequirement>`.
 
-- [ ] **Step 1: Create the CountryRequirement entity**
+- [x] **Step 1: Create the CountryRequirement entity**
 
 `backend/src/country-requirements/country-requirement.entity.ts`:
 ```typescript
@@ -398,7 +398,7 @@ export class CountryRequirement {
 }
 ```
 
-- [ ] **Step 2: Create the CountryRequirements module**
+- [x] **Step 2: Create the CountryRequirements module**
 
 `backend/src/country-requirements/country-requirements.module.ts`:
 ```typescript
@@ -413,7 +413,7 @@ import { CountryRequirement } from './country-requirement.entity';
 export class CountryRequirementsModule {}
 ```
 
-- [ ] **Step 3: Register CountryRequirement on the migration DataSource**
+- [x] **Step 3: Register CountryRequirement on the migration DataSource**
 
 Modify `backend/src/database/data-source.ts` — add the import and add `CountryRequirement` to the `entities` array:
 ```typescript
@@ -423,7 +423,7 @@ import { CountryRequirement } from '../country-requirements/country-requirement.
 entities: [User, Leg, CountryRequirement],
 ```
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 `backend/migrations/1755993600000-CreateCountryRequirements.ts`:
 ```typescript
@@ -455,7 +455,7 @@ export class CreateCountryRequirements1755993600000 implements MigrationInterfac
 }
 ```
 
-- [ ] **Step 5: Run the migration and verify the table exists**
+- [x] **Step 5: Run the migration and verify the table exists**
 
 Run:
 ```bash
@@ -468,7 +468,7 @@ docker compose exec postgres psql -U uaa -d uaa -c '\d country_requirements'
 ```
 Expected: prints the 9 columns defined above.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/country-requirements backend/migrations/1755993600000-CreateCountryRequirements.ts backend/src/database/data-source.ts
@@ -488,7 +488,7 @@ git commit -m "Add CountryRequirement entity and migration"
 **Interfaces:**
 - Produces: `FormTemplate` entity — `id: string (uuid)`, `country: string`, `name: string`, `bodyTemplate: string`, `mergeFields: string[]`. `renderTemplate(template: { bodyTemplate: string; mergeFields: string[] }, values: Record<string, string>): string` — later tasks (`PermitsService`) call this exact name.
 
-- [ ] **Step 1: Write the failing test for the renderer**
+- [x] **Step 1: Write the failing test for the renderer**
 
 `backend/test/template-renderer.spec.ts`:
 ```typescript
@@ -530,12 +530,12 @@ describe('renderTemplate', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/template-renderer.spec.ts`
 Expected: FAIL — `Cannot find module '../src/form-templates/template-renderer'`
 
-- [ ] **Step 3: Implement the renderer, entity, and module**
+- [x] **Step 3: Implement the renderer, entity, and module**
 
 `backend/src/form-templates/template-renderer.ts`:
 ```typescript
@@ -598,7 +598,7 @@ import { FormTemplate } from './form-template.entity';
 export class FormTemplatesModule {}
 ```
 
-- [ ] **Step 4: Register FormTemplate on the migration DataSource**
+- [x] **Step 4: Register FormTemplate on the migration DataSource**
 
 Modify `backend/src/database/data-source.ts` — add the import and add `FormTemplate` to `entities`:
 ```typescript
@@ -608,7 +608,7 @@ import { FormTemplate } from '../form-templates/form-template.entity';
 entities: [User, Leg, CountryRequirement, FormTemplate],
 ```
 
-- [ ] **Step 5: Write the migration**
+- [x] **Step 5: Write the migration**
 
 `backend/migrations/1755993600001-CreateFormTemplates.ts`:
 ```typescript
@@ -638,7 +638,7 @@ export class CreateFormTemplates1755993600001 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 6: Run the test to verify it passes, then run the migration**
+- [x] **Step 6: Run the test to verify it passes, then run the migration**
 
 Run: `cd backend && npx jest test/template-renderer.spec.ts`
 Expected: PASS (3 tests)
@@ -650,7 +650,7 @@ docker compose exec postgres psql -U uaa -d uaa -c '\d form_templates'
 ```
 Expected: prints the 7 columns defined above.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/form-templates backend/migrations/1755993600001-CreateFormTemplates.ts backend/src/database/data-source.ts backend/test/template-renderer.spec.ts
@@ -673,7 +673,7 @@ git commit -m "Add FormTemplate entity/migration and #1/#2 mail-merge renderer"
 - Consumes: `Leg` (Task 4 of the foundation plan), `CountryRequirement` (Task 3), `FormTemplate` + `renderTemplate` (Task 4), `computeRequiredByZ` (Task 2), `MailService` (Task 1).
 - Produces: `PermitRequestsService.create(legId: string, country: string): Promise<PermitRequest>` (looks up the leg, the country's `CountryRequirement` and `FormTemplate`, computes `requiredByZ`, renders + sends the email, records a `Comm` row, returns the created `PermitRequest`), `.findByLeg(legId: string): Promise<PermitRequest[]>`, `.update(id: string, dto: UpdatePermitRequestDto): Promise<PermitRequest>`. Later tasks (controller, frontend) call these exact names.
 
-- [ ] **Step 1: Create the PermitRequest and Comm entities**
+- [x] **Step 1: Create the PermitRequest and Comm entities**
 
 `backend/src/permits/permit-request.entity.ts`:
 ```typescript
@@ -774,7 +774,7 @@ export class Comm {
 }
 ```
 
-- [ ] **Step 2: Create the DTOs**
+- [x] **Step 2: Create the DTOs**
 
 `backend/src/permits/dto/create-permit-request.dto.ts`:
 ```typescript
@@ -808,7 +808,7 @@ export class UpdatePermitRequestDto {
 }
 ```
 
-- [ ] **Step 3: Write the failing tests for PermitsService**
+- [x] **Step 3: Write the failing tests for PermitsService**
 
 `backend/test/permits.service.spec.ts`:
 ```typescript
@@ -969,12 +969,12 @@ describe('PermitsService', () => {
 });
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [x] **Step 4: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/permits/permits.service'`
 
-- [ ] **Step 5: Implement PermitsService**
+- [x] **Step 5: Implement PermitsService**
 
 `backend/src/permits/permits.service.ts`:
 ```typescript
@@ -1086,12 +1086,12 @@ export class PermitsService {
 
 Note: `correlationToken` is written in two saves (created empty, then set once the row's real `id` exists) because the token embeds the `PermitRequest`'s own id — it can't be known before the first insert. The unique constraint on `correlation_token` still holds since each row is only "live" with a real token after the second save.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: PASS (9 tests)
 
-- [ ] **Step 7: Write the migrations**
+- [x] **Step 7: Write the migrations**
 
 `backend/migrations/1755993600002-CreatePermitRequests.ts`:
 ```typescript
@@ -1160,7 +1160,7 @@ export class CreateComms1755993600003 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 8: Register PermitRequest and Comm on the migration DataSource, then run the migrations**
+- [x] **Step 8: Register PermitRequest and Comm on the migration DataSource, then run the migrations**
 
 Modify `backend/src/database/data-source.ts` — add both imports and add both to `entities`:
 ```typescript
@@ -1180,7 +1180,7 @@ docker compose exec postgres psql -U uaa -d uaa -c '\d comms'
 ```
 Expected: `\d permit_requests` prints 12 columns, `\d comms` prints 12 columns.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/permits backend/migrations/1755993600002-CreatePermitRequests.ts backend/migrations/1755993600003-CreateComms.ts backend/src/database/data-source.ts backend/test/permits.service.spec.ts
@@ -1200,7 +1200,7 @@ git commit -m "Add PermitRequest/Comm entities, migrations, and PermitsService"
 - Consumes: `PermitsService` (Task 5), `JwtAuthGuard` (foundation plan Task 3).
 - Produces: `POST /legs/:legId/permit-requests` (201, body `{ country: string }`), `GET /legs/:legId/permit-requests` (200, array), `PATCH /permit-requests/:id` (200), all guarded by `JwtAuthGuard`.
 
-- [ ] **Step 1: Write the failing e2e test**
+- [x] **Step 1: Write the failing e2e test**
 
 `backend/test/permits.e2e-spec.ts`:
 ```typescript
@@ -1306,12 +1306,12 @@ describe('Permits (e2e)', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/permits.e2e-spec.ts --config test/jest-e2e.json`
 Expected: FAIL — `Cannot find module '../src/permits/permits.module'`
 
-- [ ] **Step 3: Implement PermitsController and PermitsModule**
+- [x] **Step 3: Implement PermitsController and PermitsModule**
 
 `backend/src/permits/permits.controller.ts`:
 ```typescript
@@ -1370,16 +1370,16 @@ export class PermitsModule {}
 
 Note: `PermitsModule` does **not** import `AuthModule`, same reasoning as `LegsModule` in the foundation plan — `JwtAuthGuard` has no constructor dependencies of its own, and importing `AuthModule` here would transitively pull in `UsersModule`'s `User` repository, breaking this task's isolated e2e test (only `Leg`, `CountryRequirement`, `FormTemplate`, `PermitRequest`, and `Comm` repositories are mocked there).
 
-- [ ] **Step 4: Wire PermitsModule into AppModule**
+- [x] **Step 4: Wire PermitsModule into AppModule**
 
 Modify `backend/src/app.module.ts` — add `import { PermitsModule } from './permits/permits.module';` and add `PermitsModule` to the `imports` array.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/permits.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (3 tests)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/permits/permits.controller.ts backend/src/permits/permits.module.ts backend/src/app.module.ts backend/test/permits.e2e-spec.ts
@@ -1398,7 +1398,7 @@ git commit -m "Add JWT-protected permit-requests REST endpoints"
 - Consumes: `AppDataSource` (foundation plan Task 2), `CountryRequirement`/`FormTemplate` entities.
 - Produces: a runnable script (`npm run seed:country-requirements`) inserting one `CountryRequirement` row per country actually present in the seeded MAYFLY data, plus one generic `FormTemplate` per country. Not a TDD unit-test target (an I/O seed script) — verified by Step 3's run + row-count check.
 
-- [ ] **Step 1: Write the seed script**
+- [x] **Step 1: Write the seed script**
 
 `backend/scripts/seed-country-requirements.ts`:
 ```typescript
@@ -1474,11 +1474,11 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 2: Add the npm script**
+- [x] **Step 2: Add the npm script**
 
 Modify `backend/package.json` — add to `scripts`: `"seed:country-requirements": "ts-node scripts/seed-country-requirements.ts"`.
 
-- [ ] **Step 3: Run the seed script and verify row counts**
+- [x] **Step 3: Run the seed script and verify row counts**
 
 Run:
 ```bash
@@ -1492,7 +1492,7 @@ docker compose exec postgres psql -U uaa -d uaa -c "SELECT count(*) FROM form_te
 ```
 Both should return 15.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/scripts/seed-country-requirements.ts backend/package.json
@@ -1513,7 +1513,7 @@ git commit -m "Seed CountryRequirements and FormTemplates for the 15 countries i
 - Consumes: widened `Leg` interface (already has the fields this page needs, from the tail-prefill feature already shipped).
 - Produces: `getLeg(token: string, id: string): Promise<Leg>` in `api-client.ts`. Route `/legs/[id]` rendering a leg's full detail. Task 9's permit composer mounts inside this page.
 
-- [ ] **Step 1: Write the failing test for `getLeg`**
+- [x] **Step 1: Write the failing test for `getLeg`**
 
 Add to `frontend/test/api-client.test.ts`:
 ```typescript
@@ -1535,12 +1535,12 @@ Add `getLeg` to the import at the top of `frontend/test/api-client.test.ts`:
 import { login, getLegs, createLeg, getLeg } from '../src/lib/api-client';
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `getLeg is not a function`
 
-- [ ] **Step 3: Implement `getLeg`**
+- [x] **Step 3: Implement `getLeg`**
 
 Modify `frontend/src/lib/api-client.ts` — add after `getLegs`:
 ```typescript
@@ -1553,12 +1553,12 @@ export async function getLeg(token: string, id: string): Promise<Leg> {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (7 tests)
 
-- [ ] **Step 5: Write the failing test for the Leg detail page**
+- [x] **Step 5: Write the failing test for the Leg detail page**
 
 `frontend/test/leg-detail.test.tsx`:
 ```tsx
@@ -1610,12 +1610,12 @@ describe('LegDetailPage', () => {
 
 Note: two real bugs found running this test, both in the test itself, not the component. First — `next/navigation`'s `useRouter` is mocked globally in `frontend/test/setup.ts` (added when the foundation plan's Legs page picked up a redirect), but this file's own local `vi.mock('next/navigation', ...)` (needed for `useParams`) replaces that mock entirely and spreads in the *real* `useRouter` via `importActual`, which throws `invariant expected app router to be mounted` outside a real Next.js router tree. Any test file that locally mocks `next/navigation` needs to re-declare `useRouter` itself — the global setup mock doesn't compose with a local one. Second — `getByText('482421')` fails because the page renders `Trip {leg.tripNo}` as sibling text nodes inside one `<h1>` (JSX interpolation, not a wrapping element around just the number), so no single node's text content is the exact string `'482421'` — `getByRole('heading', { name: /482421/ })` matches the heading's full accessible name instead, which is the correct fix here (not a component restructure).
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/leg-detail.test.tsx`
 Expected: FAIL — `Cannot find module '../src/app/legs/[id]/page'`
 
-- [ ] **Step 7: Implement the Leg detail page**
+- [x] **Step 7: Implement the Leg detail page**
 
 `frontend/src/app/legs/[id]/page.tsx`:
 ```tsx
@@ -1684,12 +1684,12 @@ export default function PermitRequests(_props: { legId: string; country: string 
 }
 ```
 
-- [ ] **Step 8: Run the test to verify it passes**
+- [x] **Step 8: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/leg-detail.test.tsx`
 Expected: PASS (1 test)
 
-- [ ] **Step 9: Link each legs-list row to its detail page**
+- [x] **Step 9: Link each legs-list row to its detail page**
 
 Modify `frontend/src/app/legs/page.tsx` — wrap the trip-no cell in a link:
 ```tsx
@@ -1699,7 +1699,7 @@ Modify `frontend/src/app/legs/page.tsx` — wrap the trip-no cell in a link:
 ```
 (replacing the existing `<td className="col-mono">{leg.tripNo}</td>` line).
 
-- [ ] **Step 10: Run the full frontend suite and the build**
+- [x] **Step 10: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -1709,7 +1709,7 @@ npm run build
 ```
 Expected: all tests PASS, build succeeds, new route `/legs/[id]` listed in the build output.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add frontend/src/lib/api-client.ts frontend/src/app/legs/[id] frontend/src/app/legs/page.tsx frontend/test/leg-detail.test.tsx frontend/test/api-client.test.ts
@@ -1730,7 +1730,7 @@ git commit -m "Add Leg detail page, linked from the legs list"
 - Consumes: `Leg` detail page (Task 8).
 - Produces: a "Request Permit" action per leg that calls `POST /legs/:legId/permit-requests`, a list of existing requests with status, and a status-update control calling `PATCH /permit-requests/:id`.
 
-- [ ] **Step 1: Write the failing test for the new api-client functions**
+- [x] **Step 1: Write the failing test for the new api-client functions**
 
 Add to `frontend/test/api-client.test.ts`:
 ```typescript
@@ -1783,12 +1783,12 @@ Add to `frontend/test/api-client.test.ts`:
 ```
 Add the new names to the import: `import { login, getLegs, createLeg, getLeg, listPermitRequests, createPermitRequest, updatePermitRequest } from '../src/lib/api-client';`
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `listPermitRequests is not a function`
 
-- [ ] **Step 3: Implement the api-client functions**
+- [x] **Step 3: Implement the api-client functions**
 
 Modify `frontend/src/lib/api-client.ts` — add after `getLeg`:
 ```typescript
@@ -1843,12 +1843,12 @@ export async function updatePermitRequest(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (10 tests)
 
-- [ ] **Step 5: Write the failing test for the composer**
+- [x] **Step 5: Write the failing test for the composer**
 
 `frontend/test/permit-composer.test.tsx`:
 ```tsx
@@ -1920,12 +1920,12 @@ describe('PermitRequests', () => {
 });
 ```
 
-- [ ] **Step 6: Run the tests to verify they fail**
+- [x] **Step 6: Run the tests to verify they fail**
 
 Run: `cd frontend && npx vitest run test/permit-composer.test.tsx`
 Expected: FAIL — the stub `PermitRequests` renders `null`, so none of the queried text/roles exist.
 
-- [ ] **Step 7: Implement the composer**
+- [x] **Step 7: Implement the composer**
 
 `frontend/src/app/legs/[id]/permit-requests.tsx`:
 ```tsx
@@ -2025,7 +2025,7 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
 }
 ```
 
-- [ ] **Step 8: Add supporting CSS**
+- [x] **Step 8: Add supporting CSS**
 
 Modify `frontend/src/app/globals.css` — append:
 ```css
@@ -2087,12 +2087,12 @@ Modify `frontend/src/app/globals.css` — append:
 }
 ```
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/permit-composer.test.tsx`
 Expected: PASS (3 tests)
 
-- [ ] **Step 10: Run the full frontend suite and the build**
+- [x] **Step 10: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -2102,7 +2102,7 @@ npm run build
 ```
 Expected: all tests PASS, build succeeds.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add frontend/src/app/legs/[id]/permit-requests.tsx frontend/src/lib/api-client.ts frontend/src/app/globals.css frontend/test/permit-composer.test.tsx frontend/test/api-client.test.ts
@@ -2115,7 +2115,7 @@ git commit -m "Add permit request composer to the Leg detail page"
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script in order**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script in order**
 
 Run:
 ```bash
@@ -2128,7 +2128,9 @@ DATABASE_URL="postgres://uaa:uaa@localhost:5432/uaa" npm run seed:country-requir
 ```
 Expected: 6 migrations run (2 from the foundation plan + 4 from this one), leg/user seed reports real counts, country-requirements seed reports `Seeded 15 CountryRequirement(s), 15 FormTemplate(s).`
 
-- [ ] **Step 2: Request a real permit via the API and confirm the dry-run mail log**
+Actual: `docker compose down -v` + `up --build -d` on a completely fresh volume, all 6 migrations ran in order (`CreateUsers` → `CreateLegs` → `CreateCountryRequirements` → `CreateFormTemplates` → `CreatePermitRequests` → `CreateComms`), seed reported `Seeded 2 user(s), 62 leg(s).` and `Seeded 15 CountryRequirement(s), 15 FormTemplate(s).` — exactly as expected.
+
+- [x] **Step 2: Request a real permit via the API and confirm the dry-run mail log**
 
 Using a real seeded coordinator's token (see the foundation plan's Task 10 for the login flow) and a real leg id (`GET /legs`, take the first entry's `id`):
 ```bash
@@ -2140,18 +2142,24 @@ docker compose logs backend --tail 5
 ```
 Expected (no `SMTP_HOST` configured in this local environment, per Task 1's dry-run fallback): a `WARN` log line — `SMTP not configured — dry-run only. Would send "Permit Request — Trip ... — Egypt [...]" to permits.eg@example.com`. Confirms the composer→template→send pipeline actually ran end-to-end, without requiring real SMTP credentials for this check.
 
-- [ ] **Step 3: Confirm the outbound Comm row was recorded**
+Actual: used real trip 482421 (Egypt, arrDate `2026-09-16T16:20:00.000Z`). Response: `status: "REQUESTED"`, `correlationToken: "44/5c8f18b2-9f30-4438-a51e-aac332077443"`, `requiredByZ: "2026-09-10T16:20:00.000Z"` — independently verified correct: Egypt's `CountryRequirement` is 96 working-hours lead time; Sept 16 → Sept 10 is exactly 6 calendar days (144h) minus the Sat 12/Sun 13 weekend (48h) = 96 working hours, matching `computeRequiredByZ`'s already-unit-tested weekend-skipping logic. Backend log: `WARN [MailService] SMTP not configured — dry-run only. Would send "Permit Request — Trip 482421 — Egypt [44/5c8f18b2-9f30-4438-a51e-aac332077443]" to permits.eg@example.com`.
+
+- [x] **Step 3: Confirm the outbound Comm row was recorded**
 
 ```bash
 docker compose exec postgres psql -U uaa -d uaa -c "SELECT direction, kind, to_address, correlation_token FROM comms ORDER BY created_at DESC LIMIT 1;"
 ```
 Expected: one row, `direction = OUTBOUND`, `kind = REQUEST`, `to_address = permits.eg@example.com`, `correlation_token` matching Step 2's response.
 
-- [ ] **Step 4: Confirm the frontend composer renders the same request**
+Actual: one row — `OUTBOUND | REQUEST | permits.eg@example.com | 44/5c8f18b2-9f30-4438-a51e-aac332077443` — correlation token matches Step 2 exactly.
+
+- [x] **Step 4: Confirm the frontend composer renders the same request**
 
 Visit `http://localhost:3012/legs`, sign in, click into the trip used in Step 2, confirm the Permits section shows the request with status `REQUESTED`. Type a clearance number and click "Mark Confirmed"; confirm the row updates to `CONFIRMED` and shows the clearance number.
 
-- [ ] **Step 5: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+Actual: verified via browser automation on the Leg detail page for trip 482421 — Permits section showed `Egypt | REQUESTED` with an empty Clearance No field, matching Step 2's real API-created request exactly. Typed `EG-4471`, clicked "Mark Confirmed" — row updated live to `Egypt | CONFIRMED | EG-4471` with the amber row-hover accent, no page reload needed.
+
+- [x] **Step 5: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
 
 ---
 
