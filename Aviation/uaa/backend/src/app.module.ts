@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { LegsModule } from './legs/legs.module';
 import { PermitsModule } from './permits/permits.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TripsModule } from './trips/trips.module';
 
 @Controller('health')
 class HealthController {
@@ -31,6 +32,7 @@ class HealthController {
     LegsModule,
     PermitsModule,
     NotificationsModule,
+    TripsModule,
   ],
   controllers: [HealthController],
 })
