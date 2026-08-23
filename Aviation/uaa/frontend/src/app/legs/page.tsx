@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getLegs, type Leg } from '@/lib/api-client';
+import { getLegs, downloadCompletedMissions, type Leg } from '@/lib/api-client';
 
 type SortKey = 'tripNo' | 'icao' | 'tail' | 'country' | 'arrDate' | 'depDate';
 type SortDir = 'asc' | 'desc';
@@ -36,6 +36,10 @@ export default function LegsPage() {
   const [countryFilter, setCountryFilter] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('tripNo');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -89,6 +93,28 @@ export default function LegsPage() {
     return sortDir === 'asc' ? ' ▲' : ' ▼';
   }
 
+  async function handleExport() {
+    const token = localStorage.getItem('uaa_token');
+    if (!token || !exportFrom || !exportTo) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await downloadCompletedMissions(token, exportFrom, exportTo);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `UAA_Completed_Missions_${exportFrom}_to_${exportTo}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError('Could not export completed missions. Check the date range and try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="board-shell">
       <div className="board-header">
@@ -131,6 +157,21 @@ export default function LegsPage() {
           ))}
         </select>
       </div>
+
+      <div className="export-toolbar">
+        <label htmlFor="export-from">From</label>
+        <input id="export-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+        <label htmlFor="export-to">To</label>
+        <input id="export-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+        <button type="button" className="btn-link" onClick={handleExport} disabled={exporting || !exportFrom || !exportTo}>
+          {exporting ? 'Exporting…' : 'Download Completed Missions (Excel)'}
+        </button>
+      </div>
+      {exportError && (
+        <p className="login-error" role="alert">
+          {exportError}
+        </p>
+      )}
 
       <div className="board-table-wrap">
         <table className="legs-table">

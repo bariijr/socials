@@ -6,7 +6,7 @@ import LegsPage from '../src/app/legs/page';
 
 vi.mock('../src/lib/api-client', async () => {
   const actual = await vi.importActual<typeof apiClient>('../src/lib/api-client');
-  return { ...actual, getLegs: vi.fn() };
+  return { ...actual, getLegs: vi.fn(), downloadCompletedMissions: vi.fn() };
 });
 
 describe('LegsPage', () => {
@@ -118,5 +118,24 @@ describe('LegsPage', () => {
     render(<LegsPage />);
 
     await waitFor(() => expect(screen.getByText('Completed')).toBeInTheDocument());
+  });
+
+  it('downloads completed missions for the selected date range', async () => {
+    vi.mocked(apiClient.getLegs).mockResolvedValue([]);
+    const blob = new Blob(['fake-xlsx-bytes']);
+    vi.mocked(apiClient.downloadCompletedMissions).mockResolvedValue(blob);
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() });
+
+    render(<LegsPage />);
+    await waitFor(() => expect(apiClient.getLegs).toHaveBeenCalled());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('From'), '2026-08-01');
+    await user.type(screen.getByLabelText('To'), '2026-08-31');
+    await user.click(screen.getByRole('button', { name: /Download Completed Missions/ }));
+
+    await waitFor(() =>
+      expect(apiClient.downloadCompletedMissions).toHaveBeenCalledWith('test-token', '2026-08-01', '2026-08-31'),
+    );
   });
 });
