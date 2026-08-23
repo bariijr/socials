@@ -75,4 +75,20 @@ describe('LegsService', () => {
       NotFoundException,
     );
   });
+
+  it('markComplete stamps completedAt and returns the saved leg', async () => {
+    legRepo.findOne.mockResolvedValue({ id: '1', tripNo: '482421', completedAt: null });
+    legRepo.save.mockImplementation(async (entity) => entity);
+
+    const result = await service.markComplete('1');
+
+    expect(result.completedAt).toBeInstanceOf(Date);
+    expect(legRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: '1', completedAt: expect.any(Date) }));
+  });
+
+  it('throws NotFoundException when marking a leg that does not exist as complete', async () => {
+    legRepo.findOne.mockResolvedValue(null);
+
+    await expect(service.markComplete('missing')).rejects.toThrow(NotFoundException);
+  });
 });

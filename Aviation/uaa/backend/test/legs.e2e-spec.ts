@@ -86,4 +86,13 @@ describe('Legs (e2e)', () => {
 
     expect(response.status).toBe(200);
   });
+
+  it('POST /legs/:id/complete marks the leg complete and returns 201', async () => {
+    legRepo.findOne.mockResolvedValue({ id: 'generated-id', tripNo: '2608001', completedAt: null });
+
+    const response = await request(app.getHttpServer()).post('/legs/generated-id/complete').send();
+
+    expect(response.status).toBe(201);
+    expect(response.body.completedAt).toBeTruthy();
+  });
 });

@@ -38,4 +38,9 @@ export class LegsController {
     }
     return leg;
   }
+
+  @Post(':id/complete')
+  markComplete(@Param('id') id: string) {
+    return this.legsService.markComplete(id);
+  }
 }

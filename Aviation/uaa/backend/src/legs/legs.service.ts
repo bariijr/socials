@@ -36,4 +36,11 @@ export class LegsService {
 
     return this.legRepo.save(leg);
   }
+
+  async markComplete(id: string): Promise<Leg> {
+    const leg = await this.legRepo.findOne({ where: { id } });
+    if (!leg) throw new NotFoundException(`Leg ${id} not found`);
+    leg.completedAt = new Date();
+    return this.legRepo.save(leg);
+  }
 }
