@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import { Leg } from './leg.entity';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
+import { buildMayflyWorkbook } from './mayfly-export';
 
 @Injectable()
 export class LegsService {
@@ -42,5 +43,14 @@ export class LegsService {
     if (!leg) throw new NotFoundException(`Leg ${id} not found`);
     leg.completedAt = new Date();
     return this.legRepo.save(leg);
+  }
+
+  findCompletedInRange(from: Date, to: Date): Promise<Leg[]> {
+    return this.legRepo.find({ where: { completedAt: Between(from, to) }, order: { completedAt: 'ASC' } });
+  }
+
+  async exportMayflyBuffer(from: Date, to: Date): Promise<Buffer> {
+    const legs = await this.findCompletedInRange(from, to);
+    return buildMayflyWorkbook(legs);
   }
 }

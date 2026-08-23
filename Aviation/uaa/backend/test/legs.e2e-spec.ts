@@ -95,4 +95,15 @@ describe('Legs (e2e)', () => {
     expect(response.status).toBe(201);
     expect(response.body.completedAt).toBeTruthy();
   });
+
+  it('GET /legs/export returns an xlsx file for the date range', async () => {
+    legRepo.find.mockResolvedValue([
+      { id: '1', tripNo: '475087', icao: 'GMMN', country: 'Morocco', legId: 63, completedAt: new Date('2026-08-15T00:00:00.000Z') },
+    ]);
+
+    const response = await request(app.getHttpServer()).get('/legs/export?from=2026-08-01&to=2026-08-31');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('spreadsheetml');
+  });
 });

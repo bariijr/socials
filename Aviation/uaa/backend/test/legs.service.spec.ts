@@ -91,4 +91,29 @@ describe('LegsService', () => {
 
     await expect(service.markComplete('missing')).rejects.toThrow(NotFoundException);
   });
+
+  it('findCompletedInRange queries legs with completedAt between the given dates', async () => {
+    legRepo.find.mockResolvedValue([{ id: '1', completedAt: new Date('2026-08-15T00:00:00.000Z') }]);
+
+    const result = await service.findCompletedInRange(
+      new Date('2026-08-01T00:00:00.000Z'),
+      new Date('2026-08-31T23:59:59.000Z'),
+    );
+
+    expect(legRepo.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ completedAt: expect.anything() }) }),
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  it('exportMayflyBuffer returns a real xlsx buffer for the completed legs in range', async () => {
+    legRepo.find.mockResolvedValue([{ id: '1', country: 'Morocco', tripNo: '475087', icao: 'GMMN', legId: 63 }]);
+
+    const buffer = await service.exportMayflyBuffer(
+      new Date('2026-08-01T00:00:00.000Z'),
+      new Date('2026-08-31T23:59:59.000Z'),
+    );
+
+    expect(Buffer.isBuffer(buffer)).toBe(true);
+  });
 });
