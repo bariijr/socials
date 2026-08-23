@@ -7,6 +7,7 @@ import { CountryRequirement } from '../country-requirements/country-requirement.
 import { FormTemplate } from '../form-templates/form-template.entity';
 import { PermitsService } from './permits.service';
 import { PermitsController } from './permits.controller';
+import { ReconfirmSweepService } from './reconfirm-sweep.service';
 import { MailModule } from '../mail/mail.module';
 
 @Module({
@@ -14,7 +15,7 @@ import { MailModule } from '../mail/mail.module';
     TypeOrmModule.forFeature([PermitRequest, Comm, Leg, CountryRequirement, FormTemplate]),
     MailModule,
   ],
-  providers: [PermitsService],
+  providers: [PermitsService, ReconfirmSweepService],
   controllers: [PermitsController],
   exports: [PermitsService],
 })

@@ -720,6 +720,8 @@ export class ReconfirmSweepService {
     let flipped = 0;
 
     for (const request of requests) {
+      if (request.status === 'CANCELLED') continue;
+
       const leg = await this.legRepo.findOne({ where: { id: request.legId } });
       const nextStatus = evaluateReconfirm(request, leg?.arrDate ?? null, now);
       if (nextStatus !== request.status) {
@@ -733,6 +735,8 @@ export class ReconfirmSweepService {
   }
 }
 ```
+
+Note: the `if (request.status === 'CANCELLED') continue;` guard is required for Step 2's "skips CANCELLED requests entirely and does not query their leg" test to actually pass — the SQL `where` clause above already excludes `CANCELLED` rows in real usage, but the test drives `permitRequestRepo.find` with a mock that ignores the `where` argument entirely (as mocks do), returning a `CANCELLED` row anyway to exercise the defensive path. Without the explicit continue, the loop would call `legRepo.findOne` for every returned row regardless of status, failing the test's `expect(legRepo.findOne).not.toHaveBeenCalled()`.
 
 - [ ] **Step 5: Run the test to verify it passes**
 
