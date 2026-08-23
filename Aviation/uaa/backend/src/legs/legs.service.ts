@@ -5,15 +5,20 @@ import { Leg } from './leg.entity';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
 import { buildMayflyWorkbook } from './mayfly-export';
+import { TripsService } from '../trips/trips.service';
 
 @Injectable()
 export class LegsService {
-  constructor(@InjectRepository(Leg) private readonly legRepo: Repository<Leg>) {}
+  constructor(
+    @InjectRepository(Leg) private readonly legRepo: Repository<Leg>,
+    private readonly tripsService: TripsService,
+  ) {}
 
   async create(dto: CreateLegDto): Promise<Leg> {
     const currentMax = await this.legRepo.maximum('legId');
     const legId = (currentMax ?? 0) + 1;
-    const leg = this.legRepo.create({ ...dto, legId });
+    const trip = await this.tripsService.findOrCreateByTripNo(dto.tripNo);
+    const leg = this.legRepo.create({ ...dto, legId, tripId: trip.id });
     return this.legRepo.save(leg);
   }
 
@@ -29,11 +34,18 @@ export class LegsService {
     const leg = await this.legRepo.findOne({ where: { id } });
     if (!leg) throw new NotFoundException(`Leg ${id} not found`);
 
+    const tripNoChanged = dto.tripNo !== undefined && dto.tripNo !== leg.tripNo;
+
     Object.assign(leg, {
       ...dto,
       arrDate: dto.arrDate !== undefined ? new Date(dto.arrDate) : leg.arrDate,
       depDate: dto.depDate !== undefined ? new Date(dto.depDate) : leg.depDate,
     });
+
+    if (tripNoChanged) {
+      const trip = await this.tripsService.findOrCreateByTripNo(dto.tripNo!);
+      leg.tripId = trip.id;
+    }
 
     return this.legRepo.save(leg);
   }

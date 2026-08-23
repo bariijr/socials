@@ -11,6 +11,8 @@ import { PermitRequest } from '../src/permits/permit-request.entity';
 import { Comm } from '../src/permits/comm.entity';
 import { CountryRequirement } from '../src/country-requirements/country-requirement.entity';
 import { FormTemplate } from '../src/form-templates/form-template.entity';
+import { TripsService } from '../src/trips/trips.service';
+import { Trip } from '../src/trips/trip.entity';
 
 describe('Legs (e2e)', () => {
   let app: INestApplication;
@@ -40,6 +42,10 @@ describe('Legs (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(FormTemplate))
       .useValue({})
+      .overrideProvider(TripsService)
+      .useValue({ findOrCreateByTripNo: jest.fn().mockResolvedValue({ id: 'trip-1', tripNo: 'trip-1' }) })
+      .overrideProvider(getRepositoryToken(Trip))
+      .useValue({})
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .compile();
@@ -59,7 +65,7 @@ describe('Legs (e2e)', () => {
       .send({ tripNo: '2608001', icao: 'GMMN' });
 
     expect(response.status).toBe(201);
-    expect(response.body).toEqual(expect.objectContaining({ tripNo: '2608001', icao: 'GMMN' }));
+    expect(response.body).toEqual(expect.objectContaining({ tripNo: '2608001', icao: 'GMMN', tripId: 'trip-1' }));
   });
 
   it('GET /legs returns an array', async () => {

@@ -3,10 +3,12 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { LegsService } from '../src/legs/legs.service';
 import { Leg } from '../src/legs/leg.entity';
+import { TripsService } from '../src/trips/trips.service';
 
 describe('LegsService', () => {
   let service: LegsService;
   let legRepo: { create: jest.Mock; save: jest.Mock; find: jest.Mock; findOne: jest.Mock; maximum: jest.Mock };
+  let tripsService: { findOrCreateByTripNo: jest.Mock };
 
   beforeEach(async () => {
     legRepo = {
@@ -16,19 +18,28 @@ describe('LegsService', () => {
       findOne: jest.fn(),
       maximum: jest.fn(),
     };
+    tripsService = { findOrCreateByTripNo: jest.fn().mockResolvedValue({ id: 'trip-1', tripNo: 'trip-1' }) };
     const moduleRef = await Test.createTestingModule({
-      providers: [LegsService, { provide: getRepositoryToken(Leg), useValue: legRepo }],
+      providers: [
+        LegsService,
+        { provide: getRepositoryToken(Leg), useValue: legRepo },
+        { provide: TripsService, useValue: tripsService },
+      ],
     }).compile();
     service = moduleRef.get(LegsService);
   });
 
-  it('assigns the next leg ID as max(existing legId) + 1', async () => {
+  it('assigns the next leg ID as max(existing legId) + 1 and attaches the leg to its trip', async () => {
     legRepo.maximum.mockResolvedValue(41);
+    tripsService.findOrCreateByTripNo.mockResolvedValue({ id: 'trip-42', tripNo: '2608001' });
 
     const result = await service.create({ tripNo: '2608001', icao: 'GMMN' });
 
     expect(legRepo.maximum).toHaveBeenCalledWith('legId');
-    expect(legRepo.create).toHaveBeenCalledWith(expect.objectContaining({ legId: 42, tripNo: '2608001', icao: 'GMMN' }));
+    expect(tripsService.findOrCreateByTripNo).toHaveBeenCalledWith('2608001');
+    expect(legRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ legId: 42, tripNo: '2608001', icao: 'GMMN', tripId: 'trip-42' }),
+    );
     expect(result).toEqual(expect.objectContaining({ id: 'generated-id', legId: 42 }));
   });
 
@@ -66,6 +77,19 @@ describe('LegsService', () => {
       expect.objectContaining({ arrDate: new Date('2026-09-18T10:00:00.000Z') }),
     );
     expect(result).toEqual(expect.objectContaining({ id: '1' }));
+    expect(tripsService.findOrCreateByTripNo).not.toHaveBeenCalled();
+  });
+
+  it('reassigns the leg to a different (or new) trip when tripNo changes', async () => {
+    legRepo.findOne.mockResolvedValue({ id: '1', tripNo: '482421', tripId: 'trip-old' });
+    legRepo.save.mockImplementation(async (entity) => entity);
+    tripsService.findOrCreateByTripNo.mockResolvedValue({ id: 'trip-new', tripNo: '482499' });
+
+    const result = await service.update('1', { tripNo: '482499' });
+
+    expect(tripsService.findOrCreateByTripNo).toHaveBeenCalledWith('482499');
+    expect(legRepo.save).toHaveBeenCalledWith(expect.objectContaining({ tripId: 'trip-new' }));
+    expect(result).toEqual(expect.objectContaining({ tripId: 'trip-new' }));
   });
 
   it('throws NotFoundException when updating a leg that does not exist', async () => {
