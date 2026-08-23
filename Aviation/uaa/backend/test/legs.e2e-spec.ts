@@ -6,6 +6,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { LegsModule } from '../src/legs/legs.module';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { Leg } from '../src/legs/leg.entity';
+import { PermitsService } from '../src/permits/permits.service';
+import { PermitRequest } from '../src/permits/permit-request.entity';
+import { Comm } from '../src/permits/comm.entity';
+import { CountryRequirement } from '../src/country-requirements/country-requirement.entity';
+import { FormTemplate } from '../src/form-templates/form-template.entity';
 
 describe('Legs (e2e)', () => {
   let app: INestApplication;
@@ -25,6 +30,16 @@ describe('Legs (e2e)', () => {
     })
       .overrideProvider(getRepositoryToken(Leg))
       .useValue(legRepo)
+      .overrideProvider(PermitsService)
+      .useValue({ reconcileForLeg: jest.fn() })
+      .overrideProvider(getRepositoryToken(PermitRequest))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(Comm))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(CountryRequirement))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(FormTemplate))
+      .useValue({})
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .compile();

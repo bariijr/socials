@@ -3,11 +3,15 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LegsService } from './legs.service';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
+import { PermitsService } from '../permits/permits.service';
 
 @Controller('legs')
 @UseGuards(JwtAuthGuard)
 export class LegsController {
-  constructor(private readonly legsService: LegsService) {}
+  constructor(
+    private readonly legsService: LegsService,
+    private readonly permitsService: PermitsService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateLegDto) {
@@ -27,7 +31,11 @@ export class LegsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateLegDto) {
-    return this.legsService.update(id, dto);
+  async update(@Param('id') id: string, @Body() dto: UpdateLegDto) {
+    const leg = await this.legsService.update(id, dto);
+    if (dto.arrDate !== undefined) {
+      await this.permitsService.reconcileForLeg(id, leg.arrDate);
+    }
+    return leg;
   }
 }

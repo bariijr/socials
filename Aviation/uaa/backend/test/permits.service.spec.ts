@@ -150,4 +150,41 @@ describe('PermitsService', () => {
 
     await expect(service.update('missing', { status: 'CONFIRMED' })).rejects.toThrow(NotFoundException);
   });
+
+  it('reconcileForLeg flips a CONFIRMED request whose validity window no longer covers the leg ETD', async () => {
+    permitRequestRepo.find.mockResolvedValue([
+      {
+        id: 'pr-1',
+        legId: 'leg-1',
+        status: 'CONFIRMED',
+        requiredByZ: null,
+        validFrom: new Date('2026-09-10T00:00:00.000Z'),
+        validTo: new Date('2026-09-20T00:00:00.000Z'),
+      },
+    ]);
+
+    await service.reconcileForLeg('leg-1', new Date('2026-09-25T00:00:00.000Z'));
+
+    expect(permitRequestRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'pr-1', status: 'RECONFIRM_REQUIRED' }),
+    );
+  });
+
+  it('reconcileForLeg does not save a request whose status does not change', async () => {
+    permitRequestRepo.find.mockResolvedValue([
+      {
+        id: 'pr-1',
+        legId: 'leg-1',
+        status: 'CONFIRMED',
+        requiredByZ: null,
+        validFrom: new Date('2026-09-10T00:00:00.000Z'),
+        validTo: new Date('2026-09-20T00:00:00.000Z'),
+      },
+    ]);
+    permitRequestRepo.save.mockClear();
+
+    await service.reconcileForLeg('leg-1', new Date('2026-09-15T00:00:00.000Z'));
+
+    expect(permitRequestRepo.save).not.toHaveBeenCalled();
+  });
 });

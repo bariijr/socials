@@ -8,6 +8,7 @@ import { CountryRequirement } from '../country-requirements/country-requirement.
 import { FormTemplate } from '../form-templates/form-template.entity';
 import { renderTemplate } from '../form-templates/template-renderer';
 import { computeRequiredByZ } from './permit-deadline';
+import { evaluateReconfirm } from './reconfirm';
 import { MailService } from '../mail/mail.service';
 import { UpdatePermitRequestDto } from './dto/update-permit-request.dto';
 
@@ -100,5 +101,18 @@ export class PermitsService {
     if (dto.validTo) permitRequest.validTo = new Date(dto.validTo);
 
     return this.permitRequestRepo.save(permitRequest);
+  }
+
+  async reconcileForLeg(legId: string, currentArrDateZ: Date | null): Promise<void> {
+    const requests = await this.permitRequestRepo.find({ where: { legId } });
+    const now = new Date();
+
+    for (const request of requests) {
+      const nextStatus = evaluateReconfirm(request, currentArrDateZ, now);
+      if (nextStatus !== request.status) {
+        request.status = nextStatus;
+        await this.permitRequestRepo.save(request);
+      }
+    }
   }
 }

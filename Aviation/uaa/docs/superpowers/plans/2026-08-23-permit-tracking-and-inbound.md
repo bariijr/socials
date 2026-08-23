@@ -563,6 +563,19 @@ Modify `backend/test/legs.e2e-spec.ts` — the test module now needs `PermitsSer
 ```
 placed alongside the existing `.overrideGuard(JwtAuthGuard)` chain (before `.compile()`), and add the import: `import { PermitsService } from '../src/permits/permits.service';`. Also change the test module's `imports` from `[LegsModule]` to keep `LegsModule` (it now transitively imports `PermitsModule`, which is fine — the override above replaces the real `PermitsService` regardless of which module provides it).
 
+Note: overriding `PermitsService` alone is **not** sufficient — `PermitsModule` also declares `TypeOrmModule.forFeature([PermitRequest, Comm, Leg, CountryRequirement, FormTemplate])`, and Nest's testing module still eagerly instantiates every provider those `forFeature` registrations produce (real repository factories needing a live `DataSource`), regardless of whether anything still injects them once `PermitsService` itself is mocked out. Also override the other four repository tokens with a plain `{}` (nothing calls them — `PermitsService` is already mocked, so they exist purely to satisfy DI construction):
+```typescript
+      .overrideProvider(getRepositoryToken(PermitRequest))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(Comm))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(CountryRequirement))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(FormTemplate))
+      .useValue({})
+```
+with imports for `PermitRequest`, `Comm`, `CountryRequirement`, `FormTemplate` added alongside the existing `Leg` import. (`getRepositoryToken(Leg)` was already overridden for `LegsModule`'s own use above — that single override also satisfies `PermitsModule`'s separate `forFeature([..., Leg])` registration, since the injection token is keyed by entity class, not by which module's `forFeature` call produced it — no additional `Leg` override needed.)
+
 - [ ] **Step 7: Run the full e2e suite to verify nothing broke**
 
 Run: `cd backend && npx jest --config test/jest-e2e.json`
