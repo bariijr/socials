@@ -131,6 +131,9 @@ export class Leg {
   @Column({ name: 'intel_status', type: 'varchar', nullable: true })
   intelStatus: string | null;
 
+  @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
+  completedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
