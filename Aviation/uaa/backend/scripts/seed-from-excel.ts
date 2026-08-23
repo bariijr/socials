@@ -5,6 +5,7 @@ import { AppDataSource } from '../src/database/data-source';
 import { User } from '../src/users/user.entity';
 import { Leg } from '../src/legs/leg.entity';
 import { Team } from '../src/notifications/team.entity';
+import { Trip } from '../src/trips/trip.entity';
 
 const TEMP_PASSWORD = 'ChangeMe-' + Math.random().toString(36).slice(2, 10);
 
@@ -54,6 +55,8 @@ async function seedLegs(workbook: XLSX.WorkBook, dataSource: typeof AppDataSourc
   const mayflySheet = workbook.Sheets['MAYFLY'];
   const rows = XLSX.utils.sheet_to_json<any[]>(mayflySheet, { header: 1, range: 1 });
   const legRepo = dataSource.getRepository(Leg);
+  const tripRepo = dataSource.getRepository(Trip);
+  const tripIdByTripNo = new Map<string, string>();
   let created = 0;
 
   for (const row of rows) {
@@ -61,7 +64,17 @@ async function seedLegs(workbook: XLSX.WorkBook, dataSource: typeof AppDataSourc
     const icao = row[12];
     if (!tripNo || !icao) continue;
 
+    const tripNoStr = String(tripNo);
+    let tripId = tripIdByTripNo.get(tripNoStr);
+    if (!tripId) {
+      const existingTrip = await tripRepo.findOne({ where: { tripNo: tripNoStr } });
+      const trip = existingTrip ?? (await tripRepo.save(tripRepo.create({ tripNo: tripNoStr })));
+      tripId = trip.id;
+      tripIdByTripNo.set(tripNoStr, tripId);
+    }
+
     const leg = legRepo.create({
+      tripId,
       country: row[0] ?? null,
       region: row[1] ?? null,
       refNo: row[2] ?? null,

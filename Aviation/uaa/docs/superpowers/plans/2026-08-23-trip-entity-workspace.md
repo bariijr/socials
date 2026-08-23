@@ -76,7 +76,7 @@ frontend/
 
 Real data grounding: 62 seeded legs group into exactly 31 distinct `trip_no` values (verified against the live database before writing this plan), all clean numeric strings — no whitespace/casing collisions to worry about in the backfill.
 
-- [ ] **Step 1: Create the Trip entity**
+- [x] **Step 1: Create the Trip entity**
 
 `backend/src/trips/trip.entity.ts`:
 ```typescript
@@ -98,7 +98,7 @@ export class Trip {
 }
 ```
 
-- [ ] **Step 2: Add tripId to the Leg entity**
+- [x] **Step 2: Add tripId to the Leg entity**
 
 Modify `backend/src/legs/leg.entity.ts` — add after `completedAt` (before `createdAt`):
 ```typescript
@@ -106,7 +106,7 @@ Modify `backend/src/legs/leg.entity.ts` — add after `completedAt` (before `cre
   tripId: string;
 ```
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 `backend/migrations/1756252800000-CreateTripsAndBackfillLegs.ts`:
 ```typescript
@@ -169,7 +169,7 @@ export class CreateTripsAndBackfillLegs1756252800000 implements MigrationInterfa
 }
 ```
 
-- [ ] **Step 4: Register Trip in the CLI data source**
+- [x] **Step 4: Register Trip in the CLI data source**
 
 Modify `backend/src/database/data-source.ts`:
 ```typescript
@@ -193,12 +193,12 @@ export const AppDataSource = new DataSource({
 });
 ```
 
-- [ ] **Step 5: Verify the backend still builds**
+- [x] **Step 5: Verify the backend still builds**
 
 Run: `cd backend && npm run build`
 Expected: compiles with no errors. (Note: `Leg.tripId` has no default and no repositories reference it yet in this task — TypeScript won't complain since nothing constructs a `Leg` literal missing it at compile time in existing code; the real migration/backfill runs for real in Task 5.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/trips/trip.entity.ts backend/src/legs/leg.entity.ts backend/migrations/1756252800000-CreateTripsAndBackfillLegs.ts backend/src/database/data-source.ts
@@ -217,7 +217,7 @@ git commit -m "Add Trip entity and migrate Legs onto a real trip_id FK"
 - Produces: `TripsService.findOrCreateByTripNo(tripNo: string): Promise<Trip>` (Task 3 consumes this), `TripsService.getWorkspace(tripNo: string): Promise<TripWorkspace>`, `GET /trips/:tripNo` (200 or 404).
 - `TripWorkspace` shape: `{ tripNo, tails: string[], operatorNames: string[], countries: string[], legCount: number, firstDeparture: Date | null, lastArrival: Date | null, status: 'ACTIVE' | 'COMPLETED', legs: Leg[] }`.
 
-- [ ] **Step 1: Write the failing service tests**
+- [x] **Step 1: Write the failing service tests**
 
 `backend/test/trips.service.spec.ts`:
 ```typescript
@@ -318,12 +318,12 @@ describe('TripsService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/trips.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/trips/trips.service'`
 
-- [ ] **Step 3: Implement TripsService**
+- [x] **Step 3: Implement TripsService**
 
 `backend/src/trips/trips.service.ts`:
 ```typescript
@@ -386,12 +386,12 @@ export class TripsService {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/trips.service.spec.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Add the controller and module**
+- [x] **Step 5: Add the controller and module**
 
 `backend/src/trips/trips.controller.ts`:
 ```typescript
@@ -431,7 +431,7 @@ export class TripsModule {}
 
 Modify `backend/src/app.module.ts` — add the import and add `TripsModule` to the `imports` array (alongside `LegsModule`/`PermitsModule`/`NotificationsModule`).
 
-- [ ] **Step 6: Write the failing e2e test**
+- [x] **Step 6: Write the failing e2e test**
 
 `backend/test/trips.e2e-spec.ts`:
 ```typescript
@@ -495,12 +495,12 @@ describe('Trips (e2e)', () => {
 });
 ```
 
-- [ ] **Step 7: Run the e2e test to verify it passes**
+- [x] **Step 7: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/trips.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (2 tests)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/trips/trips.service.ts backend/src/trips/trips.controller.ts backend/src/trips/trips.module.ts backend/src/app.module.ts backend/test/trips.service.spec.ts backend/test/trips.e2e-spec.ts
@@ -521,7 +521,7 @@ git commit -m "Add TripsService/Controller — trip workspace aggregation from a
 
 Real correctness requirement found while grounding this plan: `UpdateLegDto` already allows editing `tripNo` (it has since Slice 1). Without handling this, editing a leg's `tripNo` via `PATCH /legs/:id` would leave `Leg.tripNo` and `Leg.tripId` pointing at different trips — the leg would show a new trip number while `TripsService.getWorkspace` (which queries by `tripId`) still lists it under the old trip. `update()` must re-run the same find-or-create when `tripNo` actually changes.
 
-- [ ] **Step 1: Write the failing unit tests**
+- [x] **Step 1: Write the failing unit tests**
 
 Modify `backend/test/legs.service.spec.ts` — replace the whole file:
 ```typescript
@@ -670,12 +670,12 @@ describe('LegsService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/trips/trips.service'` (doesn't exist yet in `LegsService`'s constructor dependencies)
 
-- [ ] **Step 3: Wire TripsService into LegsService**
+- [x] **Step 3: Wire TripsService into LegsService**
 
 Modify `backend/src/legs/legs.service.ts`:
 ```typescript
@@ -749,12 +749,12 @@ export class LegsService {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: PASS (11 tests)
 
-- [ ] **Step 5: Import TripsModule into LegsModule**
+- [x] **Step 5: Import TripsModule into LegsModule**
 
 Modify `backend/src/legs/legs.module.ts`:
 ```typescript
@@ -775,7 +775,7 @@ import { TripsModule } from '../trips/trips.module';
 export class LegsModule {}
 ```
 
-- [ ] **Step 6: Update the Legs e2e test to provide TripsService**
+- [x] **Step 6: Update the Legs e2e test to provide TripsService**
 
 Modify `backend/test/legs.e2e-spec.ts` — add the import `import { TripsService } from '../src/trips/trips.service';`, `import { Trip } from '../src/trips/trip.entity';`, and add these overrides alongside the existing chain (before `.compile()`):
 ```typescript
@@ -792,12 +792,12 @@ Then extend the existing "POST /legs creates a leg and returns 201" test's asser
 ```
 (replacing its current `expect(response.body).toEqual(expect.objectContaining({ tripNo: '2608001', icao: 'GMMN' }));`)
 
-- [ ] **Step 7: Run the full e2e suite to verify nothing broke**
+- [x] **Step 7: Run the full e2e suite to verify nothing broke**
 
 Run: `cd backend && npx jest --config test/jest-e2e.json`
 Expected: PASS (all suites)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/legs/legs.service.ts backend/src/legs/legs.module.ts backend/test/legs.service.spec.ts backend/test/legs.e2e-spec.ts
@@ -817,7 +817,7 @@ git commit -m "Wire TripsService into leg creation/update — every leg stays at
 - Consumes: `GET /trips/:tripNo` (Task 2).
 - Produces: `getTrip(token, tripNo): Promise<TripWorkspace>` in `api-client.ts`. Route `/trips/[tripNo]`.
 
-- [ ] **Step 1: Write the failing api-client type/function (no dedicated test — mirrors the existing untested-in-isolation `getLeg` pattern; covered by the page test in Step 5)**
+- [x] **Step 1: Write the failing api-client type/function (no dedicated test — mirrors the existing untested-in-isolation `getLeg` pattern; covered by the page test in Step 5)**
 
 Modify `frontend/src/lib/api-client.ts` — add after `getLeg`:
 ```typescript
@@ -842,7 +842,7 @@ export async function getTrip(token: string, tripNo: string): Promise<TripWorksp
 }
 ```
 
-- [ ] **Step 2: Write the failing Trip workspace page test**
+- [x] **Step 2: Write the failing Trip workspace page test**
 
 `frontend/test/trip-workspace.test.tsx`:
 ```tsx
@@ -893,12 +893,12 @@ describe('TripWorkspacePage', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/trip-workspace.test.tsx`
 Expected: FAIL — `Cannot find module '../src/app/trips/[tripNo]/page'`
 
-- [ ] **Step 4: Implement the Trip workspace page**
+- [x] **Step 4: Implement the Trip workspace page**
 
 `frontend/src/app/trips/[tripNo]/page.tsx`:
 ```tsx
@@ -1010,12 +1010,12 @@ export default function TripWorkspacePage() {
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/trip-workspace.test.tsx`
 Expected: PASS (1 test)
 
-- [ ] **Step 6: Add trip status badge CSS**
+- [x] **Step 6: Add trip status badge CSS**
 
 Modify `frontend/src/app/globals.css` — append:
 ```css
@@ -1039,7 +1039,7 @@ Modify `frontend/src/app/globals.css` — append:
 }
 ```
 
-- [ ] **Step 7: Write the failing leg-detail link test**
+- [x] **Step 7: Write the failing leg-detail link test**
 
 Add to `frontend/test/leg-detail.test.tsx` (inside the existing `describe('LegDetailPage', ...)` block, after the first test):
 ```typescript
@@ -1063,12 +1063,12 @@ Add to `frontend/test/leg-detail.test.tsx` (inside the existing `describe('LegDe
   });
 ```
 
-- [ ] **Step 8: Run the test to verify it fails**
+- [x] **Step 8: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/leg-detail.test.tsx`
 Expected: FAIL — no link with that accessible name rendered yet
 
-- [ ] **Step 9: Add the trip link to the leg detail page**
+- [x] **Step 9: Add the trip link to the leg detail page**
 
 Modify `frontend/src/app/legs/[id]/page.tsx` — add the link inside `.board-header-right`, before the existing "Back to legs" link:
 ```tsx
@@ -1077,12 +1077,12 @@ Modify `frontend/src/app/legs/[id]/page.tsx` — add the link inside `.board-hea
           </a>
 ```
 
-- [ ] **Step 10: Run the tests to verify they pass**
+- [x] **Step 10: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/leg-detail.test.tsx`
 Expected: PASS (3 tests)
 
-- [ ] **Step 11: Run the full frontend suite and the build**
+- [x] **Step 11: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -1092,7 +1092,7 @@ npm run build
 ```
 Expected: all tests PASS, build succeeds, `/trips/[tripNo]` listed in the route output.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add frontend/src/app/trips frontend/src/app/legs/[id]/page.tsx frontend/src/app/globals.css frontend/src/lib/api-client.ts frontend/test/trip-workspace.test.tsx frontend/test/leg-detail.test.tsx
@@ -1105,7 +1105,7 @@ git commit -m "Add Trip workspace page and link from the leg detail page"
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script**
 
 Following the established approach from Slices 3-5:
 ```bash
@@ -1122,7 +1122,9 @@ docker run --rm --network web-proxy -e DATABASE_URL="postgres://uaa:uaa@postgres
 ```
 Expected: 9 migrations now (the prior 8 plus `CreateTripsAndBackfillLegs`), same real leg/team/country/template counts as Slice 5's Task 7. Reset coordinator `bminja`'s password to `Admin123!` the same way as prior slices.
 
-- [ ] **Step 2: Verify the backfill produced exactly the expected trip count**
+Real defect found here: the migration itself ran cleanly (against the empty freshly-migrated database, correctly backfilling 0 trips since 0 legs existed yet), but the leg seed script then failed immediately — `scripts/seed-from-excel.ts`'s `seedLegs()` inserts `Leg` rows directly via its own `legRepo.create()`/`legRepo.save()` calls, bypassing `LegsService.create()` entirely, so it never set the now-`NOT NULL` `trip_id` column. This wasn't caught by any unit or e2e test in Tasks 1-4 because none of them exercise the seed script — only `LegsService`, which the seed script never calls. Fixed by adding the same find-or-create logic directly to `seedLegs()`: a `Repository<Trip>` plus an in-memory `Map<tripNo, tripId>` cache (avoids redundant lookups for the many rows sharing a `tripNo`, without risking duplicate-`trip_no` inserts since the loop is sequential, not concurrent). Zero legs had been inserted before the failure (confirmed via `SELECT COUNT(*) FROM legs`), so no partial-state cleanup was needed — just rebuild the seed image and rerun. Re-run after the fix: `Seeded 0 user(s), 62 leg(s), 20 team(s).` (`0` users because the first, failed attempt had already created them before hitting the `seedLegs` failure, and the script is idempotent).
+
+- [x] **Step 2: Verify the backfill produced exactly the expected trip count**
 
 ```bash
 docker compose exec postgres psql -U uaa -d uaa -c "SELECT COUNT(*) FROM trips;"
@@ -1130,14 +1132,18 @@ docker compose exec postgres psql -U uaa -d uaa -c "SELECT COUNT(*) FROM legs WH
 ```
 Expected: `31` trips (matches the real distinct-`trip_no` count confirmed against the live database while writing this plan); `0` legs with a null `trip_id` (the `NOT NULL` constraint the migration adds would itself have failed the migration if any leg was left unassigned, but this double-checks the real data directly).
 
-- [ ] **Step 3: Confirm the backend booted cleanly with the new module**
+Confirmed: `31` trips, `0` legs with a null `trip_id` — exactly as expected, using the seed script's own find-or-create logic (Step 1's fix) rather than the migration's backfill query (which only ever saw 0 legs, since seeding runs after migrations in this stack's startup order).
+
+- [x] **Step 3: Confirm the backend booted cleanly with the new module**
 
 ```bash
 docker compose logs backend --tail 30
 ```
 Expected: `Nest application successfully started`, with `Mapped {/trips/:tripNo, GET}` listed, no crash.
 
-- [ ] **Step 4: Fetch a real multi-leg trip's workspace**
+Confirmed: `TripsModule dependencies initialized`, `Mapped {/trips/:tripNo, GET}` route logged, `Nest application successfully started` with no crash.
+
+- [x] **Step 4: Fetch a real multi-leg trip's workspace**
 
 Using trip `484701` (4 real seeded legs across Nigeria and South Africa, confirmed while writing this plan):
 ```bash
@@ -1145,7 +1151,9 @@ curl -s http://localhost:3011/trips/484701 -H "Authorization: Bearer <token>"
 ```
 Expected: `200` with `"legCount":4`, `"tails":["N221RW"]`, `"countries"` listing Nigeria and South Africa, and a `legs` array of 4 real leg objects.
 
-- [ ] **Step 5: Create a new leg and confirm it attaches to the correct trip**
+Confirmed: `"legCount":4`, `"tails":["N221RW"]`, `"operatorNames":["THE COCA-COLA COMPANY"]`, `"countries":["Nigeria","South Africa"]`, `"status":"ACTIVE"`, and all 4 real legs (DNAA, DNMM, FAOR, FACT) in the `legs` array.
+
+- [x] **Step 5: Create a new leg and confirm it attaches to the correct trip**
 
 ```bash
 curl -s -X POST http://localhost:3011/legs -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"tripNo":"484701","icao":"FALE"}'
@@ -1153,11 +1161,15 @@ curl -s http://localhost:3011/trips/484701 -H "Authorization: Bearer <token>"
 ```
 Expected: first call's response includes a `tripId`; second call's `legCount` is now `5` and the new leg appears in the `legs` array — confirms `LegsService.create()`'s find-or-create ran against the real database, not just the unit test's mocked repo.
 
-- [ ] **Step 6: Confirm the frontend renders the Trip workspace and the leg-detail link in a real browser**
+Confirmed: the created leg's response included `"tripId":"135512a2-ca14-4b7c-a911-5ddc2e8e00ad"` (the same id as trip 484701's real seeded record — no new trip was spuriously created); the follow-up fetch showed `legCount: 5` with `FALE` appended to the ICAO list.
+
+- [x] **Step 6: Confirm the frontend renders the Trip workspace and the leg-detail link in a real browser**
 
 Log in at `http://localhost:3012/login`. Open `http://localhost:3012/legs/<id-of-a-484701-leg>`, confirm a "Trip 484701" link appears in the header and navigates to `http://localhost:3012/trips/484701`, which should show all 5 legs (including the one created in Step 5), the aggregate tail/operator/countries, and an `ACTIVE` status badge.
 
-- [ ] **Step 7: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+Confirmed in a real Chrome tab: the leg detail page showed a "Trip 484701" link in the header; navigating to `/trips/484701` rendered all 5 legs (96, 121, 122, 131, and the newly created 150/FALE), the correct tail/operator/countries, and an `ACTIVE` status badge.
+
+- [x] **Step 7: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
 
 ---
 
