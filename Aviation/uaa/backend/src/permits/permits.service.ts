@@ -132,4 +132,27 @@ export class PermitsService {
       }
     }
   }
+
+  async addManualComm(
+    permitRequestId: string,
+    input: { fromAddress: string; subject: string; body: string },
+  ): Promise<Comm> {
+    const permitRequest = await this.permitRequestRepo.findOne({ where: { id: permitRequestId } });
+    if (!permitRequest) throw new NotFoundException(`PermitRequest ${permitRequestId} not found`);
+
+    return this.commRepo.save(
+      this.commRepo.create({
+        direction: 'INBOUND',
+        legId: permitRequest.legId,
+        permitRequestId,
+        correlationToken: permitRequest.correlationToken,
+        fromAddress: input.fromAddress,
+        toAddress: process.env.SMTP_FROM ?? '',
+        subject: input.subject,
+        body: input.body,
+        kind: 'REQUEST',
+        sentAt: new Date(),
+      }),
+    );
+  }
 }

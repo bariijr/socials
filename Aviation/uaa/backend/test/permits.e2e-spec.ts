@@ -108,4 +108,15 @@ describe('Permits (e2e)', () => {
     expect(response.status).toBe(200);
     expect(response.body[0]).toEqual(expect.objectContaining({ id: 'pr-1', urgency: 'OK' }));
   });
+
+  it('POST /permit-requests/:id/comms files a manual inbound reply', async () => {
+    permitRequestRepo.findOne.mockResolvedValue({ id: 'pr-1', legId: 'leg-1', correlationToken: '149/pr-1' });
+
+    const response = await request(app.getHttpServer())
+      .post('/permit-requests/pr-1/comms')
+      .send({ fromAddress: 'permits.eg@example.com', subject: 'RE: Permit', body: 'Confirmed.' });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(expect.objectContaining({ direction: 'INBOUND' }));
+  });
 });

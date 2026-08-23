@@ -221,4 +221,33 @@ describe('PermitsService', () => {
 
     expect(result[0].urgency).toBe('OK');
   });
+
+  it('addManualComm files an inbound reply against a permit request', async () => {
+    permitRequestRepo.findOne.mockResolvedValue({ id: 'pr-1', legId: 'leg-1', correlationToken: '149/pr-1' });
+
+    const result = await service.addManualComm('pr-1', {
+      fromAddress: 'permits.eg@example.com',
+      subject: 'RE: Permit Request',
+      body: 'Clearance confirmed, number EG-4471.',
+    });
+
+    expect(commRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        direction: 'INBOUND',
+        legId: 'leg-1',
+        permitRequestId: 'pr-1',
+        kind: 'REQUEST',
+        fromAddress: 'permits.eg@example.com',
+      }),
+    );
+    expect(result).toEqual(expect.objectContaining({ id: 'comm-1' }));
+  });
+
+  it('addManualComm throws NotFoundException for an unknown permit request', async () => {
+    permitRequestRepo.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.addManualComm('missing', { fromAddress: 'x@example.com', subject: 's', body: 'b' }),
+    ).rejects.toThrow(NotFoundException);
+  });
 });

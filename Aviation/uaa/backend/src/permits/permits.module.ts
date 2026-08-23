@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PermitRequest } from './permit-request.entity';
 import { Comm } from './comm.entity';
@@ -13,7 +13,7 @@ import { MailModule } from '../mail/mail.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([PermitRequest, Comm, Leg, CountryRequirement, FormTemplate]),
-    MailModule,
+    forwardRef(() => MailModule),
   ],
   providers: [PermitsService, ReconfirmSweepService],
   controllers: [PermitsController],

@@ -1296,7 +1296,7 @@ git commit -m "Add parseCorrelationToken for inbound reply matching"
 - Consumes: `parseCorrelationToken` (Task 7).
 - Produces: `ImapService.pollInbox(): Promise<{ filed: number; skipped: number }>` (dry-run fallback when `IMAP_HOST` is unset, matching `MailService`), `PermitsService.addManualComm(permitRequestId: string, input: { fromAddress: string; subject: string; body: string }): Promise<Comm>`, `POST /permit-requests/:id/comms` (201).
 
-- [ ] **Step 1: Add the `imapflow` and `mailparser` dependencies**
+- [x] **Step 1: Add the `imapflow` and `mailparser` dependencies**
 
 Modify `backend/package.json` — add to `dependencies`: `"imapflow": "^1.0.167"`, `"mailparser": "^3.7.1"`; add to `devDependencies`: `"@types/mailparser": "^3.4.4"`. Run:
 ```bash
@@ -1312,7 +1312,7 @@ IMAP_PASS=
 IMAP_SECURE=true
 ```
 
-- [ ] **Step 2: Write the failing test for PermitsService.addManualComm**
+- [x] **Step 2: Write the failing test for PermitsService.addManualComm**
 
 Add to `backend/test/permits.service.spec.ts`:
 ```typescript
@@ -1346,12 +1346,12 @@ Add to `backend/test/permits.service.spec.ts`:
   });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: FAIL — `service.addManualComm is not a function`
 
-- [ ] **Step 4: Implement addManualComm**
+- [x] **Step 4: Implement addManualComm**
 
 Modify `backend/src/permits/permits.service.ts` — add the method (append inside the class, after `reconcileForLeg`):
 ```typescript
@@ -1379,12 +1379,12 @@ Modify `backend/src/permits/permits.service.ts` — add the method (append insid
   }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: PASS (15 tests)
 
-- [ ] **Step 6: Add the POST /permit-requests/:id/comms route**
+- [x] **Step 6: Add the POST /permit-requests/:id/comms route**
 
 Add to `backend/src/permits/dto/create-permit-request.dto.ts`'s file a sibling DTO — create `backend/src/permits/dto/create-comm.dto.ts`:
 ```typescript
@@ -1413,7 +1413,7 @@ import { CreateCommDto } from './dto/create-comm.dto';
   }
 ```
 
-- [ ] **Step 7: Write the failing e2e test**
+- [x] **Step 7: Write the failing e2e test**
 
 Add to `backend/test/permits.e2e-spec.ts`:
 ```typescript
@@ -1429,12 +1429,12 @@ Add to `backend/test/permits.e2e-spec.ts`:
   });
 ```
 
-- [ ] **Step 8: Run the e2e test to verify it passes**
+- [x] **Step 8: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/permits.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (6 tests)
 
-- [ ] **Step 9: Write the failing test for ImapService**
+- [x] **Step 9: Write the failing test for ImapService**
 
 `backend/test/imap.service.spec.ts`:
 ```typescript
@@ -1528,12 +1528,12 @@ describe('ImapService', () => {
 });
 ```
 
-- [ ] **Step 10: Run the test to verify it fails**
+- [x] **Step 10: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/imap.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/mail/imap.service'`
 
-- [ ] **Step 11: Implement ImapService**
+- [x] **Step 11: Implement ImapService**
 
 `backend/src/mail/imap.service.ts`:
 ```typescript
@@ -1600,12 +1600,20 @@ export class ImapService {
 }
 ```
 
-- [ ] **Step 12: Run the test to verify it passes**
+- [x] **Step 12: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/imap.service.spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 13: Wire the periodic poll and export ImapService**
+Real bug surfaced here: `imapflow`'s TypeScript types declare `search()` as `Promise<number[] | false>` and `fetchOne()` as `Promise<FetchMessageObject | false>` — both can return `false` on certain server responses, which the plan's original implementation above didn't account for, so `tsc` (via `ts-jest`) rejected `for (const uid of uids)` (`false` isn't iterable) and every `message.envelope`/`message.source` access. The unit test's `fakeClient` mock always resolves real objects, so it never exercised this path — it's a type-checker-only failure, not a runtime one. Fixed by guarding both calls in `backend/src/mail/imap.service.ts`:
+```typescript
+      for (const uid of uids || []) {
+        const message = await this.client.fetchOne(String(uid), { envelope: true, source: true });
+        if (!message) continue;
+        const subject = message.envelope?.subject ?? '';
+```
+
+- [x] **Step 13: Wire the periodic poll and export ImapService**
 
 Modify `backend/src/mail/mail.module.ts`:
 ```typescript
@@ -1646,7 +1654,7 @@ import { Interval } from '@nestjs/schedule';
   }
 ```
 
-- [ ] **Step 14: Run the full backend test suite and build**
+- [x] **Step 14: Run the full backend test suite and build**
 
 Run:
 ```bash
@@ -1657,7 +1665,7 @@ npm run build
 ```
 Expected: all PASS, build succeeds.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add backend/src/mail backend/src/permits/permits.service.ts backend/src/permits/permits.controller.ts backend/src/permits/dto/create-comm.dto.ts backend/src/permits/permits.module.ts backend/package.json backend/package-lock.json backend/.env.example backend/test/imap.service.spec.ts backend/test/permits.service.spec.ts backend/test/permits.e2e-spec.ts
