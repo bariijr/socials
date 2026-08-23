@@ -82,7 +82,7 @@ frontend/
 **Interfaces:**
 - Produces: `Team` entity (`id`, `name` unique, `teamEmail`, `remarks` nullable, `createdAt`, `updatedAt`). Task 5 (`NotificationsService`) and Task 6 (seed) consume it.
 
-- [ ] **Step 1: Create the entity**
+- [x] **Step 1: Create the entity**
 
 `backend/src/notifications/team.entity.ts`:
 ```typescript
@@ -110,7 +110,7 @@ export class Team {
 }
 ```
 
-- [ ] **Step 2: Create the migration**
+- [x] **Step 2: Create the migration**
 
 `backend/migrations/1756080000000-CreateTeams.ts`:
 ```typescript
@@ -139,7 +139,7 @@ export class CreateTeams1756080000000 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 3: Register the entity in the CLI data source**
+- [x] **Step 3: Register the entity in the CLI data source**
 
 Modify `backend/src/database/data-source.ts`:
 ```typescript
@@ -162,12 +162,12 @@ export const AppDataSource = new DataSource({
 });
 ```
 
-- [ ] **Step 4: Verify the backend still builds**
+- [x] **Step 4: Verify the backend still builds**
 
 Run: `cd backend && npm run build`
 Expected: compiles with no errors. (The migration itself runs for real in Task 8.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/notifications/team.entity.ts backend/migrations/1756080000000-CreateTeams.ts backend/src/database/data-source.ts
@@ -187,7 +187,7 @@ git commit -m "Add Team reference table — backs the team-notification email's 
 
 This mirrors the macro's `mod_Utils.ParseContact`, which the real `AGENT CONTACTS` data actually uses — confirmed against the live seeded database: `"starscmn@starsaviationservices.com; starsops@starsaviationservices.com / +212 661 888 747"`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/parse-contact.spec.ts`:
 ```typescript
@@ -215,12 +215,12 @@ describe('parseContact', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/parse-contact.spec.ts`
 Expected: FAIL — `Cannot find module '../src/notifications/parse-contact'`
 
-- [ ] **Step 3: Implement parseContact**
+- [x] **Step 3: Implement parseContact**
 
 `backend/src/notifications/parse-contact.ts`:
 ```typescript
@@ -238,12 +238,12 @@ export function parseContact(contacts: string | null | undefined): { email: stri
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/parse-contact.spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/notifications/parse-contact.ts backend/test/parse-contact.spec.ts
@@ -263,7 +263,7 @@ git commit -m "Add parseContact — splits the workbook's 'email / phone' contac
 
 Content below is transcribed from `mod_Email.bas`'s `BuildAndSend` (Email 1: Crew, Email 2: TSS/Team) and the `PMTNotify`-adjacent Email 3 block, and `WhatsApp()`, with three deliberate departures (each already listed in Explicitly Deferred): no multi-leg Section K composition, no Word-doc attachment reference in Email 3's copy, and the WhatsApp message references the Email 3 request instead of a physical attachment. Subject lines for Email 1/2 were manually-typed cell values in the macro (`SENDOR!C42`/`C43`), not generated — the subjects below are newly composed for this plan, in the same dash-and-ref style the macro uses elsewhere (e.g. `PMTNotify`'s `tail & " - " & tripNo & " / " & countryName`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/notification-templates.spec.ts`:
 ```typescript
@@ -390,12 +390,12 @@ describe('buildWhatsAppLink', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/notification-templates.spec.ts`
 Expected: FAIL — `Cannot find module '../src/notifications/notification-templates'`
 
-- [ ] **Step 3: Implement the builders**
+- [x] **Step 3: Implement the builders**
 
 `backend/src/notifications/notification-templates.ts`:
 ```typescript
@@ -529,12 +529,12 @@ export function buildWhatsAppLink(phone: string, message: string): string | null
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/notification-templates.spec.ts`
 Expected: PASS (11 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/notifications/notification-templates.ts backend/test/notification-templates.spec.ts
@@ -552,7 +552,7 @@ git commit -m "Add notification content builders — ported from mod_Email.bas's
 **Interfaces:**
 - Produces: `SendMailInput` gains optional `cc?: string` and `bcc?: string`. Task 5 relies on both (Email 1 cc's the agent, Email 2/3 cc/bcc the coordinator).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `backend/test/mail.service.spec.ts` (inside the existing `describe('MailService', ...)` block, after the first test):
 ```typescript
@@ -578,12 +578,12 @@ Add to `backend/test/mail.service.spec.ts` (inside the existing `describe('MailS
   });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/mail.service.spec.ts`
 Expected: FAIL — `Object.is equality` mismatch (TS also errors: `Object literal may only specify known properties, and 'cc' does not exist in type 'SendMailInput'`)
 
-- [ ] **Step 3: Extend SendMailInput and send()**
+- [x] **Step 3: Extend SendMailInput and send()**
 
 Modify `backend/src/mail/mail.service.ts`:
 ```typescript
@@ -631,12 +631,12 @@ export class MailService {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/mail.service.spec.ts`
 Expected: PASS (3 tests) — the pre-existing "sends via configured SMTP" test still passes unmodified: Jest's `toHaveBeenCalledWith`/`toEqual` treat an object's `undefined`-valued keys (`cc`/`bcc` when the caller doesn't pass them) as equivalent to the key being absent, so the earlier assertion (an object with no `cc`/`bcc` keys at all) still matches.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/mail/mail.service.ts backend/test/mail.service.spec.ts
@@ -656,7 +656,7 @@ git commit -m "Add cc/bcc support to MailService — needed by the crew/team not
 - Consumes: `parseContact` (Task 2), the template builders (Task 3), extended `MailService.send` (Task 4), `Team` (Task 1).
 - Produces: `NotificationsService.sendCrewNotification/sendTeamNotification/sendAgentServiceReport/buildAgentWhatsApp/listForLeg`; routes `GET /legs/:legId/notifications`, `POST /legs/:legId/notifications/{crew,team,agent-service-report,agent-whatsapp}`.
 
-- [ ] **Step 1: Write the failing service tests**
+- [x] **Step 1: Write the failing service tests**
 
 `backend/test/notifications.service.spec.ts`:
 ```typescript
@@ -794,12 +794,12 @@ describe('NotificationsService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/notifications.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/notifications/notifications.service'`
 
-- [ ] **Step 3: Implement NotificationsService**
+- [x] **Step 3: Implement NotificationsService**
 
 `backend/src/notifications/notifications.service.ts`:
 ```typescript
@@ -903,12 +903,12 @@ export class NotificationsService {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/notifications.service.spec.ts`
 Expected: PASS (7 tests)
 
-- [ ] **Step 5: Add the controller**
+- [x] **Step 5: Add the controller**
 
 `backend/src/notifications/notifications.controller.ts`:
 ```typescript
@@ -953,7 +953,7 @@ export class NotificationsController {
 }
 ```
 
-- [ ] **Step 6: Add the module and wire it into the app**
+- [x] **Step 6: Add the module and wire it into the app**
 
 `backend/src/notifications/notifications.module.ts`:
 ```typescript
@@ -977,7 +977,7 @@ export class NotificationsModule {}
 
 Modify `backend/src/app.module.ts` — add the import and add `NotificationsModule` to the `imports` array (alongside `LegsModule`/`PermitsModule`).
 
-- [ ] **Step 7: Write the failing e2e test**
+- [x] **Step 7: Write the failing e2e test**
 
 `backend/test/notifications.e2e-spec.ts`:
 ```typescript
@@ -1087,12 +1087,12 @@ describe('Notifications (e2e)', () => {
 
 Note: `NotificationsModule` imports `MailModule`, which `forwardRef`s `PermitsModule` (Slice 3, Task 8) — so `PermitsModule`'s own `TypeOrmModule.forFeature([PermitRequest, Comm, Leg, CountryRequirement, FormTemplate])` registrations get eagerly instantiated too, needing a live `DataSource`, exactly the DI-construction lesson learned in Slice 3 Task 3. `getRepositoryToken(Leg)`/`getRepositoryToken(Comm)` are already overridden above (tokens are keyed by entity class, so one override satisfies both `NotificationsModule`'s and `PermitsModule`'s separate registrations); `PermitRequest`/`CountryRequirement`/`FormTemplate` need their own dummy overrides since nothing else provides them here.
 
-- [ ] **Step 8: Run the e2e test to verify it passes**
+- [x] **Step 8: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/notifications.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (2 tests)
 
-- [ ] **Step 9: Run the full backend suite and build**
+- [x] **Step 9: Run the full backend suite and build**
 
 Run:
 ```bash
@@ -1103,7 +1103,7 @@ npm run build
 ```
 Expected: all PASS, build succeeds.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add backend/src/notifications/notifications.service.ts backend/src/notifications/notifications.controller.ts backend/src/notifications/notifications.module.ts backend/src/app.module.ts backend/test/notifications.service.spec.ts backend/test/notifications.e2e-spec.ts
@@ -1120,7 +1120,7 @@ git commit -m "Add NotificationsService/Controller — Email 1/2/3 and WhatsApp-
 **Interfaces:**
 - Consumes: `Team` entity (Task 1). Extends the existing `main()` seeding flow (`seedUsers`, `seedLegs`) with `seedTeams`.
 
-- [ ] **Step 1: Add seedTeams and wire it into main()**
+- [x] **Step 1: Add seedTeams and wire it into main()**
 
 Modify `backend/scripts/seed-from-excel.ts` — add the import:
 ```typescript
@@ -1159,12 +1159,12 @@ Modify `main()` to call it and include the count in the summary log:
   console.log(`Seeded ${usersCreated} user(s), ${legsCreated} leg(s), ${teamsCreated} team(s).`);
 ```
 
-- [ ] **Step 2: Verify the backend still builds**
+- [x] **Step 2: Verify the backend still builds**
 
 Run: `cd backend && npm run build`
 Expected: compiles with no errors. (The script itself is verified for real against the live workbook in Task 8.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/scripts/seed-from-excel.ts
@@ -1184,7 +1184,7 @@ git commit -m "Seed Teams from the real TEAMS sheet (21 rows, real @univ-wea.com
 - Consumes: `GET/POST /legs/:legId/notifications*` (Task 5).
 - Produces: `listNotifications`, `sendCrewNotification`, `sendTeamNotification`, `sendAgentServiceReport`, `getAgentWhatsAppLink` in `api-client.ts`. `<Notifications legId={...} />` component.
 
-- [ ] **Step 1: Write the failing api-client tests**
+- [x] **Step 1: Write the failing api-client tests**
 
 Add to `frontend/test/api-client.test.ts` (adjust the top-of-file import to include the new functions):
 ```typescript
@@ -1247,12 +1247,12 @@ Add to `frontend/test/api-client.test.ts` (adjust the top-of-file import to incl
   });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `listNotifications is not a function` (and similar for the other four)
 
-- [ ] **Step 3: Implement the api-client functions**
+- [x] **Step 3: Implement the api-client functions**
 
 Modify `frontend/src/lib/api-client.ts` — add after `listAllPermitRequests`:
 ```typescript
@@ -1310,12 +1310,12 @@ export async function getAgentWhatsAppLink(token: string, legId: string): Promis
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (15 tests)
 
-- [ ] **Step 5: Write the failing component test**
+- [x] **Step 5: Write the failing component test**
 
 `frontend/test/notifications.test.tsx`:
 ```tsx
@@ -1376,12 +1376,12 @@ describe('Notifications', () => {
 });
 ```
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/notifications.test.tsx`
 Expected: FAIL — `Cannot find module '../src/app/legs/[id]/notifications'`
 
-- [ ] **Step 7: Implement the Notifications component**
+- [x] **Step 7: Implement the Notifications component**
 
 `frontend/src/app/legs/[id]/notifications.tsx`:
 ```tsx
@@ -1509,7 +1509,7 @@ export default function Notifications({ legId }: { legId: string }) {
 }
 ```
 
-- [ ] **Step 8: Add notification section CSS**
+- [x] **Step 8: Add notification section CSS**
 
 Modify `frontend/src/app/globals.css` — append:
 ```css
@@ -1545,7 +1545,7 @@ Modify `frontend/src/app/globals.css` — append:
 }
 ```
 
-- [ ] **Step 9: Wire the section into the leg detail page**
+- [x] **Step 9: Wire the section into the leg detail page**
 
 Modify `frontend/src/app/legs/[id]/page.tsx`:
 ```tsx
@@ -1609,12 +1609,12 @@ export default function LegDetailPage() {
 }
 ```
 
-- [ ] **Step 10: Run the tests to verify they pass**
+- [x] **Step 10: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/notifications.test.tsx`
 Expected: PASS (2 tests)
 
-- [ ] **Step 11: Run the full frontend suite and the build**
+- [x] **Step 11: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -1624,7 +1624,7 @@ npm run build
 ```
 Expected: all tests PASS (including `leg-detail.test.tsx`, which now also mounts `<Notifications>` — its `refresh()` already has a `.catch()`, same defensive pattern as `PermitRequests`, from the start, so it should not reproduce the Slice 3 Task 6 unhandled-rejection bug). Build succeeds.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add frontend/src/app/legs/[id]/notifications.tsx frontend/src/app/legs/[id]/page.tsx frontend/src/lib/api-client.ts frontend/src/app/globals.css frontend/test/notifications.test.tsx frontend/test/api-client.test.ts
@@ -1637,7 +1637,7 @@ git commit -m "Add Notifications section to the leg detail page — crew/team/ag
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script**
 
 Run:
 ```bash
@@ -1657,14 +1657,18 @@ docker run --rm --network web-proxy -e DATABASE_URL="postgres://uaa:uaa@postgres
 ```
 Expected: 7 migrations now (the prior 6 plus `CreateTeams`), `Seeded 2 user(s), 62 leg(s), 20 team(s).` from the leg seed script (real `TEAMS` sheet row count), `Seeded 15 CountryRequirement(s), 15 FormTemplate(s).` from the other. Reset coordinator `bminja`'s password to `Admin123!` the same way as Slice 3 Task 9 (bcrypt hash generated via `uaa-backend-seed`, applied with `UPDATE users SET password_hash = ...`).
 
-- [ ] **Step 2: Confirm the backend booted cleanly with the new module**
+Confirmed: 7 migrations executed (including `CreateTeams1756080000000`), leg seed logged exactly `Seeded 2 user(s), 62 leg(s), 20 team(s).`, country-requirements seed logged `Seeded 15 CountryRequirement(s), 15 FormTemplate(s).` — both real counts as expected.
+
+- [x] **Step 2: Confirm the backend booted cleanly with the new module**
 
 ```bash
 docker compose logs backend --tail 30
 ```
 Expected: `Nest application successfully started`, with `Mapped {/legs/:legId/notifications, GET}` and the four `POST` notification routes listed, no crash.
 
-- [ ] **Step 3: Send a real crew notification for a leg with real agent contacts (dry-run — no SMTP configured)**
+Confirmed: all 5 routes mapped (`GET`, `crew`, `team`, `agent-service-report`, `agent-whatsapp`), `Nest application successfully started` with no crash.
+
+- [x] **Step 3: Send a real crew notification for a leg with real agent contacts (dry-run — no SMTP configured)**
 
 Find a leg whose `agentContacts` is populated (e.g. trip `475087` at `HECA`, agent "Hicham Bentouzer" — confirmed present in the live seeded data during this plan's research) and its `id`, then:
 ```bash
@@ -1673,7 +1677,9 @@ curl -s http://localhost:3011/legs/<leg-id>/notifications -H "Authorization: Bea
 ```
 Expected: first call returns `201` with `"direction":"OUTBOUND","kind":"NOTIFICATION"`; second call's array includes that row. Check `docker compose logs backend --tail 10` for the `MailService` dry-run warning line confirming the subject/recipient were built correctly even without live SMTP.
 
-- [ ] **Step 4: Send a real team notification for a leg whose TSS team matches a real seeded Team**
+Confirmed against leg `52235cd2-a5b0-43f8-9334-45651df6b39c` (trip 475087, GMMN, tail N832PJ, agent Hicham Bentouzer, captain John Spannhake): `201` response with the full rendered subject `"UA Crew Notification — GMMN — Ref: N832PJ – 475087"` and body (greeting "Captain John", real agent phone/email, real coordinator signature). Backend log showed `MailService` dry-run warning with the correct subject and `to` address.
+
+- [x] **Step 4: Send a real team notification for a leg whose TSS team matches a real seeded Team**
 
 Using a leg with `tssTeam` `"X-Ray"` (real seeded value — confirmed matching the real `TEAMS` sheet row `X-RAY` / `xrayteam@univ-wea.com`):
 ```bash
@@ -1681,18 +1687,26 @@ curl -s -X POST http://localhost:3011/legs/<leg-id>/notifications/team -H "Autho
 ```
 Expected: `201`, `toAddress` in the response is `xrayteam@univ-wea.com` — confirms the case-insensitive `ILike` lookup actually resolved against the real seeded `Team` row, not just a unit-test mock.
 
-- [ ] **Step 5: Build a real WhatsApp link**
+Confirmed — using the same leg from Step 3, whose real `tssTeam` value is `"VICTOR"` (not the hypothetical `"X-Ray"` example above): `201` response with `toAddress: "victorteam@univ-wea.com"`, resolved from the real seeded `Team` row named `"Victor"` — confirms the case-insensitive `ILike` lookup matches real data despite the case difference (`VICTOR` vs `Victor`), exactly the scenario it was written for.
+
+- [x] **Step 5: Build a real WhatsApp link**
 
 ```bash
 curl -s -X POST http://localhost:3011/legs/<leg-id>/notifications/agent-whatsapp -H "Authorization: Bearer <token>"
 ```
 Expected: `{"url":"https://wa.me/<digits>?text=...","phone":"..."}` — a well-formed `wa.me` link built from the real parsed agent phone.
 
-- [ ] **Step 6: Confirm the Notifications section renders in a real browser**
+Confirmed: `{"url":"https://wa.me/212661888747?text=Hi%20Hicham%2C...","phone":"+212 661 888 747"}` — digits correctly stripped from the real `+212 661 888 747` phone, message correctly URL-encoded and addressed to "Hi Hicham" (first name parsed from `Leg.agentName`).
+
+- [x] **Step 6: Confirm the Notifications section renders in a real browser**
 
 Log in at `http://localhost:3012/login`, open the leg used in Steps 3-4, confirm the "Notifications" section shows both sent rows (crew + team) with correct "To" addresses and subjects, and that all four buttons render.
 
-- [ ] **Step 7: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+Confirmed in a real Chrome tab (JWT injected via `localStorage` to route around known click flakiness in the browser automation tool, matching the established workaround from Slices 1-3): the Notifications section rendered all 4 buttons and all 3 sent rows (crew, team, WhatsApp) with the correct "To" addresses and subjects, proving `GET /legs/:legId/notifications` and the frontend list rendering work end-to-end.
+
+- [x] **Step 7: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+
+No defects found during this task — all real-data calls (crew notification, team notification via case-insensitive lookup, WhatsApp link) matched their unit/e2e-test expectations exactly.
 
 ---
 
