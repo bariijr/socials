@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
-export type PermitRequestStatus =
+export type ServiceCaseStatus =
   | 'NOT_STARTED'
   | 'REQUESTED'
   | 'CHASING'
@@ -8,22 +8,16 @@ export type PermitRequestStatus =
   | 'RECONFIRM_REQUIRED'
   | 'CANCELLED';
 
-@Entity('permit_requests')
-export class PermitRequest {
+@Entity('service_cases')
+export class ServiceCase {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'leg_id', type: 'uuid' })
-  legId: string;
-
-  @Column()
-  country: string;
+  @Column({ name: 'requirement_id', type: 'uuid' })
+  requirementId: string;
 
   @Column({ type: 'varchar', default: 'NOT_STARTED' })
-  status: PermitRequestStatus;
-
-  @Column({ name: 'required_by_z', type: 'timestamptz', nullable: true })
-  requiredByZ: Date | null;
+  status: ServiceCaseStatus;
 
   @Column({ name: 'valid_from', type: 'timestamptz', nullable: true })
   validFrom: Date | null;
@@ -33,12 +27,6 @@ export class PermitRequest {
 
   @Column({ name: 'clearance_number', type: 'varchar', nullable: true })
   clearanceNumber: string | null;
-
-  @Column({ name: 'correlation_token', type: 'varchar', unique: true })
-  correlationToken: string;
-
-  @Column({ name: 'submission_email', type: 'varchar', nullable: true })
-  submissionEmail: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -11,8 +11,8 @@ export class Comm {
   @Column({ name: 'leg_id', type: 'uuid', nullable: true })
   legId: string | null;
 
-  @Column({ name: 'permit_request_id', type: 'uuid', nullable: true })
-  permitRequestId: string | null;
+  @Column({ name: 'service_case_id', type: 'uuid', nullable: true })
+  serviceCaseId: string | null;
 
   @Column({ name: 'correlation_token', type: 'varchar', nullable: true })
   correlationToken: string | null;
