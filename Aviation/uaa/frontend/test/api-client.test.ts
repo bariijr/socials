@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { login, getLegs, createLeg, getLeg, listPermitRequests, createPermitRequest, updatePermitRequest } from '../src/lib/api-client';
+import { login, getLegs, createLeg, getLeg, listPermitRequests, createPermitRequest, updatePermitRequest, listAllPermitRequests } from '../src/lib/api-client';
 
 describe('api-client', () => {
   beforeEach(() => {
@@ -122,5 +122,18 @@ describe('api-client', () => {
       }),
     );
     expect(result).toEqual(updated);
+  });
+
+  it('listAllPermitRequests fetches every permit request with urgency', async () => {
+    const requests = [{ id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', urgency: 'BREACH', legSummary: { tripNo: '482421', icao: 'HECA', tail: 'N148B' } }];
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => requests });
+
+    const result = await listAllPermitRequests('token-123');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/permit-requests'),
+      expect.objectContaining({ headers: { Authorization: 'Bearer token-123' } }),
+    );
+    expect(result).toEqual(requests);
   });
 });

@@ -33,6 +33,9 @@ export default function LegsPage() {
         <h1 className="board-title">UAA Coordinator — Legs</h1>
         <div className="board-header-right">
           <span className="board-count">{legs.length} leg{legs.length === 1 ? '' : 's'}</span>
+          <a className="btn-link" href="/action-board">
+            Action board
+          </a>
           <a className="btn-link" href="/legs/new">
             + New leg
           </a>

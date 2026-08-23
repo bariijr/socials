@@ -1066,18 +1066,21 @@ import { useRouter } from 'next/navigation';
 import { listAllPermitRequests, type PermitRequestWithUrgency } from '@/lib/api-client';
 
 const URGENCY_ORDER: Record<PermitRequestWithUrgency['urgency'], number> = {
-  RECONFIRM_REQUIRED: 0 as any,
-  BREACH: 1,
-  URGENT: 2,
-  DUE: 3,
-  OK: 4,
+  BREACH: 0,
+  URGENT: 1,
+  DUE: 2,
+  OK: 3,
 };
 
 function sortKey(r: PermitRequestWithUrgency): number {
   if (r.status === 'RECONFIRM_REQUIRED') return -1;
   return URGENCY_ORDER[r.urgency];
 }
+```
 
+Note: `URGENCY_ORDER` must **not** include a `RECONFIRM_REQUIRED` key — `PermitRequestWithUrgency['urgency']` is `'BREACH' | 'URGENT' | 'DUE' | 'OK'` (a `Comm`-adjacent status value never appears there; `RECONFIRM_REQUIRED` is a `PermitRequest.status`, a separate field), so `Record<..., number>` with that extra key is a real TypeScript error (`Object literal may only specify known properties`), not just dead weight. `sortKey` already checks `r.status === 'RECONFIRM_REQUIRED'` first and returns before ever touching the map, so the entry was never reachable anyway.
+
+```tsx
 export default function ActionBoardPage() {
   const [requests, setRequests] = useState<PermitRequestWithUrgency[]>([]);
   const router = useRouter();
@@ -1193,6 +1196,18 @@ npx vitest run
 npm run build
 ```
 Expected: all tests PASS, build succeeds, `/action-board` listed in the route output.
+
+Real bug surfaced here, not by this task's own new tests but by broader coverage: running the *full* suite (not just `action-board.test.tsx` in isolation) triggers an unhandled promise rejection from `leg-detail.test.tsx` — that test renders the full `LegDetailPage` tree, which mounts `PermitRequests` (from the permit-request-workflow plan), and its `refresh()` function had no `.catch()` on `listPermitRequests(...)`. `leg-detail.test.tsx` doesn't mock `listPermitRequests` (only `getLeg`/`getLegs`), so the composer's real `fetch()` call fails against no live server, and with no catch that becomes an unhandled rejection — a latent bug in already-shipped code, not something this task introduced, just never exercised by a full-suite run until now. Fix `frontend/src/app/legs/[id]/permit-requests.tsx`'s `refresh()`:
+```typescript
+  function refresh() {
+    const token = localStorage.getItem('uaa_token');
+    if (!token) return Promise.resolve();
+    return listPermitRequests(token, legId)
+      .then(setRequests)
+      .catch(() => setRequests([]));
+  }
+```
+(adding the `.catch(() => setRequests([]))`, matching the pattern already used elsewhere in the app, e.g. `legs/page.tsx`'s `getLegs(token).then(setLegs).catch(...)`).
 
 - [ ] **Step 12: Commit**
 

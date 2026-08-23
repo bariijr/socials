@@ -388,3 +388,33 @@ table.legs-table {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+
+/* ---------- Action Board ---------- */
+
+.urgency-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.urgency-breach {
+  background: rgba(255, 107, 87, 0.15);
+  color: var(--danger);
+}
+
+.urgency-urgent {
+  background: rgba(255, 176, 32, 0.15);
+  color: var(--accent);
+}
+
+.urgency-due {
+  background: rgba(124, 135, 148, 0.15);
+  color: var(--ink);
+}
+
+.urgency-ok {
+  color: var(--muted);
+}

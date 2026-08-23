@@ -11,7 +11,9 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
   function refresh() {
     const token = localStorage.getItem('uaa_token');
     if (!token) return Promise.resolve();
-    return listPermitRequests(token, legId).then(setRequests);
+    return listPermitRequests(token, legId)
+      .then(setRequests)
+      .catch(() => setRequests([]));
   }
 
   useEffect(() => {

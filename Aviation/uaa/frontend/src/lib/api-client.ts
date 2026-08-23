@@ -135,3 +135,16 @@ export async function updatePermitRequest(
   if (!response.ok) throw new Error('Failed to update permit request');
   return response.json();
 }
+
+export interface PermitRequestWithUrgency extends PermitRequest {
+  urgency: 'BREACH' | 'URGENT' | 'DUE' | 'OK';
+  legSummary: { tripNo: string; icao: string; tail: string | null } | null;
+}
+
+export async function listAllPermitRequests(token: string): Promise<PermitRequestWithUrgency[]> {
+  const response = await fetch(`${API_URL}/permit-requests`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to load permit requests');
+  return response.json();
+}
