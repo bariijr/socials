@@ -187,4 +187,38 @@ describe('PermitsService', () => {
 
     expect(permitRequestRepo.save).not.toHaveBeenCalled();
   });
+
+  it('findAllWithUrgency joins each request to its leg summary and computed urgency', async () => {
+    permitRequestRepo.find.mockResolvedValue([
+      {
+        id: 'pr-1',
+        legId: 'leg-1',
+        country: 'Egypt',
+        status: 'REQUESTED',
+        requiredByZ: new Date(Date.now() - 3_600_000), // 1h ago -> BREACH
+      },
+    ]);
+    legRepo.findOne.mockResolvedValue({ id: 'leg-1', tripNo: '482421', icao: 'HECA', tail: 'N148B' });
+
+    const result = await service.findAllWithUrgency();
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'pr-1',
+        urgency: 'BREACH',
+        legSummary: { tripNo: '482421', icao: 'HECA', tail: 'N148B' },
+      }),
+    ]);
+  });
+
+  it('findAllWithUrgency reports OK urgency for a request with no requiredByZ set', async () => {
+    permitRequestRepo.find.mockResolvedValue([
+      { id: 'pr-1', legId: 'leg-1', country: 'Egypt', status: 'NOT_STARTED', requiredByZ: null },
+    ]);
+    legRepo.findOne.mockResolvedValue({ id: 'leg-1', tripNo: '482421', icao: 'HECA', tail: 'N148B' });
+
+    const result = await service.findAllWithUrgency();
+
+    expect(result[0].urgency).toBe('OK');
+  });
 });

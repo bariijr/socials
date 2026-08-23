@@ -97,4 +97,15 @@ describe('Permits (e2e)', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(expect.objectContaining({ status: 'CONFIRMED' }));
   });
+
+  it('GET /permit-requests returns all requests with urgency and leg summary', async () => {
+    permitRequestRepo.find.mockResolvedValue([
+      { id: 'pr-1', legId: 'leg-1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null },
+    ]);
+
+    const response = await request(app.getHttpServer()).get('/permit-requests');
+
+    expect(response.status).toBe(200);
+    expect(response.body[0]).toEqual(expect.objectContaining({ id: 'pr-1', urgency: 'OK' }));
+  });
 });

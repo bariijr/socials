@@ -7,7 +7,7 @@ import { Leg } from '../legs/leg.entity';
 import { CountryRequirement } from '../country-requirements/country-requirement.entity';
 import { FormTemplate } from '../form-templates/form-template.entity';
 import { renderTemplate } from '../form-templates/template-renderer';
-import { computeRequiredByZ } from './permit-deadline';
+import { computeRequiredByZ, computeUrgency } from './permit-deadline';
 import { evaluateReconfirm } from './reconfirm';
 import { MailService } from '../mail/mail.service';
 import { UpdatePermitRequestDto } from './dto/update-permit-request.dto';
@@ -101,6 +101,23 @@ export class PermitsService {
     if (dto.validTo) permitRequest.validTo = new Date(dto.validTo);
 
     return this.permitRequestRepo.save(permitRequest);
+  }
+
+  async findAllWithUrgency() {
+    const requests = await this.permitRequestRepo.find();
+    const now = new Date().toISOString();
+
+    const withUrgency = [];
+    for (const request of requests) {
+      const leg = await this.legRepo.findOne({ where: { id: request.legId } });
+      const urgency = request.requiredByZ ? computeUrgency(request.requiredByZ.toISOString(), now) : 'OK';
+      withUrgency.push({
+        ...request,
+        urgency,
+        legSummary: leg ? { tripNo: leg.tripNo, icao: leg.icao, tail: leg.tail } : null,
+      });
+    }
+    return withUrgency;
   }
 
   async reconcileForLeg(legId: string, currentArrDateZ: Date | null): Promise<void> {

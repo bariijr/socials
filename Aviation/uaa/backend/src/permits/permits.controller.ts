@@ -19,6 +19,11 @@ export class PermitsController {
     return this.permitsService.findByLeg(legId);
   }
 
+  @Get('permit-requests')
+  findAllWithUrgency() {
+    return this.permitsService.findAllWithUrgency();
+  }
+
   @Patch('permit-requests/:id')
   update(@Param('id') id: string, @Body() dto: UpdatePermitRequestDto) {
     return this.permitsService.update(id, dto);
