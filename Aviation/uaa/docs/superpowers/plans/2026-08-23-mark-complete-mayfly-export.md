@@ -804,6 +804,8 @@ Expected: FAIL — no "Completed" text rendered yet
 
 - [ ] **Step 11: Add the Status column**
 
+Note: see Task 6 Step 7's deviation note — `frontend/src/app/legs/page.tsx` already has sort/filter/date columns from a mid-session addition unrelated to this plan, so `<th>Status</th>` becomes the 7th header (after `Arrival`/`Departure`), not the 5th.
+
 Modify `frontend/src/app/legs/page.tsx` — add `<th>Status</th>` to the header row and a matching `<td>` to each body row:
 ```tsx
               <th>Status</th>
@@ -926,7 +928,9 @@ Expected: FAIL — no export controls rendered yet
 
 - [ ] **Step 7: Implement the export toolbar**
 
-Modify `frontend/src/app/legs/page.tsx`:
+Real deviation, found before this task started executing: mid-session, the user flagged that `/legs` needed sorting, filtering, and visible arrival/departure columns — a real usability gap unrelated to this plan's own scope, addressed immediately as its own change (commit "Add sorting, filtering, and arrival/departure columns to the Legs list") rather than folded into this plan's task numbering. `frontend/src/app/legs/page.tsx` and `frontend/test/legs-list.test.tsx` are therefore **already substantially different** from the simple 4-column version this plan was originally drafted against: the page now has `search`/`countryFilter`/`sortKey`/`sortDir` state, a `.legs-filter-toolbar`, click-to-sort column headers, and `Arrival`/`Departure` columns. The block below is left as originally drafted to show exactly what this task adds (the `exportFrom`/`exportTo`/`exporting`/`exportError` state, `handleExport`, the `.export-toolbar` JSX, and the `downloadCompletedMissions` import) — **merge those additions into the real current file, do not paste this block over it**, or the sort/filter/date-column work will be silently reverted. Step 11 of Task 5 (the Status column) needs the same care: it becomes the 7th column (after Departure), not the 5th.
+
+Modify `frontend/src/app/legs/page.tsx` (illustrative — merge, don't overwrite; see note above):
 ```tsx
 'use client';
 
