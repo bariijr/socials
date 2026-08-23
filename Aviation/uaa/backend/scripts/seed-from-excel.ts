@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { AppDataSource } from '../src/database/data-source';
 import { User } from '../src/users/user.entity';
 import { Leg } from '../src/legs/leg.entity';
+import { Team } from '../src/notifications/team.entity';
 
 const TEMP_PASSWORD = 'ChangeMe-' + Math.random().toString(36).slice(2, 10);
 
@@ -110,6 +111,26 @@ async function seedLegs(workbook: XLSX.WorkBook, dataSource: typeof AppDataSourc
   return created;
 }
 
+async function seedTeams(workbook: XLSX.WorkBook, dataSource: typeof AppDataSource) {
+  const teamsSheet = workbook.Sheets['TEAMS'];
+  const rows = XLSX.utils.sheet_to_json<any[]>(teamsSheet, { header: 1, range: 1 });
+  const teamRepo = dataSource.getRepository(Team);
+  let created = 0;
+
+  for (const row of rows) {
+    const name = row[0] != null ? String(row[0]).trim() : '';
+    const teamEmail = row[2] != null ? String(row[2]).trim() : '';
+    if (!name || !teamEmail) continue;
+
+    const exists = await teamRepo.findOne({ where: { name } });
+    if (exists) continue;
+
+    await teamRepo.save(teamRepo.create({ name, teamEmail, remarks: row[3] ? String(row[3]) : null }));
+    created++;
+  }
+  return created;
+}
+
 async function main() {
   const filePath = process.argv[2];
   if (!filePath) {
@@ -122,8 +143,9 @@ async function main() {
 
   const usersCreated = await seedUsers(workbook, AppDataSource);
   const legsCreated = await seedLegs(workbook, AppDataSource);
+  const teamsCreated = await seedTeams(workbook, AppDataSource);
 
-  console.log(`Seeded ${usersCreated} user(s), ${legsCreated} leg(s).`);
+  console.log(`Seeded ${usersCreated} user(s), ${legsCreated} leg(s), ${teamsCreated} team(s).`);
   if (usersCreated > 0) {
     console.log(`Temporary password for newly created users: ${TEMP_PASSWORD}`);
     console.log('Share this out-of-band and require a password change on first login (password-change flow is a follow-up task, not part of this plan).');
