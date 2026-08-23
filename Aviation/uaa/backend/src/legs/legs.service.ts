@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Leg } from './leg.entity';
 import { CreateLegDto } from './dto/create-leg.dto';
+import { UpdateLegDto } from './dto/update-leg.dto';
 
 @Injectable()
 export class LegsService {
@@ -21,5 +22,18 @@ export class LegsService {
 
   findOne(id: string): Promise<Leg | null> {
     return this.legRepo.findOne({ where: { id } });
+  }
+
+  async update(id: string, dto: UpdateLegDto): Promise<Leg> {
+    const leg = await this.legRepo.findOne({ where: { id } });
+    if (!leg) throw new NotFoundException(`Leg ${id} not found`);
+
+    Object.assign(leg, {
+      ...dto,
+      arrDate: dto.arrDate !== undefined ? new Date(dto.arrDate) : leg.arrDate,
+      depDate: dto.depDate !== undefined ? new Date(dto.depDate) : leg.depDate,
+    });
+
+    return this.legRepo.save(leg);
   }
 }

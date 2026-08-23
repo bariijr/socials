@@ -61,4 +61,14 @@ describe('Legs (e2e)', () => {
 
     expect(response.status).toBe(404);
   });
+
+  it('PATCH /legs/:id updates the leg and returns 200', async () => {
+    legRepo.findOne.mockResolvedValue({ id: 'generated-id', tripNo: '2608001', arrDate: new Date('2026-09-16T16:20:00.000Z') });
+
+    const response = await request(app.getHttpServer())
+      .patch('/legs/generated-id')
+      .send({ arrDate: '2026-09-18T10:00:00.000Z' });
+
+    expect(response.status).toBe(200);
+  });
 });

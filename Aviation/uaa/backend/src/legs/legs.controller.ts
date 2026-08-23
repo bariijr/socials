@@ -1,7 +1,8 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LegsService } from './legs.service';
 import { CreateLegDto } from './dto/create-leg.dto';
+import { UpdateLegDto } from './dto/update-leg.dto';
 
 @Controller('legs')
 @UseGuards(JwtAuthGuard)
@@ -23,5 +24,10 @@ export class LegsController {
     const leg = await this.legsService.findOne(id);
     if (!leg) throw new NotFoundException(`Leg ${id} not found`);
     return leg;
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateLegDto) {
+    return this.legsService.update(id, dto);
   }
 }

@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { NotFoundException } from '@nestjs/common';
 import { LegsService } from '../src/legs/legs.service';
 import { Leg } from '../src/legs/leg.entity';
 
@@ -53,5 +54,25 @@ describe('LegsService', () => {
     const result = await service.findOne('1');
 
     expect(result).toEqual(expect.objectContaining({ tripNo: '2608001' }));
+  });
+
+  it('updates a leg and returns the saved entity', async () => {
+    legRepo.findOne.mockResolvedValue({ id: '1', tripNo: '482421', arrDate: new Date('2026-09-16T16:20:00.000Z') });
+    legRepo.save.mockImplementation(async (entity) => entity);
+
+    const result = await service.update('1', { arrDate: '2026-09-18T10:00:00.000Z' });
+
+    expect(legRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ arrDate: new Date('2026-09-18T10:00:00.000Z') }),
+    );
+    expect(result).toEqual(expect.objectContaining({ id: '1' }));
+  });
+
+  it('throws NotFoundException when updating a leg that does not exist', async () => {
+    legRepo.findOne.mockResolvedValue(null);
+
+    await expect(service.update('missing', { arrDate: '2026-09-18T10:00:00.000Z' })).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
