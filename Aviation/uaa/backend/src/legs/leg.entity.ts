@@ -134,6 +134,9 @@ export class Leg {
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
   completedAt: Date | null;
 
+  @Column({ name: 'trip_id', type: 'uuid' })
+  tripId: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
