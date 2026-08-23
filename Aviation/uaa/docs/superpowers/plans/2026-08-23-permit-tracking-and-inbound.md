@@ -79,7 +79,7 @@ frontend/
 **Interfaces:**
 - Produces: `LegsService.update(id: string, dto: UpdateLegDto): Promise<Leg>`, `PATCH /legs/:id` (200 or 404). Task 3 calls `update()` and, when `arrDate` changes, calls `PermitsService.reconcileForLeg`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `backend/test/legs.service.spec.ts` (append inside the existing `describe('LegsService', ...)` block, after the last test):
 ```typescript
@@ -118,12 +118,12 @@ Add to `backend/test/legs.e2e-spec.ts` (append inside the existing `describe('Le
   });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: FAIL — `service.update is not a function`
 
-- [ ] **Step 3: Implement UpdateLegDto and LegsService.update**
+- [x] **Step 3: Implement UpdateLegDto and LegsService.update**
 
 `backend/src/legs/dto/update-leg.dto.ts`:
 ```typescript
@@ -200,12 +200,12 @@ export class LegsService {
 }
 ```
 
-- [ ] **Step 4: Run the unit test to verify it passes**
+- [x] **Step 4: Run the unit test to verify it passes**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Add the PATCH route**
+- [x] **Step 5: Add the PATCH route**
 
 Modify `backend/src/legs/legs.controller.ts`:
 ```typescript
@@ -244,12 +244,12 @@ export class LegsController {
 }
 ```
 
-- [ ] **Step 6: Run the e2e test to verify it passes**
+- [x] **Step 6: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/legs.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (4 tests)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/legs/dto/update-leg.dto.ts backend/src/legs/legs.service.ts backend/src/legs/legs.controller.ts backend/test/legs.service.spec.ts backend/test/legs.e2e-spec.ts
@@ -267,7 +267,7 @@ git commit -m "Add PATCH /legs/:id — prerequisite for re-confirm invalidation 
 **Interfaces:**
 - Produces: `evaluateReconfirm(permitRequest: { status: PermitRequestStatus; requiredByZ: Date | null; validFrom: Date | null; validTo: Date | null }, currentArrDateZ: Date | null, nowZ: Date): PermitRequestStatus`. Returns the *next* status — either unchanged, or `'RECONFIRM_REQUIRED'`. Tasks 3 and 4 call this exact function.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/reconfirm.spec.ts`:
 ```typescript
@@ -349,12 +349,12 @@ describe('evaluateReconfirm', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/reconfirm.spec.ts`
 Expected: FAIL — `Cannot find module '../src/permits/reconfirm'`
 
-- [ ] **Step 3: Implement evaluateReconfirm**
+- [x] **Step 3: Implement evaluateReconfirm**
 
 `backend/src/permits/reconfirm.ts`:
 ```typescript
@@ -390,12 +390,12 @@ export function evaluateReconfirm(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/reconfirm.spec.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/permits/reconfirm.ts backend/test/reconfirm.spec.ts
@@ -414,7 +414,7 @@ git commit -m "Add evaluateReconfirm — the two exact flip conditions the spec 
 - Consumes: `evaluateReconfirm` (Task 2), `LegsService.update` (Task 1).
 - Produces: `PermitsService.reconcileForLeg(legId: string, currentArrDateZ: Date | null): Promise<void>` — re-evaluates every `PermitRequest` for a leg and saves any that flip. `LegsController.update` (Task 1) calls this after a successful save when `arrDate` was part of the update.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `backend/test/permits.service.spec.ts` (append inside the existing `describe('PermitsService', ...)` block):
 ```typescript
@@ -456,12 +456,12 @@ Add to `backend/test/permits.service.spec.ts` (append inside the existing `descr
   });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: FAIL — `service.reconcileForLeg is not a function`
 
-- [ ] **Step 3: Implement reconcileForLeg**
+- [x] **Step 3: Implement reconcileForLeg**
 
 Modify `backend/src/permits/permits.service.ts` — add the import and the method (append inside the `PermitsService` class, after `update`):
 ```typescript
@@ -482,12 +482,12 @@ import { evaluateReconfirm } from './reconfirm';
   }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: PASS (11 tests)
 
-- [ ] **Step 5: Call reconcileForLeg from the Leg update route**
+- [x] **Step 5: Call reconcileForLeg from the Leg update route**
 
 Modify `backend/src/legs/legs.controller.ts` — inject `PermitsService` and call it after a successful update when `arrDate` was part of the request body:
 ```typescript
@@ -554,7 +554,7 @@ export class LegsModule {}
 
 Note: this makes `LegsModule` depend on `PermitsModule`, which is the opposite direction from how `PermitsModule` already depends on the `Leg` *entity* (via `TypeOrmModule.forFeature([Leg])` for its own repository — that's just shared table access, not a module-to-module dependency, so this doesn't create a cycle). `PermitsModule` already exports `PermitsService` (permit-request-workflow plan, Task 6).
 
-- [ ] **Step 6: Update the Legs e2e test to provide PermitsService**
+- [x] **Step 6: Update the Legs e2e test to provide PermitsService**
 
 Modify `backend/test/legs.e2e-spec.ts` — the test module now needs `PermitsService` available (since `LegsController` injects it). Add an override:
 ```typescript
@@ -576,12 +576,12 @@ Note: overriding `PermitsService` alone is **not** sufficient — `PermitsModule
 ```
 with imports for `PermitRequest`, `Comm`, `CountryRequirement`, `FormTemplate` added alongside the existing `Leg` import. (`getRepositoryToken(Leg)` was already overridden for `LegsModule`'s own use above — that single override also satisfies `PermitsModule`'s separate `forFeature([..., Leg])` registration, since the injection token is keyed by entity class, not by which module's `forFeature` call produced it — no additional `Leg` override needed.)
 
-- [ ] **Step 7: Run the full e2e suite to verify nothing broke**
+- [x] **Step 7: Run the full e2e suite to verify nothing broke**
 
 Run: `cd backend && npx jest --config test/jest-e2e.json`
 Expected: PASS (all suites — `legs.e2e-spec.ts`, `permits.e2e-spec.ts`)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/permits/permits.service.ts backend/src/legs/legs.controller.ts backend/src/legs/legs.module.ts backend/test/permits.service.spec.ts backend/test/legs.e2e-spec.ts
@@ -601,14 +601,14 @@ git commit -m "Wire reconfirm evaluation into PATCH /legs/:id — the ETD-shift 
 - Consumes: `evaluateReconfirm` (Task 2).
 - Produces: `ReconfirmSweepService.sweep(): Promise<number>` (returns count of requests flipped) — runs on a 15-minute interval via `@nestjs/schedule`, and is directly callable in tests without waiting on a timer.
 
-- [ ] **Step 1: Add the `@nestjs/schedule` dependency**
+- [x] **Step 1: Add the `@nestjs/schedule` dependency**
 
 Modify `backend/package.json` — add to `dependencies`: `"@nestjs/schedule": "^4.1.1"`. Run:
 ```bash
 cd backend && npm install
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `backend/test/reconfirm-sweep.service.spec.ts`:
 ```typescript
@@ -677,12 +677,12 @@ describe('ReconfirmSweepService', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/reconfirm-sweep.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/permits/reconfirm-sweep.service'`
 
-- [ ] **Step 4: Implement ReconfirmSweepService**
+- [x] **Step 4: Implement ReconfirmSweepService**
 
 `backend/src/permits/reconfirm-sweep.service.ts`:
 ```typescript
@@ -738,12 +738,12 @@ export class ReconfirmSweepService {
 
 Note: the `if (request.status === 'CANCELLED') continue;` guard is required for Step 2's "skips CANCELLED requests entirely and does not query their leg" test to actually pass — the SQL `where` clause above already excludes `CANCELLED` rows in real usage, but the test drives `permitRequestRepo.find` with a mock that ignores the `where` argument entirely (as mocks do), returning a `CANCELLED` row anyway to exercise the defensive path. Without the explicit continue, the loop would call `legRepo.findOne` for every returned row regardless of status, failing the test's `expect(legRepo.findOne).not.toHaveBeenCalled()`.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/reconfirm-sweep.service.spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 6: Wire ScheduleModule and ReconfirmSweepService into the app**
+- [x] **Step 6: Wire ScheduleModule and ReconfirmSweepService into the app**
 
 Modify `backend/src/permits/permits.module.ts`:
 ```typescript
@@ -781,7 +781,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 ```
 (add `ScheduleModule.forRoot()` as a new line directly after `ConfigModule.forRoot({ isGlobal: true }),` in the `imports` array).
 
-- [ ] **Step 7: Verify the backend still builds and boots**
+- [x] **Step 7: Verify the backend still builds and boots**
 
 Run:
 ```bash
@@ -790,7 +790,7 @@ npm run build
 ```
 Expected: compiles with no errors. (Full boot-with-live-scheduler verification happens in Task 9's end-to-end check.)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/permits/reconfirm-sweep.service.ts backend/src/permits/permits.module.ts backend/src/app.module.ts backend/package.json backend/package-lock.json backend/test/reconfirm-sweep.service.spec.ts
@@ -809,7 +809,7 @@ git commit -m "Add periodic reconfirm sweep — the deadline-passed-unconfirmed 
 - Consumes: `computeUrgency` (`backend/src/permits/permit-deadline.ts`, existing).
 - Produces: `PermitsService.findAllWithUrgency(): Promise<Array<PermitRequest & { urgency: Urgency; legSummary: { tripNo: string; icao: string; tail: string | null } }>>`, `GET /permit-requests` (200, array, JWT-protected). Task 6 (frontend) consumes this shape.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `backend/test/permits.service.spec.ts`:
 ```typescript
@@ -848,12 +848,12 @@ Add to `backend/test/permits.service.spec.ts`:
   });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: FAIL — `service.findAllWithUrgency is not a function`
 
-- [ ] **Step 3: Implement findAllWithUrgency**
+- [x] **Step 3: Implement findAllWithUrgency**
 
 Modify `backend/src/permits/permits.service.ts` — add the import and method:
 ```typescript
@@ -878,12 +878,12 @@ import { computeUrgency } from './permit-deadline';
   }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: PASS (13 tests)
 
-- [ ] **Step 5: Write the failing e2e test**
+- [x] **Step 5: Write the failing e2e test**
 
 Add to `backend/test/permits.e2e-spec.ts`:
 ```typescript
@@ -900,7 +900,7 @@ Add to `backend/test/permits.e2e-spec.ts`:
 ```
 (The `legRepo.findOne` mock already configured earlier in this test file's `beforeAll` resolves to a leg — reused here.)
 
-- [ ] **Step 6: Add the GET /permit-requests route**
+- [x] **Step 6: Add the GET /permit-requests route**
 
 Modify `backend/src/permits/permits.controller.ts` — add the route (order matters: register before `legs/:legId/permit-requests` is irrelevant since the paths don't collide, but place it near the other permit-requests routes):
 ```typescript
@@ -937,12 +937,12 @@ export class PermitsController {
 }
 ```
 
-- [ ] **Step 7: Run the e2e test to verify it passes**
+- [x] **Step 7: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/permits.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (5 tests)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/permits/permits.service.ts backend/src/permits/permits.controller.ts backend/test/permits.service.spec.ts backend/test/permits.e2e-spec.ts
@@ -962,7 +962,7 @@ git commit -m "Add GET /permit-requests — all requests with computed urgency, 
 - Consumes: `GET /permit-requests` (Task 5).
 - Produces: `listAllPermitRequests(token): Promise<PermitRequestWithUrgency[]>` in `api-client.ts`. Route `/action-board`.
 
-- [ ] **Step 1: Write the failing test for the api-client function**
+- [x] **Step 1: Write the failing test for the api-client function**
 
 Add to `frontend/test/api-client.test.ts`:
 ```typescript
@@ -981,12 +981,12 @@ Add to `frontend/test/api-client.test.ts`:
 ```
 Add `listAllPermitRequests` to the top-of-file import.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `listAllPermitRequests is not a function`
 
-- [ ] **Step 3: Implement listAllPermitRequests**
+- [x] **Step 3: Implement listAllPermitRequests**
 
 Modify `frontend/src/lib/api-client.ts` — add after `updatePermitRequest`:
 ```typescript
@@ -1004,12 +1004,12 @@ export async function listAllPermitRequests(token: string): Promise<PermitReques
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (10 tests)
 
-- [ ] **Step 5: Write the failing test for the Action Board page**
+- [x] **Step 5: Write the failing test for the Action Board page**
 
 `frontend/test/action-board.test.tsx`:
 ```tsx
@@ -1050,12 +1050,12 @@ describe('ActionBoardPage', () => {
 });
 ```
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/action-board.test.tsx`
 Expected: FAIL — `Cannot find module '../src/app/action-board/page'`
 
-- [ ] **Step 7: Implement the Action Board page**
+- [x] **Step 7: Implement the Action Board page**
 
 `frontend/src/app/action-board/page.tsx`:
 ```tsx
@@ -1140,7 +1140,7 @@ export default function ActionBoardPage() {
 }
 ```
 
-- [ ] **Step 8: Add urgency badge CSS**
+- [x] **Step 8: Add urgency badge CSS**
 
 Modify `frontend/src/app/globals.css` — append:
 ```css
@@ -1173,7 +1173,7 @@ Modify `frontend/src/app/globals.css` — append:
 }
 ```
 
-- [ ] **Step 9: Link the Action Board from the Legs list**
+- [x] **Step 9: Link the Action Board from the Legs list**
 
 Modify `frontend/src/app/legs/page.tsx` — add a link in `.board-header-right`, before the "+ New leg" link:
 ```tsx
@@ -1182,12 +1182,12 @@ Modify `frontend/src/app/legs/page.tsx` — add a link in `.board-header-right`,
           </a>
 ```
 
-- [ ] **Step 10: Run the tests to verify they pass**
+- [x] **Step 10: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/action-board.test.tsx`
 Expected: PASS (1 test)
 
-- [ ] **Step 11: Run the full frontend suite and the build**
+- [x] **Step 11: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -1209,7 +1209,7 @@ Real bug surfaced here, not by this task's own new tests but by broader coverage
 ```
 (adding the `.catch(() => setRequests([]))`, matching the pattern already used elsewhere in the app, e.g. `legs/page.tsx`'s `getLegs(token).then(setLegs).catch(...)`).
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add frontend/src/app/action-board frontend/src/lib/api-client.ts frontend/src/app/globals.css frontend/src/app/legs/page.tsx frontend/test/action-board.test.tsx frontend/test/api-client.test.ts
@@ -1227,7 +1227,7 @@ git commit -m "Add Action Board — every permit request sorted by urgency, RECO
 **Interfaces:**
 - Produces: `parseCorrelationToken(subject: string): { legId: number; permitRequestId: string } | null`. Task 8 calls this exact function.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/correlation-token.spec.ts`:
 ```typescript
@@ -1253,12 +1253,12 @@ describe('parseCorrelationToken', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/correlation-token.spec.ts`
 Expected: FAIL — `Cannot find module '../src/mail/correlation-token'`
 
-- [ ] **Step 3: Implement parseCorrelationToken**
+- [x] **Step 3: Implement parseCorrelationToken**
 
 `backend/src/mail/correlation-token.ts`:
 ```typescript
@@ -1271,12 +1271,12 @@ export function parseCorrelationToken(subject: string): { legId: number; permitR
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/correlation-token.spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/mail/correlation-token.ts backend/test/correlation-token.spec.ts
@@ -1678,7 +1678,7 @@ git commit -m "Add IMAP inbound worker with dry-run fallback, and the manual fil
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script**
 
 Run:
 ```bash
@@ -1691,14 +1691,18 @@ DATABASE_URL="postgres://uaa:uaa@localhost:5432/uaa" npm run seed:country-requir
 ```
 Expected: same 6 migrations as the permit-request-workflow plan's Task 10 (this plan adds no new tables), both seed scripts report the same real counts.
 
-- [ ] **Step 2: Confirm the scheduler booted without a live IMAP/SMTP connection**
+Real deviation found here: `docker-compose.yml`'s `postgres` service publishes no host port (only reachable on the internal `web-proxy` network), so `localhost:5432` from the host refuses the connection — not new to this plan, just never exercised from a host-side `npx typeorm-ts-node-commonjs` before. Worked around by running migrations and seeds from short-lived containers joined to the `web-proxy` network instead, targeting `postgres:5432` by service name. Migrations ran fine bind-mounting the backend source into `node:20-alpine` and reinstalling. The seed scripts did not: `node:20-alpine`'s musl libc can't load `bcrypt`'s prebuilt native binding (`Error loading shared library ... Exec format error` — `bcrypt` ships a glibc build). Rather than fight a bind-mounted `npm install` (also very slow over the Windows/Docker Desktop file-sharing boundary), the seed scripts were run from the backend Dockerfile's own `build` stage image instead (`docker build --target build -t uaa-backend-seed ./backend`), which already has a correctly-compiled glibc `node_modules` baked in — only the Excel workbook was bind-mounted in for the leg seed, never the source tree, so the image's own `node_modules` was never shadowed. Actual result: 6 migrations executed (matches expectation), `Seeded 2 user(s), 62 leg(s)` and `Seeded 15 CountryRequirement(s), 15 FormTemplate(s)` — both real counts match the permit-request-workflow plan's prior runs. Coordinator `bminja`'s password was then reset to `Admin123!` via a freshly bcrypt-hashed `UPDATE users SET password_hash = ...` (the seed script always assigns a random temporary password), matching the standing project instruction to keep that login usable for manual verification.
+
+- [x] **Step 2: Confirm the scheduler booted without a live IMAP/SMTP connection**
 
 ```bash
 docker compose logs backend --tail 20
 ```
 Expected: `Nest application successfully started` with no crash — confirms `ScheduleModule.forRoot()` and both `@Interval` jobs registered cleanly even with `IMAP_HOST`/`SMTP_HOST` unset.
 
-- [ ] **Step 3: Move a leg's ETD outside an already-confirmed permit's validity window and confirm the immediate flip**
+Confirmed: fresh boot logged `Nest application successfully started` with every route mapped including `POST /permit-requests/:id/comms`, no crash, no retry loop beyond the initial expected Postgres connection race.
+
+- [x] **Step 3: Move a leg's ETD outside an already-confirmed permit's validity window and confirm the immediate flip**
 
 Using a real seeded coordinator's token and a real leg id, first create and confirm a permit request (mirrors the permit-request-workflow plan's Task 10 flow), then:
 ```bash
@@ -1707,11 +1711,15 @@ curl -s http://localhost:3011/legs/<leg-id>/permit-requests -H "Authorization: B
 ```
 Expected: the second call's `status` is now `"RECONFIRM_REQUIRED"` — confirms `reconcileForLeg` actually ran off the real `PATCH /legs/:id` call, not just in the unit test's mocked repos.
 
-- [ ] **Step 4: Confirm the Action Board reflects it**
+Confirmed against leg 44 (trip 482421, HECA, Egypt): created and confirmed a permit request with `validFrom`/`validTo` set to `2026-09-10`–`2026-09-20`, then `PATCH`ed the leg's `arrDate` to `2027-01-01`. The follow-up `GET .../permit-requests` returned `"status":"RECONFIRM_REQUIRED"` — the real endpoint, not a mock.
+
+- [x] **Step 4: Confirm the Action Board reflects it**
 
 Visit `http://localhost:3012/action-board`, confirm the leg from Step 3 appears at the top (status `RECONFIRM_REQUIRED` sorts first regardless of urgency).
 
-- [ ] **Step 5: File a manual inbound reply and confirm it's on the Comms ledger**
+Confirmed in a real Chrome tab: the board rendered exactly one row — `482421 HECA Egypt RECONFIRM_REQUIRED OK` — proving both the `GET /permit-requests` join and the frontend's `sortKey` short-circuit work end-to-end.
+
+- [x] **Step 5: File a manual inbound reply and confirm it's on the Comms ledger**
 
 ```bash
 curl -s -X POST http://localhost:3011/permit-requests/<permit-request-id>/comms -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"fromAddress":"permits.eg@example.com","subject":"RE: Permit Request","body":"Reconfirmed, still valid."}'
@@ -1719,7 +1727,9 @@ docker compose exec postgres psql -U uaa -d uaa -c "SELECT direction, kind, from
 ```
 Expected: `201` response with `direction: "INBOUND"`; the `psql` query shows the same row.
 
-- [ ] **Step 6: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+Confirmed: `201` response with `"direction":"INBOUND","kind":"REQUEST","fromAddress":"permits.eg@example.com"`; the `psql` query against the real `comms` table returned the identical row.
+
+- [x] **Step 6: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
 
 ---
 
