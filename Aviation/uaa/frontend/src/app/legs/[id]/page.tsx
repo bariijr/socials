@@ -44,6 +44,9 @@ export default function LegDetailPage() {
           UAA Coordinator — Trip {leg.tripNo}
         </h1>
         <div className="board-header-right">
+          <a className="btn-link" href={`/trips/${leg.tripNo}`}>
+            Trip {leg.tripNo}
+          </a>
           {leg.completedAt ? (
             <span className="completed-badge">Completed {new Date(leg.completedAt).toLocaleDateString()}</span>
           ) : (

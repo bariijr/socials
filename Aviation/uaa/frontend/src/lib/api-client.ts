@@ -77,6 +77,26 @@ export async function getLeg(token: string, id: string): Promise<Leg> {
   return response.json();
 }
 
+export interface TripWorkspace {
+  tripNo: string;
+  tails: string[];
+  operatorNames: string[];
+  countries: string[];
+  legCount: number;
+  firstDeparture: string | null;
+  lastArrival: string | null;
+  status: 'ACTIVE' | 'COMPLETED';
+  legs: Leg[];
+}
+
+export async function getTrip(token: string, tripNo: string): Promise<TripWorkspace> {
+  const response = await fetch(`${API_URL}/trips/${tripNo}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to load trip');
+  return response.json();
+}
+
 export async function createLeg(token: string, input: CreateLegInput): Promise<Leg> {
   const response = await fetch(`${API_URL}/legs`, {
     method: 'POST',

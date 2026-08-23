@@ -78,4 +78,23 @@ describe('LegDetailPage', () => {
 
     await waitFor(() => expect(screen.getByText(/Completed/)).toBeInTheDocument());
   });
+
+  it('links to the trip workspace for this leg', async () => {
+    vi.mocked(apiClient.getLeg).mockResolvedValue({
+      id: '1',
+      tripNo: '484701',
+      icao: 'HECA',
+      tail: 'N148B',
+      country: 'Egypt',
+      arrDate: null,
+      depDate: null,
+      legId: 149,
+    });
+    vi.mocked(apiClient.getLegs).mockResolvedValue([]);
+
+    render(<LegDetailPage />);
+
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Trip 484701' })).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'Trip 484701' })).toHaveAttribute('href', '/trips/484701');
+  });
 });
