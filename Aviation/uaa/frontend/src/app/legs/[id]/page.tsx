@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getLeg, type Leg } from '@/lib/api-client';
+import { getLeg, markLegComplete, type Leg } from '@/lib/api-client';
 import PermitRequests from './permit-requests';
 import Notifications from './notifications';
 
 export default function LegDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [leg, setLeg] = useState<Leg | null>(null);
+  const [completing, setCompleting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -22,6 +23,18 @@ export default function LegDetailPage() {
       .catch(() => router.replace('/legs'));
   }, [id, router]);
 
+  async function handleMarkComplete() {
+    const token = localStorage.getItem('uaa_token');
+    if (!token || !leg) return;
+    setCompleting(true);
+    try {
+      const updated = await markLegComplete(token, leg.id);
+      setLeg(updated);
+    } finally {
+      setCompleting(false);
+    }
+  }
+
   if (!leg) return null;
 
   return (
@@ -30,9 +43,18 @@ export default function LegDetailPage() {
         <h1 className="board-title">
           UAA Coordinator — Trip {leg.tripNo}
         </h1>
-        <a className="btn-link" href="/legs">
-          Back to legs
-        </a>
+        <div className="board-header-right">
+          {leg.completedAt ? (
+            <span className="completed-badge">Completed {new Date(leg.completedAt).toLocaleDateString()}</span>
+          ) : (
+            <button type="button" className="btn-link" onClick={handleMarkComplete} disabled={completing}>
+              {completing ? 'Marking…' : 'Mark Complete'}
+            </button>
+          )}
+          <a className="btn-link" href="/legs">
+            Back to legs
+          </a>
+        </div>
       </div>
       <div className="runway-rule" />
 

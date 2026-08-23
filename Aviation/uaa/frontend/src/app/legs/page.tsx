@@ -154,6 +154,7 @@ export default function LegsPage() {
               <th className="sortable" onClick={() => handleSort('depDate')}>
                 Departure{sortIndicator('depDate')}
               </th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
@@ -167,6 +168,7 @@ export default function LegsPage() {
                 <td className="col-muted">{leg.country}</td>
                 <td className="col-mono">{formatDateTime(leg.arrDate)}</td>
                 <td className="col-mono">{formatDateTime(leg.depDate)}</td>
+                <td>{leg.completedAt ? <span className="completed-badge">Completed</span> : null}</td>
               </tr>
             ))}
           </tbody>

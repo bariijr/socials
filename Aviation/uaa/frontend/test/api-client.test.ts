@@ -13,6 +13,7 @@ import {
   sendTeamNotification,
   sendAgentServiceReport,
   getAgentWhatsAppLink,
+  markLegComplete,
 } from '../src/lib/api-client';
 
 describe('api-client', () => {
@@ -207,5 +208,18 @@ describe('api-client', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(result).toEqual({ url: 'https://wa.me/212661888747?text=Hi', phone: '+212 661 888 747' });
+  });
+
+  it('markLegComplete posts to the complete endpoint and returns the updated leg', async () => {
+    const updated = { id: '1', tripNo: '482421', icao: 'HECA', tail: 'N148B', country: 'Egypt', arrDate: null, depDate: null, legId: 149, completedAt: '2026-08-23T00:00:00.000Z' };
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => updated });
+
+    const result = await markLegComplete('token-123', '1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/1/complete'),
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer token-123' } }),
+    );
+    expect(result).toEqual(updated);
   });
 });

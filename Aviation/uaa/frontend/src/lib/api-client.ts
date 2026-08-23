@@ -21,6 +21,7 @@ export interface Leg {
   mtowLb?: number | null;
   pgh?: string | null;
   tssTeam?: string | null;
+  completedAt?: string | null;
 }
 
 export interface CreateLegInput {
@@ -84,6 +85,23 @@ export async function createLeg(token: string, input: CreateLegInput): Promise<L
   });
   if (!response.ok) throw new Error('Failed to create leg');
   return response.json();
+}
+
+export async function markLegComplete(token: string, id: string): Promise<Leg> {
+  const response = await fetch(`${API_URL}/legs/${id}/complete`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to mark leg complete');
+  return response.json();
+}
+
+export async function downloadCompletedMissions(token: string, from: string, to: string): Promise<Blob> {
+  const response = await fetch(`${API_URL}/legs/export?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to export completed missions');
+  return response.blob();
 }
 
 export interface PermitRequest {

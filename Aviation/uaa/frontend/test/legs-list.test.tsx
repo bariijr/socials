@@ -99,4 +99,24 @@ describe('LegsPage', () => {
     expect(screen.queryByText('2608001')).not.toBeInTheDocument();
     expect(screen.getByText('482421')).toBeInTheDocument();
   });
+
+  it('shows a Completed badge for legs with completedAt set', async () => {
+    vi.mocked(apiClient.getLegs).mockResolvedValue([
+      {
+        id: '1',
+        tripNo: '2608001',
+        icao: 'GMMN',
+        tail: 'N832PJ',
+        country: 'Morocco',
+        arrDate: null,
+        depDate: null,
+        legId: 1,
+        completedAt: '2026-08-23T00:00:00.000Z',
+      },
+    ]);
+
+    render(<LegsPage />);
+
+    await waitFor(() => expect(screen.getByText('Completed')).toBeInTheDocument());
+  });
 });
