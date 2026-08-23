@@ -189,6 +189,46 @@ a {
   white-space: nowrap;
 }
 
+.legs-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.legs-filter-toolbar label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.legs-search,
+.legs-filter-toolbar select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.legs-search {
+  min-width: 260px;
+  flex: 1 1 260px;
+}
+
+.legs-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.legs-table th.sortable:hover {
+  color: var(--accent);
+}
+
 .btn-link {
   background: none;
   border: none;
