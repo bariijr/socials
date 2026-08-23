@@ -3,6 +3,8 @@ import * as nodemailer from 'nodemailer';
 
 export interface SendMailInput {
   to: string;
+  cc?: string;
+  bcc?: string;
   subject: string;
   body: string;
 }
@@ -30,6 +32,8 @@ export class MailService {
     await this.transporter.sendMail({
       from: process.env.SMTP_FROM,
       to: input.to,
+      cc: input.cc,
+      bcc: input.bcc,
       subject: input.subject,
       text: input.body,
     });
