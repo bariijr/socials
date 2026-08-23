@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getLeg, type Leg } from '@/lib/api-client';
 import PermitRequests from './permit-requests';
+import Notifications from './notifications';
 
 export default function LegDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -51,6 +52,7 @@ export default function LegDetailPage() {
       </div>
 
       <PermitRequests legId={leg.id} country={leg.country} />
+      <Notifications legId={leg.id} />
     </div>
   );
 }

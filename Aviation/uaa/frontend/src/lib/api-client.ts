@@ -148,3 +148,56 @@ export async function listAllPermitRequests(token: string): Promise<PermitReques
   if (!response.ok) throw new Error('Failed to load permit requests');
   return response.json();
 }
+
+export interface NotificationComm {
+  id: string;
+  legId: string;
+  direction: 'OUTBOUND' | 'INBOUND';
+  toAddress: string;
+  subject: string;
+  sentAt: string;
+}
+
+export async function listNotifications(token: string, legId: string): Promise<NotificationComm[]> {
+  const response = await fetch(`${API_URL}/legs/${legId}/notifications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to load notifications');
+  return response.json();
+}
+
+export async function sendCrewNotification(token: string, legId: string): Promise<NotificationComm> {
+  const response = await fetch(`${API_URL}/legs/${legId}/notifications/crew`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to send crew notification');
+  return response.json();
+}
+
+export async function sendTeamNotification(token: string, legId: string): Promise<NotificationComm> {
+  const response = await fetch(`${API_URL}/legs/${legId}/notifications/team`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to send team notification');
+  return response.json();
+}
+
+export async function sendAgentServiceReport(token: string, legId: string): Promise<NotificationComm> {
+  const response = await fetch(`${API_URL}/legs/${legId}/notifications/agent-service-report`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to send agent service report request');
+  return response.json();
+}
+
+export async function getAgentWhatsAppLink(token: string, legId: string): Promise<{ url: string; phone: string }> {
+  const response = await fetch(`${API_URL}/legs/${legId}/notifications/agent-whatsapp`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Failed to build WhatsApp link');
+  return response.json();
+}

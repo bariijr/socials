@@ -380,6 +380,37 @@ table.legs-table {
   padding: 4px 8px;
 }
 
+.notifications-section {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 16px 20px 20px;
+  margin: 20px 0 0;
+}
+
+.notifications-section legend {
+  padding: 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.notification-actions .btn-primary {
+  width: auto;
+  padding: 9px 16px;
+}
+
+.notifications-table {
+  margin-top: 4px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

@@ -1,5 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { login, getLegs, createLeg, getLeg, listPermitRequests, createPermitRequest, updatePermitRequest, listAllPermitRequests } from '../src/lib/api-client';
+import {
+  login,
+  getLegs,
+  createLeg,
+  getLeg,
+  listPermitRequests,
+  createPermitRequest,
+  updatePermitRequest,
+  listAllPermitRequests,
+  listNotifications,
+  sendCrewNotification,
+  sendTeamNotification,
+  sendAgentServiceReport,
+  getAgentWhatsAppLink,
+} from '../src/lib/api-client';
 
 describe('api-client', () => {
   beforeEach(() => {
@@ -135,5 +149,63 @@ describe('api-client', () => {
       expect.objectContaining({ headers: { Authorization: 'Bearer token-123' } }),
     );
     expect(result).toEqual(requests);
+  });
+
+  it('listNotifications fetches NOTIFICATION comms for a leg', async () => {
+    const comms = [{ id: 'comm-1', legId: 'leg-1', direction: 'OUTBOUND', toAddress: 'adam@example.com', subject: 'UA Crew Notification', sentAt: '2026-08-23T00:00:00.000Z' }];
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => comms });
+
+    const result = await listNotifications('token-123', 'leg-1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/leg-1/notifications'),
+      expect.objectContaining({ headers: { Authorization: 'Bearer token-123' } }),
+    );
+    expect(result).toEqual(comms);
+  });
+
+  it('sendCrewNotification posts to the crew notification endpoint', async () => {
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ id: 'comm-1' }) });
+
+    await sendCrewNotification('token-123', 'leg-1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/leg-1/notifications/crew'),
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer token-123' } }),
+    );
+  });
+
+  it('sendTeamNotification posts to the team notification endpoint', async () => {
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ id: 'comm-1' }) });
+
+    await sendTeamNotification('token-123', 'leg-1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/leg-1/notifications/team'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('sendAgentServiceReport posts to the agent-service-report endpoint', async () => {
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ id: 'comm-1' }) });
+
+    await sendAgentServiceReport('token-123', 'leg-1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/leg-1/notifications/agent-service-report'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('getAgentWhatsAppLink posts to the agent-whatsapp endpoint and returns the url/phone', async () => {
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ url: 'https://wa.me/212661888747?text=Hi', phone: '+212 661 888 747' }) });
+
+    const result = await getAgentWhatsAppLink('token-123', 'leg-1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/legs/leg-1/notifications/agent-whatsapp'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(result).toEqual({ url: 'https://wa.me/212661888747?text=Hi', phone: '+212 661 888 747' });
   });
 });
