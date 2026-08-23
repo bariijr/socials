@@ -72,7 +72,7 @@ frontend/
 **Interfaces:**
 - Produces: `Leg.completedAt: Date | null`. Task 2's `markComplete` sets it; Task 4's `findCompletedInRange` filters on it.
 
-- [ ] **Step 1: Add the column to the entity**
+- [x] **Step 1: Add the column to the entity**
 
 Modify `backend/src/legs/leg.entity.ts` — add after the `intelStatus` column (before `createdAt`):
 ```typescript
@@ -80,7 +80,7 @@ Modify `backend/src/legs/leg.entity.ts` — add after the `intelStatus` column (
   completedAt: Date | null;
 ```
 
-- [ ] **Step 2: Create the migration**
+- [x] **Step 2: Create the migration**
 
 `backend/migrations/1756166400000-AddCompletedAtToLegs.ts`:
 ```typescript
@@ -100,12 +100,12 @@ export class AddCompletedAtToLegs1756166400000 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 3: Verify the backend still builds**
+- [x] **Step 3: Verify the backend still builds**
 
 Run: `cd backend && npm run build`
 Expected: compiles with no errors. (The migration itself runs for real in Task 7.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/src/legs/leg.entity.ts backend/migrations/1756166400000-AddCompletedAtToLegs.ts
@@ -123,7 +123,7 @@ git commit -m "Add Leg.completedAt — the single source of truth for Mark Compl
 **Interfaces:**
 - Produces: `LegsService.markComplete(id: string): Promise<Leg>`, `POST /legs/:id/complete` (201).
 
-- [ ] **Step 1: Write the failing unit tests**
+- [x] **Step 1: Write the failing unit tests**
 
 Add to `backend/test/legs.service.spec.ts` (inside the existing `describe('LegsService', ...)` block):
 ```typescript
@@ -144,12 +144,12 @@ Add to `backend/test/legs.service.spec.ts` (inside the existing `describe('LegsS
   });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: FAIL — `service.markComplete is not a function`
 
-- [ ] **Step 3: Implement markComplete**
+- [x] **Step 3: Implement markComplete**
 
 Modify `backend/src/legs/legs.service.ts` — add the method (after `update`):
 ```typescript
@@ -161,12 +161,12 @@ Modify `backend/src/legs/legs.service.ts` — add the method (after `update`):
   }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: PASS (7 tests)
 
-- [ ] **Step 5: Add the route**
+- [x] **Step 5: Add the route**
 
 Modify `backend/src/legs/legs.controller.ts` — add the route (after `findOne`, before `update`):
 ```typescript
@@ -176,7 +176,7 @@ Modify `backend/src/legs/legs.controller.ts` — add the route (after `findOne`,
   }
 ```
 
-- [ ] **Step 6: Write the failing e2e test**
+- [x] **Step 6: Write the failing e2e test**
 
 Add to `backend/test/legs.e2e-spec.ts` (inside the existing `describe('Legs (e2e)', ...)` block):
 ```typescript
@@ -190,12 +190,12 @@ Add to `backend/test/legs.e2e-spec.ts` (inside the existing `describe('Legs (e2e
   });
 ```
 
-- [ ] **Step 7: Run the e2e test to verify it passes**
+- [x] **Step 7: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/legs.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (5 tests)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/legs/legs.service.ts backend/src/legs/legs.controller.ts backend/test/legs.service.spec.ts backend/test/legs.e2e-spec.ts
@@ -215,7 +215,7 @@ git commit -m "Add POST /legs/:id/complete — Mark Complete, without removing t
 
 Headers and column order below are the real `MAYFLY` sheet row 1 (read via `openpyxl` for this plan), in the same order `seed-from-excel.ts`'s `seedLegs` already reads them by position — every `Leg` field maps back to the exact column it was read from at seed time.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/test/mayfly-export.spec.ts`:
 ```typescript
@@ -299,12 +299,12 @@ describe('buildMayflyWorkbook', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/mayfly-export.spec.ts`
 Expected: FAIL — `Cannot find module '../src/legs/mayfly-export'`
 
-- [ ] **Step 3: Implement the builder**
+- [x] **Step 3: Implement the builder**
 
 `backend/src/legs/mayfly-export.ts`:
 ```typescript
@@ -393,12 +393,12 @@ export function buildMayflyWorkbook(legs: Leg[]): Buffer {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/mayfly-export.spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/legs/mayfly-export.ts backend/test/mayfly-export.spec.ts
@@ -418,7 +418,7 @@ git commit -m "Add MAYFLY export builder — real 42-column layout, pure and ind
 - Consumes: `buildMayflyWorkbook` (Task 3).
 - Produces: `LegsService.findCompletedInRange(from: Date, to: Date): Promise<Leg[]>`, `LegsService.exportMayflyBuffer(from: Date, to: Date): Promise<Buffer>`, `GET /legs/export?from=&to=` (200, `.xlsx` file).
 
-- [ ] **Step 1: Write the failing unit tests**
+- [x] **Step 1: Write the failing unit tests**
 
 Add to `backend/test/legs.service.spec.ts`:
 ```typescript
@@ -448,12 +448,12 @@ Add to `backend/test/legs.service.spec.ts`:
   });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: FAIL — `service.findCompletedInRange is not a function`
 
-- [ ] **Step 3: Implement findCompletedInRange and exportMayflyBuffer**
+- [x] **Step 3: Implement findCompletedInRange and exportMayflyBuffer**
 
 Modify `backend/src/legs/legs.service.ts` — add the imports and methods:
 ```typescript
@@ -471,12 +471,12 @@ import { buildMayflyWorkbook } from './mayfly-export';
   }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/legs.service.spec.ts`
 Expected: PASS (9 tests)
 
-- [ ] **Step 5: Add the query DTO and route**
+- [x] **Step 5: Add the query DTO and route**
 
 `backend/src/legs/dto/export-legs-query.dto.ts`:
 ```typescript
@@ -553,7 +553,7 @@ export class LegsController {
 }
 ```
 
-- [ ] **Step 6: Write the failing e2e test**
+- [x] **Step 6: Write the failing e2e test**
 
 Add to `backend/test/legs.e2e-spec.ts`:
 ```typescript
@@ -569,12 +569,12 @@ Add to `backend/test/legs.e2e-spec.ts`:
   });
 ```
 
-- [ ] **Step 7: Run the e2e test to verify it passes**
+- [x] **Step 7: Run the e2e test to verify it passes**
 
 Run: `cd backend && npx jest test/legs.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (6 tests)
 
-- [ ] **Step 8: Run the full backend suite and build**
+- [x] **Step 8: Run the full backend suite and build**
 
 Run:
 ```bash
@@ -585,7 +585,7 @@ npm run build
 ```
 Expected: all PASS, build succeeds.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/legs/dto/export-legs-query.dto.ts backend/src/legs/legs.service.ts backend/src/legs/legs.controller.ts backend/test/legs.service.spec.ts backend/test/legs.e2e-spec.ts
@@ -604,7 +604,7 @@ git commit -m "Add GET /legs/export — on-demand MAYFLY-format download for a d
 - Consumes: `POST /legs/:id/complete` (Task 2).
 - Produces: `markLegComplete(token, id): Promise<Leg>` in `api-client.ts`; `Leg.completedAt` field.
 
-- [ ] **Step 1: Write the failing api-client test**
+- [x] **Step 1: Write the failing api-client test**
 
 Add to `frontend/test/api-client.test.ts` (add `markLegComplete` to the import list):
 ```typescript
@@ -622,12 +622,12 @@ Add to `frontend/test/api-client.test.ts` (add `markLegComplete` to the import l
   });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `markLegComplete is not a function`
 
-- [ ] **Step 3: Implement markLegComplete and add completedAt to the Leg interface**
+- [x] **Step 3: Implement markLegComplete and add completedAt to the Leg interface**
 
 Modify `frontend/src/lib/api-client.ts` — add `completedAt?: string | null;` to the `Leg` interface (alongside the other optional fields), and add the function after `createLeg`:
 ```typescript
@@ -641,12 +641,12 @@ export async function markLegComplete(token: string, id: string): Promise<Leg> {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (16 tests)
 
-- [ ] **Step 5: Write the failing leg-detail test**
+- [x] **Step 5: Write the failing leg-detail test**
 
 Add to `frontend/test/leg-detail.test.tsx` — add `markLegComplete: vi.fn()` to the mocked exports, then add a test:
 ```typescript
@@ -686,12 +686,12 @@ Add to `frontend/test/leg-detail.test.tsx` — add `markLegComplete: vi.fn()` to
 ```
 Add the import at the top: `import userEvent from '@testing-library/user-event';`
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/leg-detail.test.tsx`
 Expected: FAIL — no "Mark Complete" button rendered yet
 
-- [ ] **Step 7: Implement the Mark Complete button and Completed badge**
+- [x] **Step 7: Implement the Mark Complete button and Completed badge**
 
 Modify `frontend/src/app/legs/[id]/page.tsx`:
 ```tsx
@@ -777,14 +777,14 @@ export default function LegDetailPage() {
 }
 ```
 
-- [ ] **Step 8: Run the test to verify it passes**
+- [x] **Step 8: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/leg-detail.test.tsx`
 Expected: PASS (2 tests)
 
 Real bug surfaced here (a genuine test-infrastructure defect, not a component bug): the test failed with the click firing and `markLegComplete` resolving correctly, but the DOM never updating. Root cause: `frontend/test/setup.ts`'s global `next/navigation` mock recreated a brand-new `useRouter()` object on every call — `useRouter: () => ({ push: vi.fn(), replace: vi.fn(), ... })`. Real Next.js's `useRouter()` returns a referentially stable object across renders; this mock didn't. `LegDetailPage`'s initial-fetch `useEffect(() => {...}, [id, router])` therefore re-fired on *every* re-render (including the one triggered by `setCompleting(true)`), re-running `getLeg(token, id).then(setLeg)` with the original mocked value (`completedAt: null`) and clobbering the just-applied `setLeg(updated)` from `markLegComplete`'s resolution — a real race, confirmed by isolating a minimal repro outside this component. This pattern (`[..., router]` in an initial-fetch effect's deps) exists on every page in this app (`legs/page.tsx`, `legs/new/page.tsx`, this one) and was previously invisible because no other test triggered a state-changing re-render *after* the initial fetch. Fixed at the root, not just locally: `frontend/test/setup.ts`'s `useRouter` mock now returns a module-scoped, referentially stable object (matching real Next.js's actual behavior — the fix makes the test double more accurate, not a workaround), and `leg-detail.test.tsx`'s own local `next/navigation` override (needed for `useParams`) does the same. No production code needed to change — the bug was entirely in the mock's fidelity to the real API, and every other already-passing test stayed green after the fix (full suite re-run: 39/39 passed).
 
-- [ ] **Step 9: Write the failing legs-list Status column test**
+- [x] **Step 9: Write the failing legs-list Status column test**
 
 Add to `frontend/test/legs-list.test.tsx`:
 ```typescript
@@ -799,12 +799,12 @@ Add to `frontend/test/legs-list.test.tsx`:
   });
 ```
 
-- [ ] **Step 10: Run the test to verify it fails**
+- [x] **Step 10: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/legs-list.test.tsx`
 Expected: FAIL — no "Completed" text rendered yet
 
-- [ ] **Step 11: Add the Status column**
+- [x] **Step 11: Add the Status column**
 
 Note: see Task 6 Step 7's deviation note — `frontend/src/app/legs/page.tsx` already has sort/filter/date columns from a mid-session addition unrelated to this plan, so `<th>Status</th>` becomes the 7th header (after `Arrival`/`Departure`), not the 5th.
 
@@ -817,7 +817,7 @@ Modify `frontend/src/app/legs/page.tsx` — add `<th>Status</th>` to the header 
 ```
 (placed as the last header/cell, after Country.)
 
-- [ ] **Step 12: Add badge CSS**
+- [x] **Step 12: Add badge CSS**
 
 Modify `frontend/src/app/globals.css` — append:
 ```css
@@ -833,12 +833,12 @@ Modify `frontend/src/app/globals.css` — append:
 }
 ```
 
-- [ ] **Step 13: Run the tests to verify they pass**
+- [x] **Step 13: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/legs-list.test.tsx`
 Expected: PASS (2 tests)
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add frontend/src/lib/api-client.ts frontend/src/app/legs/[id]/page.tsx frontend/src/app/legs/page.tsx frontend/src/app/globals.css frontend/test/api-client.test.ts frontend/test/leg-detail.test.tsx frontend/test/legs-list.test.tsx
@@ -857,7 +857,7 @@ git commit -m "Add Mark Complete button and Completed status badge"
 - Consumes: `GET /legs/export?from=&to=` (Task 4).
 - Produces: `downloadCompletedMissions(token, from, to): Promise<Blob>` in `api-client.ts`.
 
-- [ ] **Step 1: Write the failing api-client test**
+- [x] **Step 1: Write the failing api-client test**
 
 Add to `frontend/test/api-client.test.ts` (add `downloadCompletedMissions` to the import list):
 ```typescript
@@ -875,12 +875,12 @@ Add to `frontend/test/api-client.test.ts` (add `downloadCompletedMissions` to th
   });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — `downloadCompletedMissions is not a function`
 
-- [ ] **Step 3: Implement downloadCompletedMissions**
+- [x] **Step 3: Implement downloadCompletedMissions**
 
 Modify `frontend/src/lib/api-client.ts` — add after `markLegComplete`:
 ```typescript
@@ -893,12 +893,12 @@ export async function downloadCompletedMissions(token: string, from: string, to:
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (17 tests)
 
-- [ ] **Step 5: Write the failing legs-list export test**
+- [x] **Step 5: Write the failing legs-list export test**
 
 Add to `frontend/test/legs-list.test.tsx` — add `downloadCompletedMissions: vi.fn()` to the mocked exports, then:
 ```typescript
@@ -923,12 +923,12 @@ Add to `frontend/test/legs-list.test.tsx` — add `downloadCompletedMissions: vi
 ```
 Add the import at the top: `import userEvent from '@testing-library/user-event';`
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/legs-list.test.tsx`
 Expected: FAIL — no export controls rendered yet
 
-- [ ] **Step 7: Implement the export toolbar**
+- [x] **Step 7: Implement the export toolbar**
 
 Real deviation, found before this task started executing: mid-session, the user flagged that `/legs` needed sorting, filtering, and visible arrival/departure columns — a real usability gap unrelated to this plan's own scope, addressed immediately as its own change (commit "Add sorting, filtering, and arrival/departure columns to the Legs list") rather than folded into this plan's task numbering. `frontend/src/app/legs/page.tsx` and `frontend/test/legs-list.test.tsx` are therefore **already substantially different** from the simple 4-column version this plan was originally drafted against: the page now has `search`/`countryFilter`/`sortKey`/`sortDir` state, a `.legs-filter-toolbar`, click-to-sort column headers, and `Arrival`/`Departure` columns. The block below is left as originally drafted to show exactly what this task adds (the `exportFrom`/`exportTo`/`exporting`/`exportError` state, `handleExport`, the `.export-toolbar` JSX, and the `downloadCompletedMissions` import) — **merge those additions into the real current file, do not paste this block over it**, or the sort/filter/date-column work will be silently reverted. Step 11 of Task 5 (the Status column) needs the same care: it becomes the 7th column (after Departure), not the 5th.
 
@@ -1054,7 +1054,7 @@ export default function LegsPage() {
 }
 ```
 
-- [ ] **Step 8: Add export toolbar CSS**
+- [x] **Step 8: Add export toolbar CSS**
 
 Modify `frontend/src/app/globals.css` — append:
 ```css
@@ -1084,12 +1084,12 @@ Modify `frontend/src/app/globals.css` — append:
 }
 ```
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/legs-list.test.tsx`
 Expected: PASS (3 tests)
 
-- [ ] **Step 10: Run the full frontend suite and the build**
+- [x] **Step 10: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -1099,7 +1099,7 @@ npm run build
 ```
 Expected: all tests PASS, build succeeds.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add frontend/src/lib/api-client.ts frontend/src/app/legs/page.tsx frontend/src/app/globals.css frontend/test/api-client.test.ts frontend/test/legs-list.test.tsx
@@ -1112,7 +1112,7 @@ git commit -m "Add Download Completed Missions (Excel) date-range export to the 
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script**
 
 Following the established approach from Slices 3-4 (Postgres has no published host port; `node:20-alpine`'s musl libc can't load `bcrypt`'s prebuilt binding, so seed scripts run from the backend Dockerfile's `build`-stage image):
 ```bash
@@ -1129,14 +1129,18 @@ docker run --rm --network web-proxy -e DATABASE_URL="postgres://uaa:uaa@postgres
 ```
 Expected: 8 migrations now (the prior 7 plus `AddCompletedAtToLegs`), same real seed counts as Slice 4's Task 8 (`Seeded 2 user(s), 62 leg(s), 20 team(s).`, `Seeded 15 CountryRequirement(s), 15 FormTemplate(s).`). Reset coordinator `bminja`'s password to `Admin123!` the same way as prior slices.
 
-- [ ] **Step 2: Confirm the backend booted cleanly with the new routes**
+Confirmed: all 8 migrations executed (including `AddCompletedAtToLegs1756166400000`'s real `ALTER TABLE "legs" ADD "completed_at" timestamptz`), leg seed logged exactly `Seeded 2 user(s), 62 leg(s), 20 team(s).`, country-requirements seed logged `Seeded 15 CountryRequirement(s), 15 FormTemplate(s).` — identical real counts to Slice 4.
+
+- [x] **Step 2: Confirm the backend booted cleanly with the new routes**
 
 ```bash
 docker compose logs backend --tail 30
 ```
 Expected: `Nest application successfully started`, with `Mapped {/legs/export, GET}` listed *before* `Mapped {/legs/:id, GET}` and `Mapped {/legs/:id/complete, POST}` also listed, no crash.
 
-- [ ] **Step 3: Mark a real leg complete**
+Confirmed: `Mapped {/legs/export, GET}` logged immediately before `Mapped {/legs/:id, GET}`, `Mapped {/legs/:id/complete, POST}` also present, `Nest application successfully started` with no crash — the route-ordering fix (Task 4 Step 5's note) holds against the real compiled app, not just the e2e test's in-process router.
+
+- [x] **Step 3: Mark a real leg complete**
 
 ```bash
 curl -s -X POST http://localhost:3011/legs/<leg-id>/complete -H "Authorization: Bearer <token>"
@@ -1144,7 +1148,9 @@ curl -s http://localhost:3011/legs/<leg-id> -H "Authorization: Bearer <token>"
 ```
 Expected: first call returns `201` with a non-null `completedAt`; second call's `completedAt` matches — confirms the leg is still fully retrievable (not archived away) after being marked complete.
 
-- [ ] **Step 4: Download a real MAYFLY export and verify it opens as a real workbook**
+Confirmed against leg `e1d6c6f3-7fd7-46bd-8d44-2736c1d02f42` (trip 482421, HECA, Egypt): `201` with `"completedAt":"2026-08-23T07:55:51.503Z"`; the follow-up `GET` returned the identical timestamp and every other field intact.
+
+- [x] **Step 4: Download a real MAYFLY export and verify it opens as a real workbook**
 
 ```bash
 curl -s -X GET "http://localhost:3011/legs/export?from=2020-01-01&to=2030-01-01" -H "Authorization: Bearer <token>" -o /tmp/export-test.xlsx
@@ -1156,11 +1162,15 @@ docker run --rm -v "/tmp/export-test.xlsx:/tmp/export-test.xlsx:ro" uaa-backend-
 ```
 Expected: prints `42 COUNTRY <N>` where `<N>` is the number of legs marked complete in Step 3 (at least 1) — confirms a real `.xlsx` file with 42 real MAYFLY columns and the completed leg's row.
 
-- [ ] **Step 5: Confirm the frontend renders Mark Complete, the Completed badge, and the export toolbar in a real browser**
+Confirmed, with one real path-mounting deviation: a single-file bind mount (`-v "/tmp/export-test.xlsx:/tmp/export-test.xlsx:ro"`) produced `EISDIR: illegal operation on a directory` inside the container — Docker Desktop on Windows created a directory at the mount point instead of exposing the file, for a path under Git Bash's `/tmp` (not the repo tree). Worked around by copying the downloaded file into the repo directory and mounting that directory instead (`-v "<repo>/Aviation/uaa:/data:ro"`), matching how every other file this session has bind-mounted successfully. Output: `42 COUNTRY 1` — a real, readable 42-column `.xlsx` with the one completed leg's row.
+
+- [x] **Step 5: Confirm the frontend renders Mark Complete, the Completed badge, and the export toolbar in a real browser**
 
 Log in at `http://localhost:3012/login`. On the Legs list (`http://localhost:3012/legs`), confirm the date-range export toolbar renders and the leg from Step 3 shows a "Completed" badge in its Status column. Open that leg's detail page, confirm it shows a "Completed <date>" badge instead of a "Mark Complete" button.
 
-- [ ] **Step 6: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+Confirmed in a real Chrome tab: the Legs list rendered the search box, country dropdown (populated with all 15 real seeded countries), the From/To/Download export toolbar, all 6 sortable columns plus Status, sorted ascending by Trip No by default, and trip 482421 showing "Completed" in its Status column. The leg detail page for that same leg showed "Completed 8/23/2026" in place of the "Mark Complete" button.
+
+- [x] **Step 6: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
 
 ---
 
