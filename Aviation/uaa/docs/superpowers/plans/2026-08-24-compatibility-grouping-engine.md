@@ -86,7 +86,7 @@ frontend/
 **Interfaces:**
 - Produces: `RequirementLeg` (`id`, `requirementId`, `legId`, `createdAt`), `Requirement.serviceType: ServiceType`, `CountryRequirement.serviceType`, `FormTemplate.serviceType`. Task 2 consumes all of these.
 
-- [ ] **Step 1: Add `serviceType` to Requirement, drop legId**
+- [x] **Step 1: Add `serviceType` to Requirement, drop legId**
 
 Modify `backend/src/service-cases/requirement.entity.ts`:
 ```typescript
@@ -132,7 +132,7 @@ export class Requirement {
 ```
 (the `legId` column is removed entirely — leg association now lives in `RequirementLeg`)
 
-- [ ] **Step 2: Create the RequirementLeg entity**
+- [x] **Step 2: Create the RequirementLeg entity**
 
 `backend/src/service-cases/requirement-leg.entity.ts`:
 ```typescript
@@ -154,7 +154,7 @@ export class RequirementLeg {
 }
 ```
 
-- [ ] **Step 3: Add serviceType to CountryRequirement, drop unique(country)**
+- [x] **Step 3: Add serviceType to CountryRequirement, drop unique(country)**
 
 Modify `backend/src/country-requirements/country-requirement.entity.ts`:
 ```typescript
@@ -196,7 +196,7 @@ export class CountryRequirement {
 ```
 (removed `{ unique: true }` from `country` — uniqueness is now "one row per (country, serviceType)", enforced at the application layer, matching this schema area's no-DB-constraint convention)
 
-- [ ] **Step 4: Add serviceType to FormTemplate**
+- [x] **Step 4: Add serviceType to FormTemplate**
 
 Modify `backend/src/form-templates/form-template.entity.ts`:
 ```typescript
@@ -231,7 +231,7 @@ export class FormTemplate {
 }
 ```
 
-- [ ] **Step 5: Write the migration**
+- [x] **Step 5: Write the migration**
 
 `backend/migrations/1756425600000-AddCompatibilityGrouping.ts`:
 ```typescript
@@ -325,7 +325,7 @@ export class AddCompatibilityGrouping1756425600000 implements MigrationInterface
 }
 ```
 
-- [ ] **Step 6: Register RequirementLeg in the CLI data source**
+- [x] **Step 6: Register RequirementLeg in the CLI data source**
 
 Modify `backend/src/database/data-source.ts`:
 ```typescript
@@ -352,7 +352,7 @@ export const AppDataSource = new DataSource({
 });
 ```
 
-- [ ] **Step 7: Update the seed script to seed both service types**
+- [x] **Step 7: Update the seed script to seed both service types**
 
 Replace `backend/scripts/seed-country-requirements.ts`:
 ```typescript
@@ -439,7 +439,7 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/service-cases/requirement.entity.ts backend/src/service-cases/requirement-leg.entity.ts backend/src/country-requirements/country-requirement.entity.ts backend/src/form-templates/form-template.entity.ts backend/src/database/data-source.ts backend/scripts/seed-country-requirements.ts backend/migrations/1756425600000-AddCompatibilityGrouping.ts
@@ -459,7 +459,7 @@ git commit -m "Add RequirementLeg join table and serviceType-aware CountryRequir
 - Consumes: `RequirementLeg`, `Requirement.serviceType` (Task 1).
 - Produces: `PermitsService.findCompatible/create/merge/findByLeg/update/findAllWithUrgency/reconcileForLeg/addManualComm` — `create` and `update` gain `serviceType`; every response's `legId: string` becomes `legIds: string[]`; `findCompatible` and `merge` are new.
 
-- [ ] **Step 1: Add serviceType to the create/update DTOs, add the merge DTO**
+- [x] **Step 1: Add serviceType to the create/update DTOs, add the merge DTO**
 
 Replace `backend/src/permits/dto/create-permit-request.dto.ts`:
 ```typescript
@@ -524,7 +524,7 @@ export class MergePermitRequestDto {
 }
 ```
 
-- [ ] **Step 2: Write the failing service tests (full rewrite)**
+- [x] **Step 2: Write the failing service tests (full rewrite)**
 
 Replace `backend/test/permits.service.spec.ts`:
 ```typescript
@@ -791,12 +791,12 @@ describe('PermitsService', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: FAIL — `PermitsService` still has the B1 (single-leg) implementation.
 
-- [ ] **Step 4: Rewrite PermitsService**
+- [x] **Step 4: Rewrite PermitsService**
 
 Replace `backend/src/permits/permits.service.ts`:
 ```typescript
@@ -1129,12 +1129,12 @@ export class PermitsService {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: PASS
 
-- [ ] **Step 6: Register RequirementLeg in PermitsModule**
+- [x] **Step 6: Register RequirementLeg in PermitsModule**
 
 Modify `backend/src/permits/permits.module.ts`:
 ```typescript
@@ -1165,7 +1165,7 @@ import { MailModule } from '../mail/mail.module';
 export class PermitsModule {}
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/permits/permits.service.ts backend/src/permits/permits.module.ts backend/src/permits/dto/create-permit-request.dto.ts backend/src/permits/dto/update-permit-request.dto.ts backend/src/permits/dto/merge-permit-request.dto.ts backend/test/permits.service.spec.ts
@@ -1183,7 +1183,7 @@ git commit -m "Add compatibility check and merge to PermitsService; legId -> leg
 **Interfaces:**
 - Consumes: `RequirementLeg` (Task 1).
 
-- [ ] **Step 1: Add multi-leg test cases**
+- [x] **Step 1: Add multi-leg test cases**
 
 Add to `backend/test/reconfirm-sweep.service.spec.ts` (keep the existing 3 tests; add these, and update `beforeEach` to also provide a `requirementLegRepo` mock — see full replacement below):
 
@@ -1299,12 +1299,12 @@ describe('ReconfirmSweepService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify the new ones fail**
+- [x] **Step 2: Run the tests to verify the new ones fail**
 
 Run: `cd backend && npx jest test/reconfirm-sweep.service.spec.ts`
 Expected: FAIL — `ReconfirmSweepService`'s constructor doesn't yet accept a `RequirementLeg` repo, and `sweep()` doesn't check multiple legs.
 
-- [ ] **Step 3: Rewrite ReconfirmSweepService**
+- [x] **Step 3: Rewrite ReconfirmSweepService**
 
 Replace `backend/src/permits/reconfirm-sweep.service.ts`:
 ```typescript
@@ -1389,12 +1389,12 @@ export class ReconfirmSweepService {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/reconfirm-sweep.service.spec.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/permits/reconfirm-sweep.service.ts backend/test/reconfirm-sweep.service.spec.ts
@@ -1411,7 +1411,7 @@ git commit -m "Make ReconfirmSweepService check every leg of a merged Requiremen
 **Interfaces:**
 - Consumes: `PermitsService.findCompatible/create/merge` (Task 2), `MergePermitRequestDto` (Task 2).
 
-- [ ] **Step 1: Add the two new routes and thread serviceType through create**
+- [x] **Step 1: Add the two new routes and thread serviceType through create**
 
 Modify `backend/src/permits/permits.controller.ts`:
 ```typescript
@@ -1470,7 +1470,7 @@ export class PermitsController {
 }
 ```
 
-- [ ] **Step 2: Write the failing e2e tests (full rewrite)**
+- [x] **Step 2: Write the failing e2e tests (full rewrite)**
 
 Replace `backend/test/permits.e2e-spec.ts`:
 ```typescript
@@ -1641,12 +1641,12 @@ describe('Permits (e2e)', () => {
 });
 ```
 
-- [ ] **Step 3: Run the e2e tests to verify they pass**
+- [x] **Step 3: Run the e2e tests to verify they pass**
 
 Run: `cd backend && npx jest test/permits.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (7 tests)
 
-- [ ] **Step 4: Add the RequirementLeg override to the other two e2e DI graphs**
+- [x] **Step 4: Add the RequirementLeg override to the other two e2e DI graphs**
 
 Modify `backend/test/legs.e2e-spec.ts` — add the import and a 4th override:
 ```typescript
@@ -1669,12 +1669,12 @@ and:
 
 Modify `backend/test/notifications.e2e-spec.ts` with the identical import and override addition.
 
-- [ ] **Step 5: Run the full e2e suite**
+- [x] **Step 5: Run the full e2e suite**
 
 Run: `cd backend && npx jest --config test/jest-e2e.json`
 Expected: PASS (all suites)
 
-- [ ] **Step 6: Run the full backend unit suite and build**
+- [x] **Step 6: Run the full backend unit suite and build**
 
 Run:
 ```bash
@@ -1684,7 +1684,7 @@ npm run build
 ```
 Expected: all PASS, build succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/permits/permits.controller.ts backend/test/permits.e2e-spec.ts backend/test/legs.e2e-spec.ts backend/test/notifications.e2e-spec.ts
@@ -1703,7 +1703,7 @@ git commit -m "Add compatible-check/merge routes; fix e2e DI graphs for Requirem
 - Consumes: the new `/compatible` and `/merge` routes (Task 4).
 - Produces: `PermitRequest.legIds`/`serviceType`, `CompatibleCandidate`, `checkCompatiblePermitRequest()`, `mergePermitRequest()`.
 
-- [ ] **Step 1: Update api-client.ts's PermitRequest type and permit-request functions**
+- [x] **Step 1: Update api-client.ts's PermitRequest type and permit-request functions**
 
 Modify `frontend/src/lib/api-client.ts`:
 ```typescript
@@ -1811,7 +1811,7 @@ export async function listAllPermitRequests(token: string): Promise<PermitReques
 }
 ```
 
-- [ ] **Step 2: Write the failing merge-flow test**
+- [x] **Step 2: Write the failing merge-flow test**
 
 Read `frontend/test/permit-composer.test.tsx` first to confirm its current mock/fixture conventions (it was last rewritten in B1's Task 5), then replace every existing `legId: '1'` fixture field with `legIds: ['1']` and every fixture with `serviceType: 'OVERFLIGHT'` added, and add:
 ```typescript
@@ -1854,12 +1854,12 @@ Read `frontend/test/permit-composer.test.tsx` first to confirm its current mock/
 ```
 Also extend the `vi.mock('../src/lib/api-client', ...)` factory at the top of the file to include `checkCompatiblePermitRequest: vi.fn(), mergePermitRequest: vi.fn()`, and reset them in `beforeEach` alongside the existing mocks.
 
-- [ ] **Step 3: Run the tests to verify the new ones fail**
+- [x] **Step 3: Run the tests to verify the new ones fail**
 
 Run: `cd frontend && npx vitest run test/permit-composer.test.tsx`
 Expected: FAIL — no "Merge into it" button exists yet; `createPermitRequest`/`checkCompatiblePermitRequest` not called with the right args yet.
 
-- [ ] **Step 4: Rewrite PermitRequests with the type select and merge-confirm UI**
+- [x] **Step 4: Rewrite PermitRequests with the type select and merge-confirm UI**
 
 Replace `frontend/src/app/legs/[id]/permit-requests.tsx`:
 ```tsx
@@ -2063,12 +2063,12 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd frontend && npx vitest run test/permit-composer.test.tsx`
 Expected: PASS
 
-- [ ] **Step 6: Update action-board's leg link to use legIds[0]**
+- [x] **Step 6: Update action-board's leg link to use legIds[0]**
 
 Modify `frontend/src/app/action-board/page.tsx`:
 ```typescript
@@ -2080,7 +2080,7 @@ Modify `frontend/src/app/action-board/page.tsx`:
 
 Update `frontend/test/action-board.test.tsx`'s fixture(s) to use `legIds: [...]`/`serviceType` in place of `legId`, matching the new `PermitRequestWithUrgency` shape.
 
-- [ ] **Step 7: Run the full frontend suite and the build**
+- [x] **Step 7: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -2090,7 +2090,7 @@ npm run build
 ```
 Expected: all tests PASS, `next build` succeeds with full typecheck (this is what will catch any remaining fixture still using the old `legId: string` shape anywhere in the suite).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add frontend/src/lib/api-client.ts frontend/src/app/legs/\[id\]/permit-requests.tsx frontend/src/app/action-board/page.tsx frontend/test/permit-composer.test.tsx frontend/test/action-board.test.tsx
@@ -2103,7 +2103,7 @@ git commit -m "Add permit-type selection and merge-confirmation UI; legId -> leg
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script**
 
 ```bash
 docker compose down -v
@@ -2121,14 +2121,14 @@ docker run --rm --network web-proxy -e DATABASE_URL="postgres://uaa:uaa@postgres
 
 Expected: 11 migrations now (the prior 10 plus `AddCompatibilityGrouping`); `country_requirements`/`form_templates` now hold 30 rows each (15 countries × 2 service types).
 
-- [ ] **Step 2: Confirm the backend booted cleanly**
+- [x] **Step 2: Confirm the backend booted cleanly**
 
 ```bash
 docker compose logs backend --tail 40
 ```
 Expected: `Nest application successfully started`, the new `/legs/:legId/permit-requests/compatible` and `/legs/:legId/permit-requests/merge` routes mapped, no crash.
 
-- [ ] **Step 3: Create two permit requests on different legs of the same trip and merge them**
+- [x] **Step 3: Create two permit requests on different legs of the same trip and merge them**
 
 Find two legs on the same seeded trip whose country matches (query `GET /legs` and group by `tripNo`/`country` — if the seeded MAYFLY data has no such pair, use `PATCH /legs/:id` to temporarily set a second leg's `country` to match a first leg's for this test, then revert it afterward). Then:
 ```bash
@@ -2142,7 +2142,7 @@ curl -s -X POST http://localhost:3011/legs/<leg-2-id>/permit-requests/merge -H "
 ```
 Expected: `201` with `legIds` now containing both leg ids.
 
-- [ ] **Step 4: Confirm merge is refused once CONFIRMED**
+- [x] **Step 4: Confirm merge is refused once CONFIRMED**
 
 ```bash
 curl -s -X PATCH http://localhost:3011/permit-requests/<serviceCaseId> -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"status":"CONFIRMED","clearanceNumber":"EG-9001"}'
@@ -2150,15 +2150,15 @@ curl -s "http://localhost:3011/legs/<leg-3-id>/permit-requests/compatible?countr
 ```
 Expected: the compatibility check now returns `null` — the confirmed request is no longer offered for merging.
 
-- [ ] **Step 5: Confirm the reconfirm sweep considers every merged leg**
+- [x] **Step 5: Confirm the reconfirm sweep considers every merged leg**
 
 Using the merged request from Step 3 (before confirming it in Step 4, or a fresh merged pair): confirm it with a `validFrom`/`validTo` window that covers leg 1's `arrDate` but not leg 2's, then `PATCH /legs/<leg-2-id>` with its existing `arrDate` (to trigger `reconcileForLeg`) and confirm the merged request's status flips to `RECONFIRM_REQUIRED` via `GET /legs/<leg-1-id>/permit-requests`.
 
-- [ ] **Step 6: Confirm the frontend flow end-to-end in a real browser**
+- [x] **Step 6: Confirm the frontend flow end-to-end in a real browser**
 
 Visit the leg detail page for the two legs used above. On the second leg, select the matching Overflight/Landing type and click "Request Permit" — confirm the merge-confirmation message appears, click "Merge into it," and confirm the Permits table now shows "2 legs" for that row. Reload and confirm it persists. Visit the Action Board and confirm the merged request's row links to the first (anchor) leg.
 
-- [ ] **Step 7: No commit for this task** — verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+- [x] **Step 7: No commit for this task** — verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
 
 ---
 
@@ -2173,3 +2173,33 @@ Visit the leg detail page for the two legs used above. On the second leg, select
 ---
 
 Plan complete and saved to `docs/superpowers/plans/2026-08-24-compatibility-grouping-engine.md`. Proceeding to inline execution, continuing the established "go on" rhythm from B1.
+
+---
+
+## Verification Notes (post-execution, 2026-08-24)
+
+All 6 tasks executed and committed on `main`:
+1. `9ad289ae` — RequirementLeg entity, migration, type-aware CountryRequirement/FormTemplate, seed script
+2. `98ac3b63` — PermitsService compatibility check, merge, legId → legIds
+3. `38f672b4` — ReconfirmSweepService multi-leg validity checking
+4. `85977060` — controller routes, e2e DI graphs
+5. `618c462c` — frontend serviceType selection, merge-confirmation UI
+6. `788e8ef9` — migration fix discovered by the real-stack smoke test (below)
+
+**Backend:** 90/90 unit tests pass (across 15 suites — one transient OOM in `imap.service.spec.ts` under full parallel workers reproduced as a pass both in isolation and with `--maxWorkers=2`, confirmed unrelated to this work), 17/17 e2e tests pass, clean `nest build`.
+
+**Frontend:** 46/46 tests pass, clean `next build` with full typecheck.
+
+**Three real defects found and fixed during execution** (all via TDD — the failing case surfaced the issue, not manual guessing):
+1. **NestJS null-body serialization gotcha** (Task 4): a bare `null` controller return produces an empty HTTP body, not the JSON literal `null` — `response.json()` on the frontend would throw. Fixed by wrapping `findCompatible`'s route response as `{ candidate }`.
+2. **`MergePermitRequestDto` used `@IsUUID()`**, inconsistent with every other id in this codebase's DTOs/tests (plain strings, e.g. `@Param('id') id: string` is never validated as a UUID). Relaxed to `@IsString()`.
+3. **Migration assumed `requirements.service_type` didn't exist yet** — B1's `CreateServiceCaseModel` migration already added it (as a generic `'PERMIT'` placeholder), so B2's `addColumn` failed against a real database with "column already exists." This didn't surface in the backend test suite at all (repositories are mocked there, so no real schema is touched) — only the real-stack smoke test caught it. Fixed to `UPDATE ... SET service_type = 'OVERFLIGHT' WHERE service_type = 'PERMIT'` instead, with `down()` correspondingly reverting values rather than dropping a column B2 doesn't own. TypeORM's default migration-run transaction mode wraps all pending migrations in one transaction, so the mid-batch failure cleanly rolled back all 11 migrations with no partial state to clean up before retrying.
+
+**Real-stack smoke test** (fresh `docker compose down -v` + rebuild + migrate + seed):
+- All 11 migrations ran cleanly; `country_requirements`/`form_templates` each hold 30 rows (15 countries × 2 service types) after reseeding.
+- Compatibility check (`GET .../compatible`) correctly found a same-trip, same-country, same-type, pre-confirmation candidate, and correctly returned `{candidate: null}` once that candidate was `CONFIRMED` — proving the pre-confirmation-only merge window works against real data.
+- Merge (`POST .../merge`) correctly added a second leg to `legIds` on a real Requirement.
+- The multi-leg reconfirm sweep correctly flipped a `CONFIRMED` merged request to `RECONFIRM_REQUIRED` when only one of its two covered legs' arrival dates moved outside the confirmed validity window (via a real `PATCH /legs/:id` triggering `reconcileForLeg`), leaving the other leg's date irrelevant to the outcome — matching the "any leg outside the window" design.
+- Verified live in a real browser: selecting a permit type and clicking "Request Permit" on a second leg of a trip that already had a compatible request surfaced the exact merge-confirmation message and both action buttons; clicking "Merge into it" fired exactly one `PATCH`-equivalent `POST` (confirmed via network capture) and updated the Permits table to show "2 legs," which persisted across a full page reload; the Action Board correctly listed all three permit requests created during the smoke test (Morocco `RECONFIRM_REQUIRED`/BREACH, South Africa `CONFIRMED`, Nigeria `REQUESTED`) with correct trip-number links.
+
+Sub-project B2 is complete. Per the agreed sequencing, Sub-project C (the ground-services module) is next.
