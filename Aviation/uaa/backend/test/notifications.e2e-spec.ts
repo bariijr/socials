@@ -9,6 +9,7 @@ import { Team } from '../src/notifications/team.entity';
 import { Comm } from '../src/permits/comm.entity';
 import { User } from '../src/users/user.entity';
 import { Requirement } from '../src/service-cases/requirement.entity';
+import { RequirementLeg } from '../src/service-cases/requirement-leg.entity';
 import { ServiceCase } from '../src/service-cases/service-case.entity';
 import { ServiceOrder } from '../src/service-cases/service-order.entity';
 import { CountryRequirement } from '../src/country-requirements/country-requirement.entity';
@@ -62,6 +63,8 @@ describe('Notifications (e2e)', () => {
       .overrideProvider(getRepositoryToken(User))
       .useValue(userRepo)
       .overrideProvider(getRepositoryToken(Requirement))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(RequirementLeg))
       .useValue({})
       .overrideProvider(getRepositoryToken(ServiceCase))
       .useValue({})

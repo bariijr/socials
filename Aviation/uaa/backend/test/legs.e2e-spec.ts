@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { Leg } from '../src/legs/leg.entity';
 import { PermitsService } from '../src/permits/permits.service';
 import { Requirement } from '../src/service-cases/requirement.entity';
+import { RequirementLeg } from '../src/service-cases/requirement-leg.entity';
 import { ServiceCase } from '../src/service-cases/service-case.entity';
 import { ServiceOrder } from '../src/service-cases/service-order.entity';
 import { Comm } from '../src/permits/comm.entity';
@@ -37,6 +38,8 @@ describe('Legs (e2e)', () => {
       .overrideProvider(PermitsService)
       .useValue({ reconcileForLeg: jest.fn() })
       .overrideProvider(getRepositoryToken(Requirement))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(RequirementLeg))
       .useValue({})
       .overrideProvider(getRepositoryToken(ServiceCase))
       .useValue({})

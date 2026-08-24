@@ -5,6 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { PermitsModule } from '../src/permits/permits.module';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { Requirement } from '../src/service-cases/requirement.entity';
+import { RequirementLeg } from '../src/service-cases/requirement-leg.entity';
 import { ServiceCase } from '../src/service-cases/service-case.entity';
 import { ServiceOrder } from '../src/service-cases/service-order.entity';
 import { Comm } from '../src/permits/comm.entity';
@@ -16,6 +17,7 @@ import { MailService } from '../src/mail/mail.service';
 describe('Permits (e2e)', () => {
   let app: INestApplication;
   let requirementRepo: { create: jest.Mock; save: jest.Mock; find: jest.Mock; findOne: jest.Mock };
+  let requirementLegRepo: { create: jest.Mock; save: jest.Mock; find: jest.Mock };
   let serviceCaseRepo: { create: jest.Mock; save: jest.Mock; find: jest.Mock; findOne: jest.Mock };
   let serviceOrderRepo: { create: jest.Mock; save: jest.Mock; findOne: jest.Mock };
 
@@ -24,9 +26,12 @@ describe('Permits (e2e)', () => {
       create: jest.fn((dto) => dto),
       save: jest.fn(async (entity) => ({ id: 'req-1', ...entity })),
       find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue({
-        id: 'req-1', legId: 'leg-1', country: 'Egypt', responsibility: 'OUR_ARRANGEMENT', requiredByZ: null,
-      }),
+      findOne: jest.fn().mockResolvedValue({ id: 'req-1', country: 'Egypt', serviceType: 'OVERFLIGHT', responsibility: 'OUR_ARRANGEMENT', requiredByZ: null }),
+    };
+    requirementLegRepo = {
+      create: jest.fn((dto) => dto),
+      save: jest.fn(async (entity) => ({ id: 'rl-1', ...entity })),
+      find: jest.fn().mockResolvedValue([{ requirementId: 'req-1', legId: 'leg-1' }]),
     };
     serviceCaseRepo = {
       create: jest.fn((dto) => dto),
@@ -37,27 +42,17 @@ describe('Permits (e2e)', () => {
     serviceOrderRepo = {
       create: jest.fn((dto) => dto),
       save: jest.fn(async (entity) => ({ id: 'so-1', ...entity })),
-      findOne: jest.fn().mockResolvedValue({
-        id: 'so-1', serviceCaseId: 'sc-1', submissionEmail: 'permits.eg@example.com', correlationToken: '149/sc-1',
-      }),
+      findOne: jest.fn().mockResolvedValue({ id: 'so-1', serviceCaseId: 'sc-1', submissionEmail: 'permits.eg@example.com', correlationToken: '149/sc-1' }),
     };
     const legRepo = {
       findOne: jest.fn().mockResolvedValue({
-        id: 'leg-1',
-        legId: 149,
-        tripNo: '482421',
-        icao: 'HECA',
-        tail: 'N148B',
+        id: 'leg-1', legId: 149, tripId: 'trip-1', tripNo: '482421', icao: 'HECA', tail: 'N148B',
         arrDate: new Date('2026-09-16T16:20:00.000Z'),
       }),
+      find: jest.fn().mockResolvedValue([{ id: 'leg-1', tripId: 'trip-1' }]),
     };
     const countryRequirementRepo = {
-      findOne: jest.fn().mockResolvedValue({
-        country: 'Egypt',
-        leadTimeHours: 96,
-        workingDaysOnly: true,
-        submissionEmail: 'permits.eg@example.com',
-      }),
+      findOne: jest.fn().mockResolvedValue({ country: 'Egypt', serviceType: 'OVERFLIGHT', leadTimeHours: 96, workingDaysOnly: true, submissionEmail: 'permits.eg@example.com' }),
     };
     const formTemplateRepo = { findOne: jest.fn().mockResolvedValue(null) };
     const commRepo = { create: jest.fn((dto) => dto), save: jest.fn(async (entity) => ({ id: 'comm-1', ...entity })) };
@@ -67,6 +62,8 @@ describe('Permits (e2e)', () => {
     })
       .overrideProvider(getRepositoryToken(Requirement))
       .useValue(requirementRepo)
+      .overrideProvider(getRepositoryToken(RequirementLeg))
+      .useValue(requirementLegRepo)
       .overrideProvider(getRepositoryToken(ServiceCase))
       .useValue(serviceCaseRepo)
       .overrideProvider(getRepositoryToken(ServiceOrder))
@@ -94,20 +91,43 @@ describe('Permits (e2e)', () => {
     await app.close();
   });
 
-  it('POST /legs/:legId/permit-requests creates and returns 201', async () => {
+  it('POST /legs/:legId/permit-requests requires serviceType and returns 201', async () => {
     const response = await request(app.getHttpServer())
       .post('/legs/leg-1/permit-requests')
-      .send({ country: 'Egypt' });
+      .send({ country: 'Egypt', serviceType: 'OVERFLIGHT' });
 
     expect(response.status).toBe(201);
-    expect(response.body).toEqual(expect.objectContaining({ country: 'Egypt', status: 'REQUESTED' }));
+    expect(response.body).toEqual(expect.objectContaining({ country: 'Egypt', serviceType: 'OVERFLIGHT', legIds: ['leg-1'] }));
   });
 
-  it('GET /legs/:legId/permit-requests returns an array', async () => {
-    const response = await request(app.getHttpServer()).get('/legs/leg-1/permit-requests');
+  it('POST /legs/:legId/permit-requests rejects an invalid serviceType', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/legs/leg-1/permit-requests')
+      .send({ country: 'Egypt', serviceType: 'BOGUS' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('GET /legs/:legId/permit-requests/compatible returns { candidate: null } when nothing matches', async () => {
+    requirementLegRepo.find.mockResolvedValueOnce([]);
+
+    const response = await request(app.getHttpServer())
+      .get('/legs/leg-1/permit-requests/compatible?country=Egypt&serviceType=OVERFLIGHT');
 
     expect(response.status).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body).toEqual({ candidate: null });
+  });
+
+  it('POST /legs/:legId/permit-requests/merge adds the leg and returns the updated request', async () => {
+    serviceCaseRepo.findOne.mockResolvedValue({ id: 'sc-1', requirementId: 'req-1', status: 'REQUESTED' });
+    requirementLegRepo.find.mockResolvedValue([{ legId: 'leg-2' }]);
+
+    const response = await request(app.getHttpServer())
+      .post('/legs/leg-1/permit-requests/merge')
+      .send({ requirementId: 'req-1' });
+
+    expect(response.status).toBe(201);
+    expect(requirementLegRepo.save).toHaveBeenCalledWith({ requirementId: 'req-1', legId: 'leg-1' });
   });
 
   it('PATCH /permit-requests/:id updates status', async () => {
