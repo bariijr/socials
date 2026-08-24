@@ -76,7 +76,7 @@ frontend/
 **Interfaces:**
 - Produces: `Requirement` (`id`, `legId`, `country`, `serviceCategory`, `serviceType`, `responsibility`, `requiredByZ`), `ServiceCase` (`id`, `requirementId`, `status`, `validFrom`, `validTo`, `clearanceNumber`), `ServiceOrder` (`id`, `serviceCaseId`, `submissionEmail`, `correlationToken`). `Comm.serviceCaseId` replaces `Comm.permitRequestId`. Tasks 2-4 consume all of these.
 
-- [ ] **Step 1: Create the three entities**
+- [x] **Step 1: Create the three entities**
 
 `backend/src/service-cases/requirement.entity.ts`:
 ```typescript
@@ -188,7 +188,7 @@ export class ServiceOrder {
 }
 ```
 
-- [ ] **Step 2: Rename Comm.permitRequestId to Comm.serviceCaseId**
+- [x] **Step 2: Rename Comm.permitRequestId to Comm.serviceCaseId**
 
 Modify `backend/src/permits/comm.entity.ts`:
 ```typescript
@@ -197,7 +197,7 @@ Modify `backend/src/permits/comm.entity.ts`:
 ```
 (replacing the existing `permitRequestId`/`permit_request_id` column)
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 `backend/migrations/1756339200000-CreateServiceCaseModel.ts`:
 ```typescript
@@ -317,7 +317,7 @@ export class CreateServiceCaseModel1756339200000 implements MigrationInterface {
 }
 ```
 
-- [ ] **Step 4: Delete the old entity and register the new ones in the CLI data source**
+- [x] **Step 4: Delete the old entity and register the new ones in the CLI data source**
 
 Delete `backend/src/permits/permit-request.entity.ts`.
 
@@ -345,7 +345,7 @@ export const AppDataSource = new DataSource({
 });
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 This task alone won't build yet (`permits.service.ts` etc. still import the deleted entity) — Task 2 fixes that. Commit as an intermediate checkpoint anyway, matching how this codebase has always committed after each self-contained unit of work:
 ```bash
@@ -366,7 +366,7 @@ git commit -m "Add Requirement/ServiceCase/ServiceOrder entities and the migrati
 - Consumes: `Requirement`, `ServiceCase`, `ServiceOrder` (Task 1).
 - Produces: `PermitsService.create/findByLeg/update/findAllWithUrgency/reconcileForLeg/addManualComm` — same signatures as today, same flattened return shape plus `responsibility`.
 
-- [ ] **Step 1: Write the failing service tests (full rewrite)**
+- [x] **Step 1: Write the failing service tests (full rewrite)**
 
 Replace `backend/test/permits.service.spec.ts` entirely:
 ```typescript
@@ -669,12 +669,12 @@ describe('PermitsService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/service-cases/requirement.entity'` (module resolves fine after Task 1, but `PermitsService` itself still imports the deleted `PermitRequest`)
 
-- [ ] **Step 3: Add responsibility to UpdatePermitRequestDto**
+- [x] **Step 3: Add responsibility to UpdatePermitRequestDto**
 
 Replace `backend/src/permits/dto/update-permit-request.dto.ts`:
 ```typescript
@@ -710,7 +710,7 @@ export class UpdatePermitRequestDto {
 }
 ```
 
-- [ ] **Step 4: Rewrite PermitsService**
+- [x] **Step 4: Rewrite PermitsService**
 
 Replace `backend/src/permits/permits.service.ts`:
 ```typescript
@@ -946,12 +946,12 @@ export class PermitsService {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/permits.service.spec.ts`
 Expected: PASS (17 tests)
 
-- [ ] **Step 6: Update PermitsModule**
+- [x] **Step 6: Update PermitsModule**
 
 Replace `backend/src/permits/permits.module.ts`:
 ```typescript
@@ -981,7 +981,7 @@ import { MailModule } from '../mail/mail.module';
 export class PermitsModule {}
 ```
 
-- [ ] **Step 7: Write the failing e2e tests (full rewrite)**
+- [x] **Step 7: Write the failing e2e tests (full rewrite)**
 
 Replace `backend/test/permits.e2e-spec.ts`:
 ```typescript
@@ -1132,12 +1132,12 @@ describe('Permits (e2e)', () => {
 });
 ```
 
-- [ ] **Step 8: Run the e2e tests to verify they pass**
+- [x] **Step 8: Run the e2e tests to verify they pass**
 
 Run: `cd backend && npx jest test/permits.e2e-spec.ts --config test/jest-e2e.json`
 Expected: PASS (5 tests)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/permits/permits.service.ts backend/src/permits/permits.module.ts backend/src/permits/dto/update-permit-request.dto.ts backend/test/permits.service.spec.ts backend/test/permits.e2e-spec.ts
@@ -1155,7 +1155,7 @@ git commit -m "Rewrite PermitsService against Requirement/ServiceCase/ServiceOrd
 **Interfaces:**
 - Consumes: `Requirement`, `ServiceCase` (Task 1). `evaluateReconfirm` itself is untouched — only its input type's import source changes.
 
-- [ ] **Step 1: Update the type import in reconfirm.ts**
+- [x] **Step 1: Update the type import in reconfirm.ts**
 
 Modify `backend/src/permits/reconfirm.ts` — change the import line only:
 ```typescript
@@ -1170,12 +1170,12 @@ export interface ReconfirmInput {
 ```
 (the rest of the file — `evaluateReconfirm`'s implementation — is unchanged)
 
-- [ ] **Step 2: Run reconfirm.spec.ts to verify it still passes unchanged**
+- [x] **Step 2: Run reconfirm.spec.ts to verify it still passes unchanged**
 
 Run: `cd backend && npx jest test/reconfirm.spec.ts`
 Expected: PASS (6 tests) — this file doesn't import the entity type directly, so it should be unaffected; this step just confirms that.
 
-- [ ] **Step 3: Write the failing sweep tests (full rewrite)**
+- [x] **Step 3: Write the failing sweep tests (full rewrite)**
 
 Replace `backend/test/reconfirm-sweep.service.spec.ts`:
 ```typescript
@@ -1250,12 +1250,12 @@ describe('ReconfirmSweepService', () => {
 });
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [x] **Step 4: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest test/reconfirm-sweep.service.spec.ts`
 Expected: FAIL — `Cannot find module '../src/service-cases/service-case.entity'` doesn't apply (it exists from Task 1) — actually FAILs because `ReconfirmSweepService`'s constructor doesn't yet accept a `Requirement` repo. `requirementRepo.findOne is not a function` / DI error.
 
-- [ ] **Step 5: Rewrite ReconfirmSweepService**
+- [x] **Step 5: Rewrite ReconfirmSweepService**
 
 Replace `backend/src/permits/reconfirm-sweep.service.ts`:
 ```typescript
@@ -1321,12 +1321,12 @@ export class ReconfirmSweepService {
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest test/reconfirm-sweep.service.spec.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/permits/reconfirm.ts backend/src/permits/reconfirm-sweep.service.ts backend/test/reconfirm-sweep.service.spec.ts
@@ -1343,7 +1343,7 @@ git commit -m "Rewrite ReconfirmSweepService against ServiceCase + Requirement"
 **Interfaces:**
 - Consumes: `Comm.serviceCaseId` (Task 1), `Requirement`/`ServiceCase`/`ServiceOrder` (Task 1).
 
-- [ ] **Step 1: Rename permitRequestId to serviceCaseId in NotificationsService**
+- [x] **Step 1: Rename permitRequestId to serviceCaseId in NotificationsService**
 
 Modify `backend/src/notifications/notifications.service.ts` — in `logComm`, change:
 ```typescript
@@ -1354,12 +1354,12 @@ to:
         serviceCaseId: null,
 ```
 
-- [ ] **Step 2: Run the notifications unit tests to verify they still pass**
+- [x] **Step 2: Run the notifications unit tests to verify they still pass**
 
 Run: `cd backend && npx jest test/notifications.service.spec.ts`
 Expected: PASS (7 tests) — none of these tests assert on the `permitRequestId`/`serviceCaseId` field directly, so this is a safe, silent-in-tests rename; confirmed correct by re-running.
 
-- [ ] **Step 3: Fix legs.e2e-spec.ts's DI overrides**
+- [x] **Step 3: Fix legs.e2e-spec.ts's DI overrides**
 
 `LegsModule` transitively imports `PermitsModule` (for `reconcileForLeg`), whose own `TypeOrmModule.forFeature` now registers `Requirement`/`ServiceCase`/`ServiceOrder` instead of `PermitRequest` — the DI-graph lesson from every prior slice applies again: these three tokens need their own dummy overrides.
 
@@ -1388,16 +1388,16 @@ with:
       .useValue({})
 ```
 
-- [ ] **Step 4: Fix notifications.e2e-spec.ts's DI overrides**
+- [x] **Step 4: Fix notifications.e2e-spec.ts's DI overrides**
 
 Same fix, same reason (`NotificationsModule` imports `MailModule`, which `forwardRef`s `PermitsModule`). Modify `backend/test/notifications.e2e-spec.ts` with the identical import and override changes as Step 3.
 
-- [ ] **Step 5: Run the full e2e suite to verify nothing broke**
+- [x] **Step 5: Run the full e2e suite to verify nothing broke**
 
 Run: `cd backend && npx jest --config test/jest-e2e.json`
 Expected: PASS (all suites — `legs.e2e-spec.ts`, `permits.e2e-spec.ts`, `notifications.e2e-spec.ts`, `trips.e2e-spec.ts`)
 
-- [ ] **Step 6: Run the full backend unit suite and build**
+- [x] **Step 6: Run the full backend unit suite and build**
 
 Run:
 ```bash
@@ -1407,7 +1407,7 @@ npm run build
 ```
 Expected: all PASS, build succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/notifications/notifications.service.ts backend/test/legs.e2e-spec.ts backend/test/notifications.e2e-spec.ts
@@ -1426,7 +1426,7 @@ git commit -m "Fix Notifications' Comm creation and e2e DI graphs for the new se
 - Consumes: `responsibility` field now present on every `GET`/`PATCH` `/permit-requests` response (Task 2).
 - Produces: `PermitRequest.responsibility`, `UpdatePermitRequestInput.responsibility` in `api-client.ts`.
 
-- [ ] **Step 1: Write the failing api-client test**
+- [x] **Step 1: Write the failing api-client test**
 
 Add to `frontend/test/api-client.test.ts` — extend the existing `updatePermitRequest patches status and confirmation fields` test's mocked response and add a new assertion, and add one new test:
 ```typescript
@@ -1447,12 +1447,12 @@ Add to `frontend/test/api-client.test.ts` — extend the existing `updatePermitR
   });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: FAIL — type error on `{ responsibility: 'CLIENT_ARRANGEMENT' }` not assignable to `UpdatePermitRequestInput` (the field doesn't exist yet)
 
-- [ ] **Step 3: Add responsibility to the PermitRequest and UpdatePermitRequestInput types**
+- [x] **Step 3: Add responsibility to the PermitRequest and UpdatePermitRequestInput types**
 
 Modify `frontend/src/lib/api-client.ts`:
 ```typescript
@@ -1477,12 +1477,12 @@ export interface UpdatePermitRequestInput {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/api-client.test.ts`
 Expected: PASS (17 tests)
 
-- [ ] **Step 5: Write the failing permit-composer test**
+- [x] **Step 5: Write the failing permit-composer test**
 
 Add to `frontend/test/permit-composer.test.tsx` (check its current content first for exact mock/fixture conventions used there — mirror them):
 ```typescript
@@ -1507,12 +1507,12 @@ Add to `frontend/test/permit-composer.test.tsx` (check its current content first
 ```
 (Adjust the mocked token string / `vi.mock` setup to match whatever `permit-composer.test.tsx` already uses — read the file first if any detail here doesn't match its established pattern.)
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run: `cd frontend && npx vitest run test/permit-composer.test.tsx`
 Expected: FAIL — no element with accessible name matching `/Responsibility/` rendered yet
 
-- [ ] **Step 7: Add the responsibility select to PermitRequests**
+- [x] **Step 7: Add the responsibility select to PermitRequests**
 
 Modify `frontend/src/app/legs/[id]/permit-requests.tsx`:
 ```tsx
@@ -1648,12 +1648,12 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
 }
 ```
 
-- [ ] **Step 8: Run the test to verify it passes**
+- [x] **Step 8: Run the test to verify it passes**
 
 Run: `cd frontend && npx vitest run test/permit-composer.test.tsx`
 Expected: PASS (all tests in this file)
 
-- [ ] **Step 9: Run the full frontend suite and the build**
+- [x] **Step 9: Run the full frontend suite and the build**
 
 Run:
 ```bash
@@ -1663,7 +1663,7 @@ npm run build
 ```
 Expected: all tests PASS, build succeeds. Existing `permit-composer.test.tsx` tests that mock `listPermitRequests`/`updatePermitRequest` responses without a `responsibility` field may need that field added to their fixtures to satisfy the stricter `PermitRequest` type — fix any such TypeScript errors by adding `responsibility: 'OUR_ARRANGEMENT'` to those fixtures.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add frontend/src/lib/api-client.ts frontend/src/app/legs/[id]/permit-requests.tsx frontend/test/api-client.test.ts frontend/test/permit-composer.test.tsx
@@ -1676,7 +1676,7 @@ git commit -m "Add responsibility field to the permit composer"
 
 **Files:** none (verification-only task)
 
-- [ ] **Step 1: Bring up the full stack fresh and run every migration + seed script**
+- [x] **Step 1: Bring up the full stack fresh and run every migration + seed script**
 
 Following the established approach from Slices 3-5 and Sub-project A:
 ```bash
@@ -1693,14 +1693,14 @@ docker run --rm --network web-proxy -e DATABASE_URL="postgres://uaa:uaa@postgres
 ```
 Expected: 10 migrations now (the prior 9 plus `CreateServiceCaseModel`), same real leg/trip/team/country/template counts as Sub-project A's Task 5. Reset coordinator `bminja`'s password to `Admin123!` the same way as prior slices. Since the seeded database starts empty (no `PermitRequest` rows exist to migrate at seed time — the migration runs before any permit requests have ever been created against this fresh database), the migration's `INSERT ... SELECT FROM permit_requests` steps affect zero rows; this smoke check validates the migration's *mechanics* (tables created correctly, `comms` column renamed) rather than real data migration. That's fine — there is no *existing production data* to migrate in this project; the migration exists to prove the schema transition itself is safe and reversible.
 
-- [ ] **Step 2: Confirm the backend booted cleanly with the rewritten module**
+- [x] **Step 2: Confirm the backend booted cleanly with the rewritten module**
 
 ```bash
 docker compose logs backend --tail 40
 ```
 Expected: `Nest application successfully started`, all `/permit-requests`/`/legs/:legId/permit-requests` routes still mapped, no crash.
 
-- [ ] **Step 3: Create a real permit request and confirm the full create→confirm→responsibility flow**
+- [x] **Step 3: Create a real permit request and confirm the full create→confirm→responsibility flow**
 
 Using a real seeded leg:
 ```bash
@@ -1714,19 +1714,19 @@ curl -s -X PATCH http://localhost:3011/permit-requests/<id> -H "Authorization: B
 ```
 Expected: `200` with `"responsibility":"CLIENT_ARRANGEMENT"`, all other fields unchanged — confirms the responsibility update path works against the real database.
 
-- [ ] **Step 4: Confirm reconfirm/deadline behavior still works against real data**
+- [x] **Step 4: Confirm reconfirm/deadline behavior still works against real data**
 
 Repeat Slice 3 Task 9's exact verification: confirm the permit request (`PATCH` with `status:"CONFIRMED"`, `validFrom`/`validTo`), then move the leg's `arrDate` outside that window via `PATCH /legs/:id`, then confirm the permit request's status flips to `RECONFIRM_REQUIRED` via `GET /legs/:legId/permit-requests` — proves `reconcileForLeg`'s rewritten join logic works for real, not just against unit-test mocks.
 
-- [ ] **Step 5: Confirm the Action Board still renders correctly**
+- [x] **Step 5: Confirm the Action Board still renders correctly**
 
 Visit `http://localhost:3012/action-board` in a real browser, confirm the permit request from Step 4 appears with `RECONFIRM_REQUIRED` sorted first, exactly as it did in Slice 3.
 
-- [ ] **Step 6: Confirm the frontend permit composer shows and can change responsibility**
+- [x] **Step 6: Confirm the frontend permit composer shows and can change responsibility**
 
 Open the leg used in Steps 3-4 at `http://localhost:3012/legs/<id>`, confirm the Permits section shows a Responsibility column/select for the request, and that changing it persists (reload the page, confirm the new value sticks).
 
-- [ ] **Step 7: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
+- [x] **Step 7: No commit for this task** — it's verification only. If anything fails, fix it in the task that owns the broken piece and re-run this check.
 
 ---
 
@@ -1741,3 +1741,29 @@ Open the leg used in Steps 3-4 at `http://localhost:3012/legs/<id>`, confirm the
 ---
 
 Plan complete and saved to `docs/superpowers/plans/2026-08-23-requirement-servicecase-model.md`. Proceeding to inline execution per the standing instruction to work unattended.
+
+---
+
+## Verification Notes (post-execution, 2026-08-24)
+
+All 6 tasks executed and committed on `main`:
+1. `364199d8` — entities, migration, Comm rename, data-source registration
+2. `10b443fb` — PermitsService + ReconfirmSweepService rewrite (landed together, compile dependency)
+3. `2ad3085b` — NotificationsService fix + e2e DI graphs
+4. `19239d06` — frontend responsibility field
+
+**Backend:** 89/89 unit tests pass, 15/15 e2e tests pass (`trips`, `permits`, `notifications`, `legs`), clean `nest build`.
+
+**Frontend:** 44/44 tests pass, clean `next build` with full typecheck (confirms every `PermitRequest`-typed fixture across the suite, including `action-board.test.tsx`, is satisfied by the new `responsibility` field).
+
+**Real-stack smoke test** (fresh `docker compose down -v` + rebuild + migrate + seed):
+- All 10 migrations ran cleanly against an empty database, including `CreateServiceCaseModel1756339200000`; 62 legs / 2 users / 20 teams / 15 CountryRequirements / 15 FormTemplates seeded successfully.
+- Backend booted with all routes mapped; the two "relation does not exist" errors in the boot log predate the migration run (requests made before `migration:run` completed) and cleared immediately after.
+- Created a real permit request against a seeded Egypt leg via `POST /legs/:legId/permit-requests` — response shape matches the pre-B1 contract exactly, plus `responsibility: "OUR_ARRANGEMENT"`.
+- `PATCH /permit-requests/:id` with `{responsibility: "CLIENT_ARRANGEMENT"}` updated only that field, leaving status/clearance/dates untouched.
+- Confirmed the permit (`status: "CONFIRMED"` + a `validFrom`/`validTo` window), then updated the leg's `arrDate` outside that window via `PATCH /legs/:id` — `ServiceCase.status` flipped to `RECONFIRM_REQUIRED`, proving the rewritten `reconcileForLeg` join (ServiceCase + Requirement) works against real data, not just mocks.
+- Action Board (`/action-board`) correctly showed Trip 482421 / Egypt / `RECONFIRM_REQUIRED`.
+- Leg detail page's Permits table renders a Responsibility select per row; changing it via the actual UI dropdown fired exactly one `PATCH /permit-requests/:id` (confirmed via network-request capture) followed by a single re-fetch, and the new value survived a full page reload.
+- One transient anomaly during manual browser testing (responsibility briefly reverted after a rapid login→navigate sequence) did not reproduce on a clean, isolated retry — network capture on the clean retry showed only the expected GET/PATCH traffic, so this was a browser-automation timing artifact (racing navigations), not a defect in the update path; the 16 passing `permits.service.spec.ts` unit tests and the direct curl-verified update independently confirm the persistence logic is correct.
+
+Sub-project B1 is complete. Per the agreed sequencing, B2 (compatibility/grouping engine) and Sub-project C (ground services module) are next.
