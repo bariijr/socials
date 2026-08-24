@@ -19,7 +19,7 @@ describe('PermitRequests', () => {
 
   it('lists existing permit requests with their status', async () => {
     vi.mocked(apiClient.listPermitRequests).mockResolvedValue([
-      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null },
+      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
     ]);
 
     render(<PermitRequests legId="1" country="Egypt" />);
@@ -31,7 +31,7 @@ describe('PermitRequests', () => {
   it("requests a permit for the leg's country and refreshes the list", async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.createPermitRequest).mockResolvedValue({
-      id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null,
+      id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT',
     });
 
     render(<PermitRequests legId="1" country="Egypt" />);
@@ -45,10 +45,10 @@ describe('PermitRequests', () => {
   it('marks a permit confirmed with a clearance number', async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.listPermitRequests).mockResolvedValue([
-      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null },
+      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
     ]);
     vi.mocked(apiClient.updatePermitRequest).mockResolvedValue({
-      id: 'pr-1', legId: '1', country: 'Egypt', status: 'CONFIRMED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: 'EG-4471',
+      id: 'pr-1', legId: '1', country: 'Egypt', status: 'CONFIRMED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: 'EG-4471', responsibility: 'OUR_ARRANGEMENT',
     });
 
     render(<PermitRequests legId="1" country="Egypt" />);
@@ -61,6 +61,25 @@ describe('PermitRequests', () => {
         status: 'CONFIRMED',
         clearanceNumber: 'EG-4471',
       }),
+    );
+  });
+
+  it('changes responsibility for a permit request', async () => {
+    vi.mocked(apiClient.listPermitRequests).mockResolvedValue([
+      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
+    ]);
+    vi.mocked(apiClient.updatePermitRequest).mockResolvedValue({
+      id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'CLIENT_ARRANGEMENT',
+    });
+
+    render(<PermitRequests legId="1" country="Egypt" />);
+    await waitFor(() => expect(screen.getByText('Egypt')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText(/Responsibility/), 'CLIENT_ARRANGEMENT');
+
+    await waitFor(() =>
+      expect(apiClient.updatePermitRequest).toHaveBeenCalledWith('test-token', 'pr-1', { responsibility: 'CLIENT_ARRANGEMENT' }),
     );
   });
 });

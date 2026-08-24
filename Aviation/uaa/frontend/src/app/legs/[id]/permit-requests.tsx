@@ -3,6 +3,16 @@
 import { useEffect, useState } from 'react';
 import { createPermitRequest, listPermitRequests, updatePermitRequest, type PermitRequest } from '@/lib/api-client';
 
+const RESPONSIBILITIES: PermitRequest['responsibility'][] = [
+  'OUR_ARRANGEMENT',
+  'CLIENT_ARRANGEMENT',
+  'OPERATOR_ARRANGEMENT',
+  'THIRD_PARTY_ARRANGEMENT',
+  'NOT_REQUIRED',
+  'WAIVED',
+  'TBD',
+];
+
 export default function PermitRequests({ legId, country }: { legId: string; country: string | null }) {
   const [requests, setRequests] = useState<PermitRequest[]>([]);
   const [clearanceDrafts, setClearanceDrafts] = useState<Record<string, string>>({});
@@ -40,6 +50,13 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
     await refresh();
   }
 
+  async function handleResponsibilityChange(id: string, responsibility: PermitRequest['responsibility']) {
+    const token = localStorage.getItem('uaa_token');
+    if (!token) return;
+    await updatePermitRequest(token, id, { responsibility });
+    await refresh();
+  }
+
   return (
     <fieldset className="permits-section">
       <legend>Permits</legend>
@@ -55,6 +72,7 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
           <tr>
             <th>Country</th>
             <th>Status</th>
+            <th>Responsibility</th>
             <th>Clearance No</th>
             <th />
           </tr>
@@ -64,6 +82,22 @@ export default function PermitRequests({ legId, country }: { legId: string; coun
             <tr key={r.id}>
               <td>{r.country}</td>
               <td>{r.status}</td>
+              <td>
+                <label htmlFor={`responsibility-${r.id}`} className="sr-only">
+                  Responsibility
+                </label>
+                <select
+                  id={`responsibility-${r.id}`}
+                  value={r.responsibility}
+                  onChange={(e) => handleResponsibilityChange(r.id, e.target.value as PermitRequest['responsibility'])}
+                >
+                  {RESPONSIBILITIES.map((value) => (
+                    <option key={value} value={value}>
+                      {value.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </td>
               <td>
                 {r.status === 'CONFIRMED' ? (
                   r.clearanceNumber

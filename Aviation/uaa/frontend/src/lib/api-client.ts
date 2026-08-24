@@ -133,6 +133,7 @@ export interface PermitRequest {
   validFrom: string | null;
   validTo: string | null;
   clearanceNumber: string | null;
+  responsibility: 'OUR_ARRANGEMENT' | 'CLIENT_ARRANGEMENT' | 'OPERATOR_ARRANGEMENT' | 'THIRD_PARTY_ARRANGEMENT' | 'NOT_REQUIRED' | 'WAIVED' | 'TBD';
 }
 
 export interface UpdatePermitRequestInput {
@@ -140,6 +141,7 @@ export interface UpdatePermitRequestInput {
   clearanceNumber?: string;
   validFrom?: string;
   validTo?: string;
+  responsibility?: PermitRequest['responsibility'];
 }
 
 export async function listPermitRequests(token: string, legId: string): Promise<PermitRequest[]> {

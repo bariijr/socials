@@ -139,6 +139,22 @@ describe('api-client', () => {
     expect(result).toEqual(updated);
   });
 
+  it('updatePermitRequest can set responsibility', async () => {
+    const updated = { id: 'pr-1', status: 'CONFIRMED', responsibility: 'CLIENT_ARRANGEMENT' };
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => updated });
+
+    const result = await updatePermitRequest('token-123', 'pr-1', { responsibility: 'CLIENT_ARRANGEMENT' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/permit-requests/pr-1'),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ responsibility: 'CLIENT_ARRANGEMENT' }),
+      }),
+    );
+    expect(result).toEqual(updated);
+  });
+
   it('listAllPermitRequests fetches every permit request with urgency', async () => {
     const requests = [{ id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', urgency: 'BREACH', legSummary: { tripNo: '482421', icao: 'HECA', tail: 'N148B' } }];
     (fetch as any).mockResolvedValue({ ok: true, json: async () => requests });
