@@ -7,7 +7,9 @@ import { LegsModule } from '../src/legs/legs.module';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { Leg } from '../src/legs/leg.entity';
 import { PermitsService } from '../src/permits/permits.service';
-import { PermitRequest } from '../src/permits/permit-request.entity';
+import { Requirement } from '../src/service-cases/requirement.entity';
+import { ServiceCase } from '../src/service-cases/service-case.entity';
+import { ServiceOrder } from '../src/service-cases/service-order.entity';
 import { Comm } from '../src/permits/comm.entity';
 import { CountryRequirement } from '../src/country-requirements/country-requirement.entity';
 import { FormTemplate } from '../src/form-templates/form-template.entity';
@@ -34,7 +36,11 @@ describe('Legs (e2e)', () => {
       .useValue(legRepo)
       .overrideProvider(PermitsService)
       .useValue({ reconcileForLeg: jest.fn() })
-      .overrideProvider(getRepositoryToken(PermitRequest))
+      .overrideProvider(getRepositoryToken(Requirement))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(ServiceCase))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(ServiceOrder))
       .useValue({})
       .overrideProvider(getRepositoryToken(Comm))
       .useValue({})

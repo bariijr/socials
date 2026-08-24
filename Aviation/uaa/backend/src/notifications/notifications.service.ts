@@ -38,7 +38,7 @@ export class NotificationsService {
       this.commRepo.create({
         direction: 'OUTBOUND',
         legId,
-        permitRequestId: null,
+        serviceCaseId: null,
         correlationToken: null,
         fromAddress,
         toAddress,

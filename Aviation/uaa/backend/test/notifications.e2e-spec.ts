@@ -8,7 +8,9 @@ import { Leg } from '../src/legs/leg.entity';
 import { Team } from '../src/notifications/team.entity';
 import { Comm } from '../src/permits/comm.entity';
 import { User } from '../src/users/user.entity';
-import { PermitRequest } from '../src/permits/permit-request.entity';
+import { Requirement } from '../src/service-cases/requirement.entity';
+import { ServiceCase } from '../src/service-cases/service-case.entity';
+import { ServiceOrder } from '../src/service-cases/service-order.entity';
 import { CountryRequirement } from '../src/country-requirements/country-requirement.entity';
 import { FormTemplate } from '../src/form-templates/form-template.entity';
 import { MailService } from '../src/mail/mail.service';
@@ -59,7 +61,11 @@ describe('Notifications (e2e)', () => {
       .useValue(commRepo)
       .overrideProvider(getRepositoryToken(User))
       .useValue(userRepo)
-      .overrideProvider(getRepositoryToken(PermitRequest))
+      .overrideProvider(getRepositoryToken(Requirement))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(ServiceCase))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(ServiceOrder))
       .useValue({})
       .overrideProvider(getRepositoryToken(CountryRequirement))
       .useValue({})
