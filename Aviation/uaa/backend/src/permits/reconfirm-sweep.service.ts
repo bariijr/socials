@@ -4,6 +4,7 @@ import { Not, In, Repository } from 'typeorm';
 import { Interval } from '@nestjs/schedule';
 import { ServiceCase } from '../service-cases/service-case.entity';
 import { Requirement } from '../service-cases/requirement.entity';
+import { RequirementLeg } from '../service-cases/requirement-leg.entity';
 import { Leg } from '../legs/leg.entity';
 import { evaluateReconfirm } from './reconfirm';
 
@@ -16,6 +17,7 @@ export class ReconfirmSweepService {
   constructor(
     @InjectRepository(ServiceCase) private readonly serviceCaseRepo: Repository<ServiceCase>,
     @InjectRepository(Requirement) private readonly requirementRepo: Repository<Requirement>,
+    @InjectRepository(RequirementLeg) private readonly requirementLegRepo: Repository<RequirementLeg>,
     @InjectRepository(Leg) private readonly legRepo: Repository<Leg>,
   ) {}
 
@@ -23,6 +25,13 @@ export class ReconfirmSweepService {
   async scheduledSweep() {
     const flipped = await this.sweep();
     if (flipped > 0) this.logger.log(`Reconfirm sweep flipped ${flipped} service case(s).`);
+  }
+
+  private pickArrDate(arrDates: Date[], validFrom: Date | null, validTo: Date | null): Date | null {
+    if (arrDates.length === 0) return null;
+    const outside = arrDates.find((d) => validFrom && validTo && (d < validFrom || d > validTo));
+    if (outside) return outside;
+    return arrDates.sort((a, b) => a.getTime() - b.getTime())[0];
   }
 
   async sweep(): Promise<number> {
@@ -37,7 +46,17 @@ export class ReconfirmSweepService {
       if (serviceCase.status === 'CANCELLED') continue;
 
       const requirement = await this.requirementRepo.findOne({ where: { id: serviceCase.requirementId } });
-      const leg = requirement ? await this.legRepo.findOne({ where: { id: requirement.legId } }) : null;
+      const legRows = requirement
+        ? await this.requirementLegRepo.find({ where: { requirementId: requirement.id } })
+        : [];
+
+      const arrDates: Date[] = [];
+      for (const row of legRows) {
+        const leg = await this.legRepo.findOne({ where: { id: row.legId } });
+        if (leg?.arrDate) arrDates.push(leg.arrDate);
+      }
+      const arrDateToCheck = this.pickArrDate(arrDates, serviceCase.validFrom, serviceCase.validTo);
+
       const nextStatus = evaluateReconfirm(
         {
           status: serviceCase.status,
@@ -45,7 +64,7 @@ export class ReconfirmSweepService {
           validFrom: serviceCase.validFrom,
           validTo: serviceCase.validTo,
         },
-        leg?.arrDate ?? null,
+        arrDateToCheck,
         now,
       );
       if (nextStatus !== serviceCase.status) {
