@@ -1,6 +1,8 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { PermitRequest } from './permit-request.entity';
+import { Requirement } from '../service-cases/requirement.entity';
+import { ServiceCase } from '../service-cases/service-case.entity';
+import { ServiceOrder } from '../service-cases/service-order.entity';
 import { Comm } from './comm.entity';
 import { Leg } from '../legs/leg.entity';
 import { CountryRequirement } from '../country-requirements/country-requirement.entity';
@@ -12,7 +14,7 @@ import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PermitRequest, Comm, Leg, CountryRequirement, FormTemplate]),
+    TypeOrmModule.forFeature([Requirement, ServiceCase, ServiceOrder, Comm, Leg, CountryRequirement, FormTemplate]),
     forwardRef(() => MailModule),
   ],
   providers: [PermitsService, ReconfirmSweepService],

@@ -1,7 +1,8 @@
 import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
-import type { PermitRequestStatus } from '../permit-request.entity';
+import type { ServiceCaseStatus } from '../../service-cases/service-case.entity';
+import type { Responsibility } from '../../service-cases/requirement.entity';
 
-const STATUSES: PermitRequestStatus[] = [
+const STATUSES: ServiceCaseStatus[] = [
   'NOT_STARTED',
   'REQUESTED',
   'CHASING',
@@ -10,9 +11,20 @@ const STATUSES: PermitRequestStatus[] = [
   'CANCELLED',
 ];
 
+const RESPONSIBILITIES: Responsibility[] = [
+  'OUR_ARRANGEMENT',
+  'CLIENT_ARRANGEMENT',
+  'OPERATOR_ARRANGEMENT',
+  'THIRD_PARTY_ARRANGEMENT',
+  'NOT_REQUIRED',
+  'WAIVED',
+  'TBD',
+];
+
 export class UpdatePermitRequestDto {
-  @IsOptional() @IsIn(STATUSES) status?: PermitRequestStatus;
+  @IsOptional() @IsIn(STATUSES) status?: ServiceCaseStatus;
   @IsOptional() @IsString() clearanceNumber?: string;
   @IsOptional() @IsDateString() validFrom?: string;
   @IsOptional() @IsDateString() validTo?: string;
+  @IsOptional() @IsIn(RESPONSIBILITIES) responsibility?: Responsibility;
 }

@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, In, Repository } from 'typeorm';
 import { Interval } from '@nestjs/schedule';
-import { PermitRequest } from './permit-request.entity';
+import { ServiceCase } from '../service-cases/service-case.entity';
+import { Requirement } from '../service-cases/requirement.entity';
 import { Leg } from '../legs/leg.entity';
 import { evaluateReconfirm } from './reconfirm';
 
@@ -13,32 +14,43 @@ export class ReconfirmSweepService {
   private readonly logger = new Logger(ReconfirmSweepService.name);
 
   constructor(
-    @InjectRepository(PermitRequest) private readonly permitRequestRepo: Repository<PermitRequest>,
+    @InjectRepository(ServiceCase) private readonly serviceCaseRepo: Repository<ServiceCase>,
+    @InjectRepository(Requirement) private readonly requirementRepo: Repository<Requirement>,
     @InjectRepository(Leg) private readonly legRepo: Repository<Leg>,
   ) {}
 
   @Interval(SWEEP_INTERVAL_MS)
   async scheduledSweep() {
     const flipped = await this.sweep();
-    if (flipped > 0) this.logger.log(`Reconfirm sweep flipped ${flipped} permit request(s).`);
+    if (flipped > 0) this.logger.log(`Reconfirm sweep flipped ${flipped} service case(s).`);
   }
 
   async sweep(): Promise<number> {
-    const requests = await this.permitRequestRepo.find({
+    const serviceCases = await this.serviceCaseRepo.find({
       where: [{ status: Not(In(['CANCELLED', 'RECONFIRM_REQUIRED'])) }],
     });
 
     const now = new Date();
     let flipped = 0;
 
-    for (const request of requests) {
-      if (request.status === 'CANCELLED') continue;
+    for (const serviceCase of serviceCases) {
+      if (serviceCase.status === 'CANCELLED') continue;
 
-      const leg = await this.legRepo.findOne({ where: { id: request.legId } });
-      const nextStatus = evaluateReconfirm(request, leg?.arrDate ?? null, now);
-      if (nextStatus !== request.status) {
-        request.status = nextStatus;
-        await this.permitRequestRepo.save(request);
+      const requirement = await this.requirementRepo.findOne({ where: { id: serviceCase.requirementId } });
+      const leg = requirement ? await this.legRepo.findOne({ where: { id: requirement.legId } }) : null;
+      const nextStatus = evaluateReconfirm(
+        {
+          status: serviceCase.status,
+          requiredByZ: requirement?.requiredByZ ?? null,
+          validFrom: serviceCase.validFrom,
+          validTo: serviceCase.validTo,
+        },
+        leg?.arrDate ?? null,
+        now,
+      );
+      if (nextStatus !== serviceCase.status) {
+        serviceCase.status = nextStatus;
+        await this.serviceCaseRepo.save(serviceCase);
         flipped++;
       }
     }
