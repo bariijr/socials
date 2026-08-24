@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import type { ServiceType } from '../service-cases/requirement.entity';
 
 @Entity('form_templates')
 export class FormTemplate {
@@ -7,6 +8,9 @@ export class FormTemplate {
 
   @Column()
   country: string;
+
+  @Column({ name: 'service_type', type: 'varchar' })
+  serviceType: ServiceType;
 
   @Column()
   name: string;

@@ -9,13 +9,12 @@ export type Responsibility =
   | 'WAIVED'
   | 'TBD';
 
+export type ServiceType = 'OVERFLIGHT' | 'LANDING';
+
 @Entity('requirements')
 export class Requirement {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ name: 'leg_id', type: 'uuid' })
-  legId: string;
 
   @Column()
   country: string;
@@ -23,8 +22,8 @@ export class Requirement {
   @Column({ name: 'service_category', type: 'varchar', default: 'PERMIT' })
   serviceCategory: string;
 
-  @Column({ name: 'service_type', type: 'varchar', default: 'PERMIT' })
-  serviceType: string;
+  @Column({ name: 'service_type', type: 'varchar' })
+  serviceType: ServiceType;
 
   @Column({ type: 'varchar', default: 'OUR_ARRANGEMENT' })
   responsibility: Responsibility;

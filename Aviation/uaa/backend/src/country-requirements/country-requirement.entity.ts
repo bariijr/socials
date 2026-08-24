@@ -1,12 +1,16 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import type { ServiceType } from '../service-cases/requirement.entity';
 
 @Entity('country_requirements')
 export class CountryRequirement {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   country: string;
+
+  @Column({ name: 'service_type', type: 'varchar' })
+  serviceType: ServiceType;
 
   @Column({ name: 'lead_time_hours', type: 'int' })
   leadTimeHours: number;
