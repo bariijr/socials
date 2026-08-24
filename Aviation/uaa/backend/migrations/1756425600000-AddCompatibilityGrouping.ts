@@ -23,10 +23,10 @@ export class AddCompatibilityGrouping1756425600000 implements MigrationInterface
     `);
 
     await queryRunner.query(`ALTER TABLE requirements DROP COLUMN leg_id`);
-    await queryRunner.addColumn(
-      'requirements',
-      new TableColumn({ name: 'service_type', type: 'varchar', isNullable: false, default: "'OVERFLIGHT'" }),
-    );
+    // requirements.service_type already exists (added by B1 as a generic 'PERMIT'
+    // placeholder, since B1 didn't yet have real permit-type awareness) — B2 just
+    // needs to replace that placeholder value with a real ServiceType.
+    await queryRunner.query(`UPDATE requirements SET service_type = 'OVERFLIGHT' WHERE service_type = 'PERMIT'`);
 
     const countryRequirementsTable = await queryRunner.getTable('country_requirements');
     const countryUnique = countryRequirementsTable!.uniques.find((u) => u.columnNames.includes('country'));
@@ -81,7 +81,9 @@ export class AddCompatibilityGrouping1756425600000 implements MigrationInterface
       WHERE requirements.id = sub.requirement_id
     `);
     await queryRunner.query(`ALTER TABLE requirements ALTER COLUMN leg_id SET NOT NULL`);
-    await queryRunner.dropColumn('requirements', 'service_type');
+    // requirements.service_type belongs to B1 (added by CreateServiceCaseModel) — B2 only
+    // changed its values, so down() reverts the values, not the column itself.
+    await queryRunner.query(`UPDATE requirements SET service_type = 'PERMIT' WHERE service_type IN ('OVERFLIGHT', 'LANDING')`);
 
     await queryRunner.dropTable('requirement_legs');
   }
