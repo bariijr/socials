@@ -57,7 +57,7 @@ export default function ActionBoardPage() {
             {sorted.map((r) => (
               <tr key={r.id}>
                 <td className="col-mono">
-                  <a href={`/legs/${r.legId}`}>{r.legSummary?.tripNo ?? r.legId}</a>
+                  <a href={`/legs/${r.legIds[0]}`}>{r.legSummary?.tripNo ?? r.legIds[0]}</a>
                 </td>
                 <td className="col-mono">{r.legSummary?.icao}</td>
                 <td>{r.country}</td>

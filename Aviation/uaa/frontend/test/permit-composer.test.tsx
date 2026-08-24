@@ -6,7 +6,14 @@ import PermitRequests from '../src/app/legs/[id]/permit-requests';
 
 vi.mock('../src/lib/api-client', async () => {
   const actual = await vi.importActual<typeof apiClient>('../src/lib/api-client');
-  return { ...actual, listPermitRequests: vi.fn(), createPermitRequest: vi.fn(), updatePermitRequest: vi.fn() };
+  return {
+    ...actual,
+    listPermitRequests: vi.fn(),
+    createPermitRequest: vi.fn(),
+    updatePermitRequest: vi.fn(),
+    checkCompatiblePermitRequest: vi.fn(),
+    mergePermitRequest: vi.fn(),
+  };
 });
 
 describe('PermitRequests', () => {
@@ -15,11 +22,13 @@ describe('PermitRequests', () => {
     vi.mocked(apiClient.listPermitRequests).mockReset().mockResolvedValue([]);
     vi.mocked(apiClient.createPermitRequest).mockReset();
     vi.mocked(apiClient.updatePermitRequest).mockReset();
+    vi.mocked(apiClient.checkCompatiblePermitRequest).mockReset().mockResolvedValue(null);
+    vi.mocked(apiClient.mergePermitRequest).mockReset();
   });
 
   it('lists existing permit requests with their status', async () => {
     vi.mocked(apiClient.listPermitRequests).mockResolvedValue([
-      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
+      { id: 'pr-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
     ]);
 
     render(<PermitRequests legId="1" country="Egypt" />);
@@ -31,24 +40,24 @@ describe('PermitRequests', () => {
   it("requests a permit for the leg's country and refreshes the list", async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.createPermitRequest).mockResolvedValue({
-      id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT',
+      id: 'pr-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT',
     });
 
     render(<PermitRequests legId="1" country="Egypt" />);
 
     await user.click(await screen.findByRole('button', { name: /request permit/i }));
 
-    await waitFor(() => expect(apiClient.createPermitRequest).toHaveBeenCalledWith('test-token', '1', 'Egypt'));
+    await waitFor(() => expect(apiClient.createPermitRequest).toHaveBeenCalledWith('test-token', '1', 'Egypt', 'OVERFLIGHT'));
     expect(apiClient.listPermitRequests).toHaveBeenCalledTimes(2); // initial load + refresh after create
   });
 
   it('marks a permit confirmed with a clearance number', async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.listPermitRequests).mockResolvedValue([
-      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
+      { id: 'pr-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
     ]);
     vi.mocked(apiClient.updatePermitRequest).mockResolvedValue({
-      id: 'pr-1', legId: '1', country: 'Egypt', status: 'CONFIRMED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: 'EG-4471', responsibility: 'OUR_ARRANGEMENT',
+      id: 'pr-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'CONFIRMED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: 'EG-4471', responsibility: 'OUR_ARRANGEMENT',
     });
 
     render(<PermitRequests legId="1" country="Egypt" />);
@@ -66,10 +75,10 @@ describe('PermitRequests', () => {
 
   it('changes responsibility for a permit request', async () => {
     vi.mocked(apiClient.listPermitRequests).mockResolvedValue([
-      { id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
+      { id: 'pr-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT' },
     ]);
     vi.mocked(apiClient.updatePermitRequest).mockResolvedValue({
-      id: 'pr-1', legId: '1', country: 'Egypt', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'CLIENT_ARRANGEMENT',
+      id: 'pr-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'CLIENT_ARRANGEMENT',
     });
 
     render(<PermitRequests legId="1" country="Egypt" />);
@@ -81,5 +90,42 @@ describe('PermitRequests', () => {
     await waitFor(() =>
       expect(apiClient.updatePermitRequest).toHaveBeenCalledWith('test-token', 'pr-1', { responsibility: 'CLIENT_ARRANGEMENT' }),
     );
+  });
+
+  it('shows a merge-confirmation choice when a compatible request already exists, and merges on confirm', async () => {
+    vi.mocked(apiClient.listPermitRequests).mockResolvedValue([]);
+    vi.mocked(apiClient.checkCompatiblePermitRequest).mockResolvedValue({
+      requirementId: 'req-1', legIds: ['2'], status: 'REQUESTED', correlationToken: '150/sc-1',
+    });
+    vi.mocked(apiClient.mergePermitRequest).mockResolvedValue({
+      id: 'sc-1', legIds: ['2', '1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED',
+      requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT',
+    });
+
+    const user = userEvent.setup();
+    render(<PermitRequests legId="1" country="Egypt" />);
+
+    await user.click(await screen.findByRole('button', { name: /request permit/i }));
+    await waitFor(() => expect(apiClient.checkCompatiblePermitRequest).toHaveBeenCalledWith('test-token', '1', 'Egypt', 'OVERFLIGHT'));
+
+    await user.click(await screen.findByRole('button', { name: /merge into it/i }));
+
+    await waitFor(() => expect(apiClient.mergePermitRequest).toHaveBeenCalledWith('test-token', '1', 'req-1'));
+  });
+
+  it('creates a separate request when no compatible request exists', async () => {
+    vi.mocked(apiClient.listPermitRequests).mockResolvedValue([]);
+    vi.mocked(apiClient.checkCompatiblePermitRequest).mockResolvedValue(null);
+    vi.mocked(apiClient.createPermitRequest).mockResolvedValue({
+      id: 'sc-1', legIds: ['1'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED',
+      requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT',
+    });
+
+    const user = userEvent.setup();
+    render(<PermitRequests legId="1" country="Egypt" />);
+
+    await user.click(await screen.findByRole('button', { name: /request permit/i }));
+
+    await waitFor(() => expect(apiClient.createPermitRequest).toHaveBeenCalledWith('test-token', '1', 'Egypt', 'OVERFLIGHT'));
   });
 });

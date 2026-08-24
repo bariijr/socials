@@ -126,8 +126,9 @@ export async function downloadCompletedMissions(token: string, from: string, to:
 
 export interface PermitRequest {
   id: string;
-  legId: string;
+  legIds: string[];
   country: string;
+  serviceType: 'OVERFLIGHT' | 'LANDING';
   status: 'NOT_STARTED' | 'REQUESTED' | 'CHASING' | 'CONFIRMED' | 'RECONFIRM_REQUIRED' | 'CANCELLED';
   requiredByZ: string | null;
   validFrom: string | null;
@@ -142,6 +143,14 @@ export interface UpdatePermitRequestInput {
   validFrom?: string;
   validTo?: string;
   responsibility?: PermitRequest['responsibility'];
+  serviceType?: PermitRequest['serviceType'];
+}
+
+export interface CompatibleCandidate {
+  requirementId: string;
+  legIds: string[];
+  status: PermitRequest['status'];
+  correlationToken: string | null;
 }
 
 export async function listPermitRequests(token: string, legId: string): Promise<PermitRequest[]> {
@@ -152,13 +161,43 @@ export async function listPermitRequests(token: string, legId: string): Promise<
   return response.json();
 }
 
-export async function createPermitRequest(token: string, legId: string, country: string): Promise<PermitRequest> {
+export async function checkCompatiblePermitRequest(
+  token: string,
+  legId: string,
+  country: string,
+  serviceType: PermitRequest['serviceType'],
+): Promise<CompatibleCandidate | null> {
+  const response = await fetch(
+    `${API_URL}/legs/${legId}/permit-requests/compatible?country=${encodeURIComponent(country)}&serviceType=${encodeURIComponent(serviceType)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) throw new Error('Failed to check compatible permit requests');
+  const data = await response.json();
+  return data.candidate;
+}
+
+export async function createPermitRequest(
+  token: string,
+  legId: string,
+  country: string,
+  serviceType: PermitRequest['serviceType'],
+): Promise<PermitRequest> {
   const response = await fetch(`${API_URL}/legs/${legId}/permit-requests`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ country }),
+    body: JSON.stringify({ country, serviceType }),
   });
   if (!response.ok) throw new Error('Failed to create permit request');
+  return response.json();
+}
+
+export async function mergePermitRequest(token: string, legId: string, requirementId: string): Promise<PermitRequest> {
+  const response = await fetch(`${API_URL}/legs/${legId}/permit-requests/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ requirementId }),
+  });
+  if (!response.ok) throw new Error('Failed to merge permit request');
   return response.json();
 }
 

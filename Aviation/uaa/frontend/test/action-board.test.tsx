@@ -20,8 +20,8 @@ describe('ActionBoardPage', () => {
 
   it('renders each request with its urgency and trip summary, most severe first', async () => {
     vi.mocked(apiClient.listAllPermitRequests).mockResolvedValue([
-      { id: 'pr-ok', legId: '1', country: 'Kenya', status: 'REQUESTED', urgency: 'OK', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, legSummary: { tripNo: '999999', icao: 'HKJK', tail: 'N1' } },
-      { id: 'pr-breach', legId: '2', country: 'Egypt', status: 'REQUESTED', urgency: 'BREACH', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, legSummary: { tripNo: '482421', icao: 'HECA', tail: 'N148B' } },
+      { id: 'pr-ok', legIds: ['1'], country: 'Kenya', serviceType: 'OVERFLIGHT', status: 'REQUESTED', urgency: 'OK', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT', legSummary: { tripNo: '999999', icao: 'HKJK', tail: 'N1' } },
+      { id: 'pr-breach', legIds: ['2'], country: 'Egypt', serviceType: 'OVERFLIGHT', status: 'REQUESTED', urgency: 'BREACH', requiredByZ: null, validFrom: null, validTo: null, clearanceNumber: null, responsibility: 'OUR_ARRANGEMENT', legSummary: { tripNo: '482421', icao: 'HECA', tail: 'N148B' } },
     ]);
 
     render(<ActionBoardPage />);
