@@ -1,6 +1,6 @@
 import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
 import type { ServiceCaseStatus } from '../../service-cases/service-case.entity';
-import type { Responsibility } from '../../service-cases/requirement.entity';
+import type { Responsibility, ServiceType } from '../../service-cases/requirement.entity';
 
 const STATUSES: ServiceCaseStatus[] = [
   'NOT_STARTED',
@@ -21,10 +21,13 @@ const RESPONSIBILITIES: Responsibility[] = [
   'TBD',
 ];
 
+const SERVICE_TYPES: ServiceType[] = ['OVERFLIGHT', 'LANDING'];
+
 export class UpdatePermitRequestDto {
   @IsOptional() @IsIn(STATUSES) status?: ServiceCaseStatus;
   @IsOptional() @IsString() clearanceNumber?: string;
   @IsOptional() @IsDateString() validFrom?: string;
   @IsOptional() @IsDateString() validTo?: string;
   @IsOptional() @IsIn(RESPONSIBILITIES) responsibility?: Responsibility;
+  @IsOptional() @IsIn(SERVICE_TYPES) serviceType?: ServiceType;
 }
