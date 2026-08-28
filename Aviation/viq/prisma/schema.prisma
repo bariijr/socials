@@ -1,0 +1,654 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Reference tables (seeded, admin-managed) ───────────────────────────────
+
+model Country {
+  iso2                     String  @id
+  iso3                     String?
+  name                     String
+  region                   String?
+  subRegion                String? @map("sub_region")
+  overflightPermitRequired Boolean @default(false) @map("overflight_permit_required")
+  landingPermitRequired    Boolean @default(false) @map("landing_permit_required")
+  aocDocsRequired          Boolean @default(false) @map("aoc_docs_required")
+  ciqRequired              Boolean @default(false) @map("ciq_required")
+  escalationContact        String? @map("escalation_contact")
+  caaWebsite                String? @map("caa_website")
+  notes                    String?
+  // Approximate geographic centroid — used to attribute great-circle route
+  // points to a country when no boundary/polygon data is available.
+  centroidLat              Float   @map("centroid_lat")
+  centroidLng              Float   @map("centroid_lng")
+
+  airports         Airport[]
+  countryRules     CountryRule[]
+  messageTemplates MessageTemplate[]
+  fees             CountryFee[]
+
+  @@map("countries")
+}
+
+// Government/regulatory fees a country's CAA (or its air navigation
+// service provider) charges — distinct from PriceItem, which is a
+// vendor's own price list. Multiple rows per country are expected (one
+// per fee type); no unique constraint, mirroring PriceItem's own
+// (providerId, serviceType) non-uniqueness for the same reason — a
+// country can have more than one fee under different conditions.
+model CountryFee {
+  id          Int     @id @default(autoincrement())
+  countryIso2 String  @map("country_iso2")
+  feeType     String  @map("fee_type")
+  amount      Float
+  currency    String  @default("USD")
+  unit        String?
+  notes       String?
+
+  country Country @relation(fields: [countryIso2], references: [iso2])
+
+  @@index([countryIso2])
+  @@map("country_fees")
+}
+
+model MessageTemplate {
+  id           Int      @id @default(autoincrement())
+  countryIso2  String   @map("country_iso2")
+  templateType String   @map("template_type")
+  subject      String
+  body         String
+  updatedBy    String?  @map("updated_by")
+  updatedAtZ   DateTime @default(now()) @map("updated_at_z")
+
+  country Country @relation(fields: [countryIso2], references: [iso2])
+
+  @@unique([countryIso2, templateType])
+  @@index([countryIso2])
+  @@map("message_templates")
+}
+
+model Airport {
+  icao           String  @id
+  iata           String?
+  name           String
+  city           String?
+  countryIso2    String  @map("country_iso2")
+  tz             String?
+  latitude       Float
+  longitude      Float
+  elevationFt    Int?    @map("elevation_ft")
+  runwayLengthFt Int?    @map("runway_length_ft")
+  category       String?
+  fboCount       Int?    @map("fbo_count")
+
+  country Country @relation(fields: [countryIso2], references: [iso2])
+
+  @@map("airports")
+}
+
+// Free-standing (not FK'd to Country — covers cities outside the operational
+// country set, e.g. hub cities used only for reference lookups).
+model City {
+  id          Int    @id @default(autoincrement())
+  name        String
+  countryIso2 String @map("country_iso2")
+  tz          String?
+
+  @@unique([name, countryIso2])
+  @@map("cities")
+}
+
+model AircraftType {
+  icaoType          String  @id @map("icao_type")
+  manufacturer      String
+  model             String
+  category          String?
+  mtowKg            Float   @map("mtow_kg")
+  maxRangeNm        Float?  @map("max_range_nm")
+  maxPax            Int?    @map("max_pax")
+  typicalPax        Int?    @map("typical_pax")
+  crewRequired      Int?    @map("crew_required")
+  maxCrew           Int?    @map("max_crew")
+  cruiseSpeedKts    Int?    @map("cruise_speed_kts")
+  ceilingFt         Int?    @map("ceiling_ft")
+  fuelBurnKgPerHour Float?  @map("fuel_burn_kg_per_hour")
+  noiseCert         String? @map("noise_cert")
+  wakeCategory      String? @map("wake_category")
+  approachCategory  String? @map("approach_category")
+  landingDistanceFt Int?    @map("landing_distance_ft")
+  takeoffDistanceFt Int?    @map("takeoff_distance_ft")
+  wingspanFt        Float?  @map("wingspan_ft")
+  lengthFt          Float?  @map("length_ft")
+  description       String?
+
+  aircraft Aircraft[]
+
+  @@map("aircraft_types")
+}
+
+// Per-tail fleet instance. Manufacturer/MTOW/NoiseCert resolve from the
+// matching AircraftType at read time unless an override is set here.
+model Aircraft {
+  registration            String    @id
+  icaoType                String    @map("icao_type")
+  manufacturerOverride    String?   @map("manufacturer_override")
+  modelOverride           String?   @map("model_override")
+  mtowOverrideKg          Float?    @map("mtow_override_kg")
+  maxRangeOverrideNm      Float?    @map("max_range_override_nm")
+  fuelBurnOverrideKgPerHour Float?  @map("fuel_burn_override_kg_per_hour")
+  noiseCertOverride       String?   @map("noise_cert_override")
+  currentOperatorId       String    @map("current_operator_id")
+  colors                  String?
+  operationType           String?   @map("operation_type")
+  previousOperators       String[]  @map("previous_operators")
+  yearOfManufacture       Int?      @map("year_of_manufacture")
+  serialNumber            String?   @map("serial_number")
+  insuranceValidUntil     DateTime? @map("insurance_valid_until")
+  airworthinessValidUntil DateTime? @map("airworthiness_valid_until")
+  homeBaseIcao            String?   @map("home_base_icao")
+  status                  String?   @default("Active")
+  notes                   String?
+
+  type     AircraftType @relation(fields: [icaoType], references: [icaoType])
+  operator Operator     @relation(fields: [currentOperatorId], references: [operatorId])
+
+  @@map("aircraft")
+}
+
+model Operator {
+  operatorId     String   @id @map("operator_id")
+  name           String
+  type           String?
+  address        String?
+  fleet          String[] // aircraft registrations
+  primaryContact String?  @map("primary_contact")
+  billingAddress String?  @map("billing_address")
+  paymentTerms   String?  @map("payment_terms")
+  status         String?  @default("Active")
+  notes          String?
+
+  aircraft Aircraft[]
+  clients  Client[]
+  channels ContactChannel[]
+
+  @@map("operators")
+}
+
+model Provider {
+  providerId    String   @id @map("provider_id")
+  name          String
+  serviceTypes  String[] @map("service_types")
+  scopeType     String   @map("scope_type") // ICAO | Country | Global
+  scope         String
+  workingHoursZ String?  @map("working_hours_z")
+  currency      String?
+  paymentTerms  String?  @map("payment_terms")
+  rating        Int?
+  contractActive Boolean @default(true) @map("contract_active")
+  notes         String?
+
+  services   Service[]
+  priceItems PriceItem[]
+  channels   ContactChannel[]
+
+  @@map("providers")
+}
+
+model CountryRule {
+  id                Int      @id @default(autoincrement())
+  countryIso2       String   @map("country_iso2")
+  serviceType       String   @map("service_type")
+  leadTimeHours     Int      @map("lead_time_hours")
+  workingDaysOnly   Boolean  @default(false) @map("working_days_only")
+  toleranceHours    Int      @default(0) @map("tolerance_hours")
+  exceptionAirports String[] @map("exception_airports")
+  docsRequired      String[] @map("docs_required")
+  notes             String?
+
+  country Country @relation(fields: [countryIso2], references: [iso2])
+
+  @@unique([countryIso2, serviceType])
+  @@map("country_rules")
+}
+
+model ICAORule {
+  icao                 String   @id
+  inheritedCountryIso2 String?  @map("inherited_country_iso2")
+  rules                Json // Array<{ ServiceType, LeadTimeHours, WorkingDaysOnly, Required, Notes }>
+  exceptions           String[]
+  preferredProviders   String[] @map("preferred_providers")
+
+  @@map("icao_rules")
+}
+
+model DocTemplate {
+  docType               String   @id @map("doc_type")
+  category              String?
+  description           String?
+  requiredFor           String[] @map("required_for")
+  validityRequired      Boolean  @default(false) @map("validity_required")
+  defaultValidityMonths Int?     @map("default_validity_months")
+  issuedBy              String?  @map("issued_by")
+  format                String?
+
+  @@map("doc_templates")
+}
+
+model PriceItem {
+  id          Int    @id @default(autoincrement())
+  providerId  String @map("provider_id")
+  serviceType String @map("service_type")
+  unit        String?
+  price       Float
+  currency    String @default("USD")
+  notes       String?
+
+  provider Provider @relation(fields: [providerId], references: [providerId])
+
+  @@map("price_list")
+}
+
+model ServiceTypeDef {
+  code      String  @id
+  label     String
+  category  String                    // 'Permit' | 'Handling' | 'Other'
+  variants  Json?                     // Array<{ code: string; label: string }>
+  active    Boolean @default(true)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@map("service_type_defs")
+}
+
+model LegPurposeDef {
+  code      String  @id
+  label     String
+  active    Boolean @default(true)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@map("leg_purpose_defs")
+}
+
+// ─── Transactional spine ────────────────────────────────────────────────────
+
+model Trip {
+  tripId        String   @id @map("trip_id")
+  client        String
+  clientId      String?  @map("client_id")
+  operator      String?
+  registration  String?
+  status        String   @default("Planning")
+  owner         String?
+  ownerUserId   String?  @map("owner_user_id")
+  team          String?
+  createdZ      DateTime @default(now()) @map("created_z")
+  supportRef    String?  @map("support_ref")
+  operationType String?  @map("operation_type")
+  missionType   String?  @map("mission_type")
+  notes         String?
+  billToAddress String?  @map("bill_to_address")
+  billToAddressLine1 String? @map("bill_to_address_line1")
+  billToAddressLine2 String? @map("bill_to_address_line2")
+  billToCity         String? @map("bill_to_city")
+  billToState        String? @map("bill_to_state")
+  billToPostalCode   String? @map("bill_to_postal_code")
+  billToCountry      String? @map("bill_to_country")
+  billToEmails       String[] @map("bill_to_emails")
+  aircraftIcaoType    String?  @map("aircraft_icao_type")
+  aircraftMtowKg      Float?   @map("aircraft_mtow_kg")
+  aircraftSerialNumber String? @map("aircraft_serial_number")
+
+  clientRecord Client? @relation(fields: [clientId], references: [clientId])
+  ownerUser    User?   @relation(fields: [ownerUserId], references: [id])
+  legs        Leg[]
+  stops       Stop[]
+  services    Service[]
+  docs        DocAttachment[]
+  comms       Comm[]
+  invoices    Invoice[]
+
+  @@index([status])
+  @@index([createdZ])
+  @@index([clientId])
+  @@map("trips")
+}
+
+// A client may or may not be an operator, and may manage aircraft, trips, or
+// services on behalf of a separate operator — linkedOperatorId is an
+// optional pointer to that Operator record, not a requirement that every
+// client have one. Kept as its own entity (not folded into Operator)
+// because most clients never need a fleet/aircraft relation at all.
+model Client {
+  clientId   String   @id @map("client_id")
+  name       String
+  isOperator Boolean  @default(false) @map("is_operator")
+  linkedOperatorId String? @map("linked_operator_id")
+
+  billingAddressLine1 String? @map("billing_address_line1")
+  billingAddressLine2 String? @map("billing_address_line2")
+  billingCity         String? @map("billing_city")
+  billingState        String? @map("billing_state")
+  billingPostalCode   String? @map("billing_postal_code")
+  billingCountry      String? @map("billing_country")
+
+  notes String?
+
+  linkedOperator Operator? @relation(fields: [linkedOperatorId], references: [operatorId])
+  trips          Trip[]
+  channels       ContactChannel[]
+
+  @@map("clients")
+}
+
+// Shared multi-channel contact list for Provider/Operator/Client/Person —
+// exactly one of the four owner FKs is set per row, same convention as
+// DocAttachment's tripId/personId/aircraftRegistration exclusivity
+// (enforced in ContactChannelsService, not a DB constraint).
+model ContactChannel {
+  id          Int      @id @default(autoincrement())
+  channelType String   @map("channel_type") // Email | Phone | SMS | WhatsApp
+  value       String
+  label       String?
+  preferred   Boolean  @default(false)
+  forBilling  Boolean  @default(false) @map("for_billing")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  providerId String? @map("provider_id")
+  operatorId String? @map("operator_id")
+  clientId   String? @map("client_id")
+  personId   String? @map("person_id")
+
+  provider Provider? @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
+  operator Operator? @relation(fields: [operatorId], references: [operatorId], onDelete: Cascade)
+  client   Client?   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  person   Person?   @relation(fields: [personId], references: [personId], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([operatorId])
+  @@index([clientId])
+  @@index([personId])
+  @@map("contact_channels")
+}
+
+// Single-row app-wide branding config (Item 11) — always read/written at
+// id "default", so there's exactly one row, ever. Deliberately separate
+// from DocAttachment for the logo/favicon files: DocAttachment requires
+// exactly one of tripId/personId/aircraftRegistration (docs.service.ts's
+// upload() enforces this), which a global asset has none of.
+model AppSettings {
+  id              String   @id @default("default")
+  appName         String   @default("VIQ")
+  tagline         String?
+  seoTitle        String?
+  seoDescription  String?
+  seoKeywords     String?
+  domain          String?
+  subdomains      String[]
+  logoPath        String?  @map("logo_path")
+  logoMimeType    String?  @map("logo_mime_type")
+  faviconPath     String?  @map("favicon_path")
+  faviconMimeType String?  @map("favicon_mime_type")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model TripIdCounter {
+  prefix String @id
+  count  Int    @default(0)
+
+  @@map("trip_id_counters")
+}
+
+model Leg {
+  legId              String   @id @map("leg_id")
+  tripId             String   @map("trip_id")
+  seq                Int
+  depIcao            String   @map("dep_icao")
+  arrIcao            String   @map("arr_icao")
+  etdZ               DateTime @map("etd_z")
+  etaZ               DateTime @map("eta_z")
+  blockHours         Float    @map("block_hours")
+  paxCount           Int      @default(0) @map("pax_count")
+  crewCount          Int      @default(0) @map("crew_count")
+  countriesOverflown String[] @map("countries_overflown")
+  revision           Int      @default(1)
+  callSign           String?  @map("call_sign")
+  purpose            String?
+  avoidFirs          String[] @map("avoid_firs")
+  includeFirs        String[] @map("include_firs")
+  routing            String?
+
+  trip        Trip                   @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  assignments LegPersonAssignment[]
+
+  @@index([tripId])
+  @@index([etdZ])
+  @@map("legs")
+}
+
+model Stop {
+  stopId          String   @id @map("stop_id")
+  tripId          String   @map("trip_id")
+  icao            String
+  arrZ            DateTime @map("arr_z")
+  depZ            DateTime @map("dep_z")
+  groundTimeHours Float    @map("ground_time_hours")
+  purpose         String
+
+  trip Trip @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("stops")
+}
+
+model Service {
+  svcId         String    @id @map("svc_id")
+  tripId        String    @map("trip_id")
+  scopeType     String    @map("scope_type") // TRIP | LEG | STOP | SEGMENT
+  scopeId       String    @map("scope_id")
+  serviceType   String    @map("service_type")
+  providerId    String?   @map("provider_id")
+  status        String    @default("Not Started")
+  refNumber     String    @default("") @map("ref_number")
+  basedOnEtdZ   DateTime  @map("based_on_etd_z")
+  requiredByZ   DateTime  @map("required_by_z")
+  urgency       String    @default("OK")
+  assignedTo    String    @default("Unassigned") @map("assigned_to")
+  notes         String    @default("")
+  subItems      Json?     @map("sub_items")
+  confirmedBy   String?   @map("confirmed_by")
+  confirmedAtZ  DateTime? @map("confirmed_at_z")
+  validityZ     DateTime? @map("validity_z")
+  sentToCaptain Boolean?  @map("sent_to_captain")
+  attachments   String[]
+  countryIso2   String?   @map("country_iso2")
+  icao          String?
+  variant       String?
+
+  trip     Trip      @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  provider Provider? @relation(fields: [providerId], references: [providerId])
+
+  @@index([tripId])
+  @@index([scopeType, scopeId])
+  @@index([urgency])
+  @@map("services")
+}
+
+model Person {
+  personId               String    @id @map("person_id")
+  name                   String
+  defaultRole            String?   @map("default_role")
+  licenceNumber          String?   @map("licence_number")
+  medicalValidUntil      DateTime? @map("medical_valid_until")
+  medicalClass           String?   @map("medical_class")
+  medicalExaminer        String?   @map("medical_examiner")
+  passportNumber         String?   @map("passport_number")
+  passportNationality    String?   @map("passport_nationality")
+  passportIssuingCountry String?   @map("passport_issuing_country")
+  passportExpiryDate     DateTime? @map("passport_expiry_date")
+  passportDateOfBirth    DateTime? @map("passport_date_of_birth")
+  passportSex            String?   @map("passport_sex")
+
+  ratings        PersonRating[]
+  legAssignments LegPersonAssignment[]
+  docs           DocAttachment[]
+  channels       ContactChannel[]
+
+  @@map("persons")
+}
+
+model PersonRating {
+  id               Int       @id @default(autoincrement())
+  personId         String    @map("person_id")
+  ratingType       String    @map("rating_type")
+  issuingAuthority String?   @map("issuing_authority")
+  issueDate        DateTime? @map("issue_date")
+  expiryDate       DateTime? @map("expiry_date")
+  notes            String?
+
+  person Person @relation(fields: [personId], references: [personId], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_ratings")
+}
+
+model LegPersonAssignment {
+  id                  Int       @id @default(autoincrement())
+  legId               String    @map("leg_id")
+  personId            String    @map("person_id")
+  role                String
+  commercialFlightEta DateTime? @map("commercial_flight_eta")
+  hotel               String?
+
+  leg    Leg    @relation(fields: [legId], references: [legId], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [personId], onDelete: Cascade)
+
+  @@unique([legId, personId])
+  @@index([legId])
+  @@index([personId])
+  @@map("leg_person_assignments")
+}
+
+model DocAttachment {
+  docId                String    @id @map("doc_id")
+  tripId               String?   @map("trip_id")
+  svcId                String?   @map("svc_id")
+  personId             String?   @map("person_id")
+  aircraftRegistration String?   @map("aircraft_registration")
+  docType              String    @map("doc_type")
+  fileName             String    @map("file_name")
+  filePath             String    @map("file_path")
+  mimeType             String    @map("mime_type")
+  fileSizeBytes         Int       @map("file_size_bytes")
+  uploadedZ            DateTime  @default(now()) @map("uploaded_z")
+  uploadedBy           String    @map("uploaded_by")
+  validUntil            DateTime? @map("valid_until")
+  ocrStatus             String?   @map("ocr_status")
+  ocrText               String?   @map("ocr_text")
+  ocrStructuredFields   Json?     @map("ocr_structured_fields")
+  ocrError              String?   @map("ocr_error")
+  ocrProcessedAt        DateTime? @map("ocr_processed_at")
+  verifiedFields        Json?     @map("verified_fields")
+  verifiedBy            String?   @map("verified_by")
+  verifiedAt            DateTime? @map("verified_at")
+
+  trip   Trip?   @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  person Person? @relation(fields: [personId], references: [personId], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([personId])
+  @@index([aircraftRegistration])
+  @@map("docs")
+}
+
+model Comm {
+  commId     String   @id @map("comm_id")
+  direction  String
+  tripId     String   @map("trip_id")
+  svcId      String?  @map("svc_id")
+  token      String?
+  from       String
+  to         String
+  subject    String
+  body       String
+  timestampZ DateTime @default(now()) @map("timestamp_z")
+  status     String   @default("Draft")
+  sentAtZ      DateTime? @map("sent_at_z")
+  errorMessage String?   @map("error_message")
+
+  trip Trip @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("comms")
+}
+
+model AuditEntry {
+  id         Int      @id @default(autoincrement())
+  timestampZ DateTime @default(now()) @map("timestamp_z")
+  user       String
+  table      String
+  recordId   String   @map("record_id")
+  field      String
+  oldValue   String   @map("old_value")
+  newValue   String   @map("new_value")
+
+  @@index([table, recordId])
+  @@index([timestampZ])
+  @@map("audit_log")
+}
+
+model Invoice {
+  invoiceId     String    @id @map("invoice_id")
+  tripId        String    @map("trip_id")
+  status        String    @default("Draft")
+  issueDateZ    DateTime  @map("issue_date_z")
+  dueDateZ      DateTime  @map("due_date_z")
+  lineItems     Json      @map("line_items")
+  subtotal      Float
+  taxRate       Float     @map("tax_rate")
+  taxAmount     Float     @map("tax_amount")
+  total         Float
+  currency      String    @default("USD")
+  sentTo        String?   @map("sent_to")
+  sentAtZ       DateTime? @map("sent_at_z")
+  paidAtZ       DateTime? @map("paid_at_z")
+  paymentMethod String?   @map("payment_method")
+  qrCode        String?   @map("qr_code")
+  notes         String    @default("")
+  attachments   String[]
+  changeLog     Json      @map("change_log")
+
+  trip Trip @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("invoices")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         String
+  active       Boolean  @default(true)
+  // Profile fields (Item 9) — nullable at the DB level since existing seeded
+  // users predate them (no safe backfill value exists for a real name/email);
+  // CreateUserDto enforces firstName/lastName/email as required for new users.
+  firstName    String?  @map("first_name")
+  middleName   String?  @map("middle_name")
+  lastName     String?  @map("last_name")
+  email        String?  @unique
+  phone        String?
+  team         String?
+  company      String?
+  designation  String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ownedTrips Trip[]
+
+  @@map("users")
+}
