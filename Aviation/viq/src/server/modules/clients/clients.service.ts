@@ -44,7 +44,8 @@ export class ClientsService {
     const { user: _user, channels, ...rest } = dto;
     const client = await this.prisma.client.update({ where: { clientId }, data: rest });
     if (channels !== undefined) await this.contactChannels.replace({ clientId }, channels);
-    await this.audit.logDiff(user, 'Client', clientId, before as unknown as Record<string, unknown>, client as unknown as Record<string, unknown>);
+    const { channels: _beforeChannels, ...beforeForDiff } = before as unknown as Record<string, unknown> & { channels?: unknown };
+    await this.audit.logDiff(user, 'Client', clientId, beforeForDiff, client as unknown as Record<string, unknown>);
     return this.findOne(clientId);
   }
 
