@@ -136,15 +136,25 @@ export class DocumentsService {
     });
 
     const job = document.processingJobs[0];
-    const queueJob = await this.queue.add(
-      'process',
-      { documentId, jobId: job.id },
-      { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
-    );
-    await this.prisma.documentProcessingJob.update({
-      where: { id: job.id },
-      data: { queueJobId: String(queueJob.id) },
-    });
+    try {
+      const queueJob = await this.queue.add(
+        'process',
+        { documentId, jobId: job.id },
+        { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
+      );
+      await this.prisma.documentProcessingJob.update({
+        where: { id: job.id },
+        data: { queueJobId: String(queueJob.id) },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown queue error';
+      await this.prisma.documentProcessingJob.update({
+        where: { id: job.id },
+        data: { status: 'FAILED', errorMessage: message, completedAtZ: new Date() },
+      });
+      await this.prisma.document.update({ where: { documentId }, data: { status: 'PROCESSING_FAILED' } });
+      throw e;
+    }
 
     await this.audit.log(dto.uploadedBy, 'Document', documentId, 'Uploaded', '', file.originalname);
     return document;
