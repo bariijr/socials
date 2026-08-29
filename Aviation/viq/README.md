@@ -1637,6 +1637,30 @@ not-yet-started follow-ups, decided one at a time the same way this one was.
   a real browser to confirm the bottom-sheet and narrowing behavior look
   right at real tablet/phone widths.
 
+## VIQ Document Intelligence — Phase 1: Foundation (2026-08-29)
+
+New, fully parallel `documents` data model and module — the foundation for
+a multi-phase document ingestion/OCR/extraction/verification rebuild. This
+phase adds no new UI and does not touch the existing `docs` module,
+`DocAttachment` model, or `DocVerifyDialog.tsx`, all of which continue
+working exactly as before.
+
+- 7 new Prisma models: `Document`, `DocumentVersion`, `DocumentSection`,
+  `DocumentEntityLink` (many-to-many owner links, replacing
+  `DocAttachment`'s fixed 3-column single-owner shape),
+  `DocumentFamily`/`DocumentTypeDefinition` (classification scaffolding,
+  seeded with the 7 first-release document types), `DocumentProcessingJob`.
+- New `POST /documents/upload` endpoint reusing the legacy module's
+  MIME-allowlist + magic-byte validation approach, plus SHA-256 hashing
+  for future duplicate detection.
+- `bullmq` + `@nestjs/bullmq` job queue on the app's existing Redis
+  connection; a stub processor proves the async status lifecycle
+  (`UPLOADED → SECURITY_SCAN → QUEUED → READY_FOR_REVIEW`) end-to-end with
+  no real OCR/extraction yet — that begins in Phase 2.
+- `prisma/migrate-docattachment-to-documents.js` — a read-only,
+  re-runnable script that backfilled every existing `DocAttachment` row
+  into the new schema without modifying or deleting the originals.
+
 ## What's not done yet
 
 **The `dataStore.ts` → API rewire is complete.** Every transactional
