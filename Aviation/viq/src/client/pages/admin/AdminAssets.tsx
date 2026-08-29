@@ -962,7 +962,7 @@ export default function AdminAssets() {
       </div>
 
       <Tabs defaultValue="aircraft">
-        <TabsList>
+        <TabsList className="mb-4 flex-wrap">
           <TabsTrigger value="aircraft" className="flex items-center gap-1"><Plane className="h-3.5 w-3.5" /> Aircraft</TabsTrigger>
           <TabsTrigger value="vendors" className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> Vendors</TabsTrigger>
           <TabsTrigger value="airports" className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Airports</TabsTrigger>

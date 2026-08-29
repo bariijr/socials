@@ -30,7 +30,11 @@ export function useViewMode(storageKey: string, fallback: ViewMode = 'tile') {
   // Every caller of this hook gets this for free; nothing else changes.
   const isMobile = !useMediaQuery('(min-width: 768px)');
   const effectiveViewMode = viewMode === 'details' && isMobile ? 'tile' : viewMode;
-  return [effectiveViewMode, setViewMode] as const;
+  // Third element is the raw, never-degraded stored preference — use this
+  // (not the effective mode) to drive the ViewModeToggle UI's highlighted
+  // state, so the toggle always reflects what the user actually chose, even
+  // while the render branch above is using the degraded effective mode.
+  return [effectiveViewMode, setViewMode, viewMode] as const;
 }
 
 export function ViewModeToggle({ value, onChange }: { value: ViewMode; onChange: (mode: ViewMode) => void }) {

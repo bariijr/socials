@@ -28,7 +28,7 @@ export function MasterDetailList<T>({
   emptyText?: string;
 }) {
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useViewMode(viewStorageKey, 'tile');
+  const [viewMode, setViewMode, viewModeStored] = useViewMode(viewStorageKey, 'tile');
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
@@ -58,7 +58,7 @@ export function MasterDetailList<T>({
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <ViewModeToggle value={viewMode} onChange={setViewMode} />
+        <ViewModeToggle value={viewModeStored} onChange={setViewMode} />
       </div>
       <div className={cn('flex-1 overflow-auto pr-1', gridClass)}>
         {filtered.map((item) => {
