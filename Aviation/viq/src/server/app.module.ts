@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './prisma/prisma.module';
 import { ThrottlingModule } from './modules/throttling/throttling.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -19,6 +20,7 @@ import { PersonsModule } from './modules/persons/persons.module';
 import { PersonRatingsModule } from './modules/person-ratings/person-ratings.module';
 import { CommsModule } from './modules/comms/comms.module';
 import { DocsModule } from './modules/docs/docs.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { UsersModule } from './modules/users/users.module';
@@ -35,6 +37,11 @@ import { HealthModule } from './modules/health/health.module';
     }),
     PrismaModule,
     ThrottlingModule,
+    BullModule.forRootAsync({
+      useFactory: () => ({
+        connection: { url: process.env.REDIS_URL || 'redis://localhost:6389' },
+      }),
+    }),
     AuthModule,
     AuditModule,
     ContactsModule,
@@ -53,6 +60,7 @@ import { HealthModule } from './modules/health/health.module';
     SettingsModule,
     CommsModule,
     DocsModule,
+    DocumentsModule,
     InvoicesModule,
     QuotesModule,
     HealthModule,
