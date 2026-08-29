@@ -10,11 +10,13 @@ import {
   getRosterExpiryStatuses,
   getCountryFeeList, saveCountryFee, deleteCountryFee,
   getClientList, saveClient, deleteClient,
+  getPreferredContact,
 } from '@/lib/dataStore';
 import type { RosterExpiryEntry, Operator, CountryFee, Client } from '@/lib/dataStore';
-import type { Aircraft, Provider, Airport, Country, Person, PersonRole, ServiceType } from '@/data/types';
+import type { Aircraft, Provider, Airport, Country, Person, PersonRole, ServiceType, ContactChannel } from '@/data/types';
 import { useAuth } from '@/lib/authContext';
 import { ExpiryBadge } from '@/components/ExpiryBadge';
+import { ContactChannelEditor } from '@/components/ContactChannelEditor';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -200,8 +202,7 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
   const [name, setName] = useState(provider?.Name || '');
   const [scopeType, setScopeType] = useState<Provider['ScopeType']>(provider?.ScopeType || 'ICAO');
   const [scope, setScope] = useState(provider?.Scope || '');
-  const [email, setEmail] = useState(provider?.Email || '');
-  const [aogContact, setAogContact] = useState(provider?.AOGContact || '');
+  const [channels, setChannels] = useState<ContactChannel[]>(provider?.Channels ?? []);
   const [workingHours, setWorkingHours] = useState(provider?.WorkingHoursZ || 'H24');
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>(provider?.ServiceTypes || []);
 
@@ -219,10 +220,8 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
       ServiceTypes: serviceTypes,
       ScopeType: scopeType,
       Scope: scopeType === 'Global' ? 'Global' : scope.trim(),
-      Email: email.trim(),
-      AOGContact: aogContact.trim(),
       WorkingHoursZ: workingHours.trim(),
-      Contacts: provider?.Contacts ?? [{ Label: 'Primary', Email: email.trim() }],
+      Channels: channels,
     });
     onSaved(providerId.trim());
   };
@@ -265,16 +264,7 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>AOG Contact</Label>
-            <Input value={aogContact} onChange={(e) => setAogContact(e.target.value)} />
-          </div>
-        </div>
+        <ContactChannelEditor channels={channels} onChange={setChannels} />
         <div className="space-y-1">
           <Label>Working Hours</Label>
           <Input value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} />
@@ -500,8 +490,7 @@ function PersonPanel({ person, isNew, canEdit, onSaved, onDeleted, onCancel }: {
 }) {
   const [name, setName] = useState(person?.Name || '');
   const [role, setRole] = useState<PersonRole>(person?.DefaultRole || 'Pax');
-  const [phone, setPhone] = useState(person?.Phone || '');
-  const [email, setEmail] = useState(person?.Email || '');
+  const [channels, setChannels] = useState<ContactChannel[]>(person?.Channels ?? []);
   const [licenceNumber, setLicenceNumber] = useState(person?.LicenceNumber || '');
 
   const valid = name.trim();
@@ -513,8 +502,7 @@ function PersonPanel({ person, isNew, canEdit, onSaved, onDeleted, onCancel }: {
       PersonID: id,
       Name: name.trim(),
       DefaultRole: role,
-      Phone: phone.trim() || undefined,
-      Email: email.trim() || undefined,
+      Channels: channels,
       LicenceNumber: licenceNumber.trim() || undefined,
     });
     onSaved(id);
@@ -553,16 +541,7 @@ function PersonPanel({ person, isNew, canEdit, onSaved, onDeleted, onCancel }: {
             </Select>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-        </div>
+        <ContactChannelEditor channels={channels} onChange={setChannels} />
         <div className="space-y-1">
           <Label>Licence Number (crew)</Label>
           <Input value={licenceNumber} onChange={(e) => setLicenceNumber(e.target.value)} />
@@ -589,8 +568,7 @@ function OperatorPanel({ operator, isNew, isAdmin, onSaved, onDeleted, onCancel 
   const [name, setName] = useState(operator?.Name || '');
   const [address, setAddress] = useState(operator?.Address || '');
   const [billingAddress, setBillingAddress] = useState(operator?.BillingAddress || '');
-  const [email, setEmail] = useState(operator?.Email || '');
-  const [phone, setPhone] = useState(operator?.Phone || '');
+  const [channels, setChannels] = useState<ContactChannel[]>(operator?.Channels ?? []);
   const [primaryContact, setPrimaryContact] = useState(operator?.PrimaryContact || '');
   const [paymentTerms, setPaymentTerms] = useState(operator?.PaymentTerms || '');
 
@@ -604,8 +582,7 @@ function OperatorPanel({ operator, isNew, isAdmin, onSaved, onDeleted, onCancel 
       Type: operator?.Type || '',
       Address: address.trim(),
       BillingAddress: billingAddress.trim(),
-      Email: email.trim(),
-      Phone: phone.trim(),
+      Channels: channels,
       Fleet: operator?.Fleet || [],
       PrimaryContact: primaryContact.trim(),
       PaymentTerms: paymentTerms.trim(),
@@ -639,16 +616,7 @@ function OperatorPanel({ operator, isNew, isAdmin, onSaved, onDeleted, onCancel 
           <Label>Billing Address (defaults to Address if blank)</Label>
           <Input value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-        </div>
+        <ContactChannelEditor channels={channels} onChange={setChannels} />
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Primary Contact</Label>
@@ -680,15 +648,13 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
   const [name, setName] = useState(client?.Name || '');
   const [isOperator, setIsOperator] = useState(client?.IsOperator || false);
   const [linkedOperatorId, setLinkedOperatorId] = useState(client?.LinkedOperatorID || '');
-  const [contactEmail, setContactEmail] = useState(client?.ContactEmail || '');
-  const [contactPhone, setContactPhone] = useState(client?.ContactPhone || '');
+  const [channels, setChannels] = useState<ContactChannel[]>(client?.Channels ?? []);
   const [addr1, setAddr1] = useState(client?.BillingAddressLine1 || '');
   const [addr2, setAddr2] = useState(client?.BillingAddressLine2 || '');
   const [city, setCity] = useState(client?.BillingCity || '');
   const [state, setState] = useState(client?.BillingState || '');
   const [postalCode, setPostalCode] = useState(client?.BillingPostalCode || '');
   const [country, setCountry] = useState(client?.BillingCountry || '');
-  const [billingEmails, setBillingEmails] = useState((client?.BillingEmails || []).join(', '));
   const [notes, setNotes] = useState(client?.Notes || '');
 
   const valid = name.trim();
@@ -701,15 +667,13 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
       Name: name.trim(),
       IsOperator: isOperator,
       LinkedOperatorID: linkedOperatorId || undefined,
-      ContactEmail: contactEmail.trim() || undefined,
-      ContactPhone: contactPhone.trim() || undefined,
       BillingAddressLine1: addr1.trim() || undefined,
       BillingAddressLine2: addr2.trim() || undefined,
       BillingCity: city.trim() || undefined,
       BillingState: state.trim() || undefined,
       BillingPostalCode: postalCode.trim() || undefined,
       BillingCountry: country.trim() || undefined,
-      BillingEmails: billingEmails.split(',').map((e) => e.trim()).filter(Boolean),
+      Channels: channels,
       Notes: notes.trim() || undefined,
     });
     onSaved(id);
@@ -725,16 +689,7 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
           <Label>Name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label>Contact Email</Label>
-            <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Contact Phone</Label>
-            <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
-          </div>
-        </div>
+        <ContactChannelEditor channels={channels} onChange={setChannels} />
         <div className="flex items-center gap-2">
           <Checkbox checked={isOperator} onCheckedChange={(v) => setIsOperator(!!v)} id="client-is-operator" />
           <Label htmlFor="client-is-operator">This client is (or manages on behalf of) an operator</Label>
@@ -775,10 +730,6 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
             <Label>Country</Label>
             <Input value={country} onChange={(e) => setCountry(e.target.value)} />
           </div>
-        </div>
-        <div className="space-y-1">
-          <Label>Billing Emails (comma-separated)</Label>
-          <Input value={billingEmails} onChange={(e) => setBillingEmails(e.target.value)} placeholder="billing@client.com, ops@client.com" />
         </div>
         <div className="space-y-1">
           <Label>Notes</Label>
@@ -1042,8 +993,8 @@ export default function AdminAssets() {
                     viewMode={viewMode} selected={selected}
                     icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
                     title={p.Name}
-                    subtitle={p.Email}
-                    meta={<div className="text-xs text-muted-foreground">Scope: {p.Scope} | AOG: {p.AOGContact}</div>}
+                    subtitle={getPreferredContact(p.Channels, 'Email')}
+                    meta={<div className="text-xs text-muted-foreground">Scope: {p.Scope} | Phone: {getPreferredContact(p.Channels, 'Phone') || '—'}</div>}
                     badges={<>
                       <Badge variant="outline" className="text-[10px]">{p.ProviderID}</Badge>
                       {p.ServiceTypes.slice(0, 3).map((st) => <Badge key={st} variant="secondary" className="text-[10px]">{st}</Badge>)}
@@ -1163,7 +1114,7 @@ export default function AdminAssets() {
             list={
               <MasterDetailList
                 title="Persons" subtitle={`${persons.length} total`} items={persons}
-                getId={(p) => p.PersonID} searchText={(p) => `${p.Name} ${p.DefaultRole || ''} ${p.Phone || ''}`}
+                getId={(p) => p.PersonID} searchText={(p) => `${p.Name} ${p.DefaultRole || ''} ${getPreferredContact(p.Channels, 'Phone') || ''}`}
                 viewStorageKey="viq_assets_persons_view" selectedId={personSel.selectedId || (personSel.adding ? 'new' : null)}
                 onSelect={personSel.select} onAddNew={personSel.startAdd} addLabel="Add Person" canAdd={canEdit}
                 emptyText="No persons yet"
@@ -1172,7 +1123,7 @@ export default function AdminAssets() {
                     viewMode={viewMode} selected={selected}
                     icon={<Users className="h-4 w-4 text-muted-foreground" />}
                     title={p.Name}
-                    subtitle={p.Phone}
+                    subtitle={getPreferredContact(p.Channels, 'Phone')}
                     meta={p.DefaultRole && <div className="text-xs text-muted-foreground">Role: {p.DefaultRole}</div>}
                     badges={<>
                       {p.DefaultRole && <Badge variant="secondary" className="text-[10px]">{p.DefaultRole}</Badge>}
@@ -1294,7 +1245,7 @@ export default function AdminAssets() {
             list={
               <MasterDetailList
                 title="Clients" subtitle={`${clients.length} total`} items={clients}
-                getId={(c) => c.ClientID} searchText={(c) => `${c.Name} ${c.ContactEmail || ''}`}
+                getId={(c) => c.ClientID} searchText={(c) => `${c.Name} ${getPreferredContact(c.Channels, 'Email') || ''}`}
                 viewStorageKey="viq_assets_clients_view" selectedId={clientSel.selectedId || (clientSel.adding ? 'new' : null)}
                 onSelect={clientSel.select} onAddNew={clientSel.startAdd} addLabel="Add Client" canAdd={canEdit}
                 emptyText="No clients yet — added here or from the New Trip form"
@@ -1303,7 +1254,7 @@ export default function AdminAssets() {
                     viewMode={viewMode} selected={selected}
                     icon={<Briefcase className="h-4 w-4 text-muted-foreground" />}
                     title={c.Name}
-                    subtitle={[c.ContactEmail, c.ContactPhone].filter(Boolean).join(' · ') || 'No contact info on file'}
+                    subtitle={[getPreferredContact(c.Channels, 'Email'), getPreferredContact(c.Channels, 'Phone')].filter(Boolean).join(' · ') || 'No contact info on file'}
                     meta={[c.BillingAddressLine1, c.BillingCity, c.BillingCountry].filter(Boolean).length > 0 && (
                       <div className="text-xs text-muted-foreground">{[c.BillingAddressLine1, c.BillingCity, c.BillingCountry].filter(Boolean).join(', ')}</div>
                     )}
