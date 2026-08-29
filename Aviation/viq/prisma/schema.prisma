@@ -566,6 +566,129 @@ model DocAttachment {
   @@map("docs")
 }
 
+model DocumentFamily {
+  code      String @id
+  label     String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  types     DocumentTypeDefinition[]
+  documents Document[]
+
+  @@map("document_families")
+}
+
+model DocumentTypeDefinition {
+  code             String  @id
+  label            String
+  familyCode       String  @map("family_code")
+  description      String?
+  extractionSchema Json?   @map("extraction_schema")
+  expiryRequired   Boolean @default(false) @map("expiry_required")
+  active           Boolean @default(true)
+  sortOrder        Int     @default(0) @map("sort_order")
+
+  family    DocumentFamily @relation(fields: [familyCode], references: [code])
+  documents Document[]
+
+  @@index([familyCode])
+  @@map("document_type_definitions")
+}
+
+model Document {
+  documentId            String    @id @map("document_id")
+  familyCode            String?   @map("family_code")
+  typeCode              String?   @map("type_code")
+  originalFileName      String    @map("original_file_name")
+  mimeType               String    @map("mime_type")
+  detectedMimeType        String?   @map("detected_mime_type")
+  fileSizeBytes             Int       @map("file_size_bytes")
+  sha256                     String?   @map("sha256")
+  status                      String    @default("UPLOADED")
+  uploadedBy                   String    @map("uploaded_by")
+  uploadedZ                     DateTime  @default(now()) @map("uploaded_z")
+  sourceDocAttachmentId           String?   @unique @map("source_doc_attachment_id")
+
+  family         DocumentFamily?         @relation(fields: [familyCode], references: [code])
+  type           DocumentTypeDefinition? @relation(fields: [typeCode], references: [code])
+  versions       DocumentVersion[]
+  entityLinks    DocumentEntityLink[]
+  processingJobs DocumentProcessingJob[]
+
+  @@index([sha256])
+  @@index([status])
+  @@index([familyCode])
+  @@index([typeCode])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id                   Int       @id @default(autoincrement())
+  documentId           String    @map("document_id")
+  versionNumber        Int       @default(1) @map("version_number")
+  storagePath          String    @map("storage_path")
+  ocrText              String?   @map("ocr_text")
+  ocrStructuredFields  Json?     @map("ocr_structured_fields")
+  verifiedFields       Json?     @map("verified_fields")
+  verifiedBy           String?   @map("verified_by")
+  verifiedAtZ          DateTime? @map("verified_at_z")
+  validUntil           DateTime? @map("valid_until")
+  supersedesVersionId  Int?      @map("supersedes_version_id")
+  createdAtZ           DateTime  @default(now()) @map("created_at_z")
+
+  document Document          @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
+  sections DocumentSection[]
+
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+model DocumentSection {
+  id              Int     @id @default(autoincrement())
+  versionId       Int     @map("version_id")
+  typeCode        String? @map("type_code")
+  startPage       Int     @map("start_page")
+  endPage         Int     @map("end_page")
+  extractedFields Json?   @map("extracted_fields")
+  verifiedFields  Json?   @map("verified_fields")
+
+  version DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@map("document_sections")
+}
+
+model DocumentEntityLink {
+  id               Int     @id @default(autoincrement())
+  documentId       String  @map("document_id")
+  entityType       String  @map("entity_type")
+  entityId         String  @map("entity_id")
+  relationshipType String? @map("relationship_type")
+  verified         Boolean @default(false)
+
+  document Document @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([entityType, entityId])
+  @@map("document_entity_links")
+}
+
+model DocumentProcessingJob {
+  id            Int       @id @default(autoincrement())
+  documentId    String    @map("document_id")
+  queueJobId    String?   @map("queue_job_id")
+  status        String    @default("QUEUED")
+  errorMessage  String?   @map("error_message")
+  attempts      Int       @default(0)
+  createdAtZ    DateTime  @default(now()) @map("created_at_z")
+  completedAtZ  DateTime? @map("completed_at_z")
+
+  document Document @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([status])
+  @@map("document_processing_jobs")
+}
+
 model Comm {
   commId     String   @id @map("comm_id")
   direction  String
