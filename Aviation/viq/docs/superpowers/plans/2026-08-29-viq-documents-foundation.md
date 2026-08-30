@@ -924,3 +924,26 @@ working exactly as before.
 git add README.md
 git commit -m "Document VIQ Document Intelligence Phase 1 (Foundation) in the changelog"
 ```
+
+---
+
+## Post-implementation corrections (for Phase 2 planning accuracy)
+
+Found by the final whole-branch review after all 4 tasks shipped. Recorded
+here rather than silently rewritten into the task text above, since that
+text is what was actually reviewed and executed.
+
+- **Task 4's curl examples omitted the `/api` global prefix.** `main.ts`
+  calls `app.setGlobalPrefix('api')`, so every endpoint in this plan is
+  actually under `/api/documents/...` and `/api/docs/...`, not the bare
+  paths Task 4's brief showed. Task 4's implementer caught this live and
+  used the correct `/api/...` paths throughout — the shipped verification
+  is accurate; only this plan document's example paths were wrong.
+- **The migration script's `entityLinksFor()` omits `DocAttachment.svcId`.**
+  `DocAttachment` has a fourth owner column (`svcId`, alongside
+  `tripId`/`personId`/`aircraftRegistration`) that this plan's spec and
+  Task 3's script both missed — `'Service'` was already a valid
+  `entityType` in the new model, just never wired into the migration.
+  Fixed in a post-review fix round (see the plan's commit history after
+  `9fafe71e`) — any future re-derivation of this plan's scope for Phase 2
+  should treat `svcId` as a fourth owner column, not three.
