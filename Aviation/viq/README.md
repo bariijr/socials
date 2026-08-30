@@ -1661,6 +1661,63 @@ working exactly as before.
   re-runnable script that backfilled every existing `DocAttachment` row
   into the new schema without modifying or deleting the originals.
 
+## Multi-channel contacts — `ContactChannel` model (2026-08-30)
+
+Sub-project 1 of 3 in the contact-channels overhaul — a settings
+multi-provider backend and an in-app mail client are separate,
+not-yet-started follow-ups. Replaces every single-value contact field on
+Provider/Operator/Client/Person with a shared `ContactChannel[]` list, so
+any entity can carry multiple typed entries (Email/Phone/SMS/WhatsApp)
+instead of exactly one email and one phone.
+
+- New `ContactChannel` Prisma model (table `contact_channels`,
+  `prisma/schema.prisma`) — `channelType` (`'Email'|'Phone'|'SMS'|'WhatsApp'`),
+  `value`, `label`, `preferred`, `forBilling`, `sortOrder`, and exactly one
+  of `providerId`/`operatorId`/`clientId`/`personId` set per row (enforced
+  in `ContactChannelsService`, not a DB constraint — same convention as
+  `DocAttachment`'s owner-exclusivity). A `channels` back-relation was
+  added to all four owner models.
+- A hand-written migration
+  (`prisma/migrations/20260828120000_add_contact_channels/migration.sql`)
+  backfilled every pre-existing value into `contact_channels` before
+  dropping the legacy columns: `providers.email`/`aog_contact`,
+  `operators.email`/`phone`, `clients.contact_email`/`contact_phone`/
+  `billing_emails` (an array column — `unnest()` produced one row per
+  address, each marked `forBilling: true`), and `persons.phone`/`email` —
+  8 scalar columns plus the `billing_emails` array, across the 4 entities.
+  Every migrated single value was marked `preferred: true`, since it was
+  the only value that entity had.
+- A new shared `ContactChannelsService` (`src/server/modules/contacts/`,
+  registered as a `@Global()` `ContactsModule` so no entity module needs to
+  import it explicitly) does whole-list saves — `.replace(owner, channels)`
+  deletes and recreates every row for that owner on each save, no separate
+  CRUD routes — and exports `CONTACT_CHANNELS_INCLUDE`, the
+  `orderBy: sortOrder` Prisma `include` fragment every entity read now
+  attaches. `src/server/modules/reference/reference.service.ts` (Providers,
+  Operators), `src/server/modules/clients/clients.service.ts`, and
+  `src/server/modules/persons/persons.service.ts` all now read and write
+  `channels` instead of the dropped columns.
+- Client-side, `src/client/lib/dataStore.ts` gained the `ContactChannel`
+  type plus `getPreferredContact(channels, type)` and
+  `setPreferredChannelValue(channels, type, value)` helpers; every
+  Provider/Operator/Client/Person mapper and save function now round-trips
+  `Channels` instead of the old flat fields.
+- A new shared `<ContactChannelEditor>` component
+  (`src/client/components/ContactChannelEditor.tsx`) — a repeating add/
+  remove/edit list (type, value, label, Preferred, and a Billing checkbox
+  on Email rows) — replaced the single Email/Phone/AOG Contact/Billing
+  Emails inputs in all four of `AdminAssets.tsx`'s detail panels (Vendors,
+  Operators, Clients, Persons).
+- Every other read/write site was updated to the new shape:
+  `TripDetail.tsx`'s `VendorContactCard` now renders one clickable pill per
+  channel (`tel:`/`sms:`/`mailto:`/`wa.me`) instead of a hardcoded
+  phone+email pair, and its crew/pax register CONTACT column now calls
+  `getPreferredContact`; `PersonDetail.tsx`'s biodata Phone/Email fields,
+  `ComposeDrawer.tsx`'s Email recipient list, `ReferencePage.tsx`'s
+  Providers tile and details views, and `NewTripWizard.tsx`'s quick-add
+  person row all now read and write through `Channels` rather than the
+  removed flat fields.
+
 ## What's not done yet
 
 **The `dataStore.ts` → API rewire is complete.** Every transactional
