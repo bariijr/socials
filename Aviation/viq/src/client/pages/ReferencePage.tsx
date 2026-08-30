@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import {
   getAirportList, getCountryList, getAircraftList, getProviderList, getCountryRuleList,
   saveAirport, saveCountry, saveAircraft, saveProvider, saveCountryRule, deleteCountryRule,
-  getServiceTypes, saveServiceType, getLegPurposes, saveLegPurpose,
+  getServiceTypes, saveServiceType, getLegPurposes, saveLegPurpose, getPreferredContact,
 } from '@/lib/dataStore';
 import { useAuth } from '@/lib/authContext';
 import type { ServiceTypeDef, LegPurposeDef, CountryRule, Provider } from '@/data/types';
@@ -647,7 +647,7 @@ export default function ReferencePage() {
           <div className="mb-4 flex items-center justify-end gap-2">
             <Input placeholder="Search providers..." value={providerFilter.query} onChange={(e) => providerFilter.setQuery(e.target.value)} className="h-9 w-56" />
             <ViewModeToggle value={providerViewStored} onChange={setProviderView} />
-            <Button size="sm" variant="outline" onClick={() => exportToExcel(providers.map(({ Contacts, ...rest }) => rest), 'providers.xlsx', 'Providers')}>
+            <Button size="sm" variant="outline" onClick={() => exportToExcel(providers.map(({ Channels, ...rest }) => rest), 'providers.xlsx', 'Providers')}>
               <Download className="h-4 w-4" /> Download
             </Button>
             <label className="inline-flex">
@@ -666,8 +666,7 @@ export default function ReferencePage() {
                         ProviderID: row.ProviderID, Name: row.Name,
                         ServiceTypes: parseListCell(row.ServiceTypes),
                         ScopeType: row.ScopeType as Provider['ScopeType'], Scope: row.Scope,
-                        Email: row.Email, AOGContact: row.AOGContact,
-                        WorkingHoursZ: row.WorkingHoursZ, Contacts: [],
+                        WorkingHoursZ: row.WorkingHoursZ, Channels: [],
                       });
                       ok++;
                     } catch (err) {
@@ -703,8 +702,8 @@ export default function ReferencePage() {
                     <TableCell className="font-mono text-xs">{p.ProviderID}</TableCell>
                     <TableCell>{p.Scope}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{p.ServiceTypes.join(', ')}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{p.Email}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{p.AOGContact}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{getPreferredContact(p.Channels, 'Email')}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{getPreferredContact(p.Channels, 'Phone')}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -727,11 +726,11 @@ export default function ReferencePage() {
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Fuel className="h-3 w-3" />
-                        {p.Email}
+                        {getPreferredContact(p.Channels, 'Email')}
                       </div>
                       <div className="flex items-center gap-1">
                         <Phone className="h-3 w-3" />
-                        {p.AOGContact}
+                        {getPreferredContact(p.Channels, 'Phone')}
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
@@ -752,7 +751,7 @@ export default function ReferencePage() {
                   icon={<Phone className="h-4 w-4 text-muted-foreground" />}
                   title={p.Name}
                   subtitle={p.Scope}
-                  meta={<div className="text-xs text-muted-foreground">{p.Email}</div>}
+                  meta={<div className="text-xs text-muted-foreground">{getPreferredContact(p.Channels, 'Email')}</div>}
                   badges={p.ServiceTypes.slice(0, 3).map((st) => <Badge key={st} variant="secondary" className="text-[10px]">{st}</Badge>)}
                 />
               ))}
