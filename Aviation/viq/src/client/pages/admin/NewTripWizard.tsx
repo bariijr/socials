@@ -8,6 +8,7 @@ import {
   getAircraftType, getAircraftList, saveAircraft, normalizeRegistration,
   computeCountriesOverflown, generateOverflightServices, generateArrivalServices,
   getAirport, getCountry, getClientList, saveClient, getUserDirectory,
+  getPreferredContact, setPreferredChannelValue,
 } from '@/lib/dataStore';
 import type { Trip, Leg, Stop, Person, TripStatus, ServiceScope, ServiceType, PersonRole } from '@/data/types';
 import type { Client, UserDirectoryEntry } from '@/lib/dataStore';
@@ -290,16 +291,16 @@ function PersonRow({ person, idx, onChange, onRemove }: {
         <div>
           <Label className="text-xs">Phone</Label>
           <Input
-            value={person.Phone || ''}
-            onChange={(e) => onChange({ ...person, Phone: e.target.value })}
+            value={getPreferredContact(person.Channels, 'Phone') || ''}
+            onChange={(e) => onChange({ ...person, Channels: setPreferredChannelValue(person.Channels ?? [], 'Phone', e.target.value) })}
             placeholder="+1-555-0100"
           />
         </div>
         <div>
           <Label className="text-xs">Email</Label>
           <Input
-            value={person.Email || ''}
-            onChange={(e) => onChange({ ...person, Email: e.target.value })}
+            value={getPreferredContact(person.Channels, 'Email') || ''}
+            onChange={(e) => onChange({ ...person, Channels: setPreferredChannelValue(person.Channels ?? [], 'Email', e.target.value) })}
             placeholder="email@example.com"
           />
         </div>
@@ -485,6 +486,7 @@ export default function NewTripWizard() {
         TripID: tripId,
         Name: '',
         Role: 'Pax',
+        Channels: [],
       },
     ]);
   };
