@@ -34,6 +34,7 @@ function entityLinksFor(doc) {
   if (doc.tripId) links.push({ entityType: 'Trip', entityId: doc.tripId });
   if (doc.personId) links.push({ entityType: 'Person', entityId: doc.personId });
   if (doc.aircraftRegistration) links.push({ entityType: 'Aircraft', entityId: doc.aircraftRegistration });
+  if (doc.svcId) links.push({ entityType: 'Service', entityId: doc.svcId });
   return links;
 }
 
@@ -79,36 +80,41 @@ async function main() {
       console.warn(`DocAttachment ${doc.docId} has no tripId/personId/aircraftRegistration — migrating with zero entity links.`);
     }
 
-    await prisma.document.create({
-      data: {
-        documentId: `DOCX-MIG-${doc.docId}`,
-        familyCode: typeDef.familyCode,
-        typeCode: typeDef.code,
-        originalFileName: doc.fileName,
-        mimeType: doc.mimeType,
-        detectedMimeType: null,
-        fileSizeBytes: doc.fileSizeBytes,
-        sha256: hashFile(doc.filePath),
-        status: doc.verifiedAt ? 'READY_FOR_REVIEW' : 'UPLOADED',
-        uploadedBy: doc.uploadedBy,
-        uploadedZ: doc.uploadedZ,
-        sourceDocAttachmentId: doc.docId,
-        versions: {
-          create: {
-            versionNumber: 1,
-            storagePath: path.join(LEGACY_UPLOADS_DIR, doc.filePath).replace(/\\/g, '/'),
-            ocrText: doc.ocrText,
-            ocrStructuredFields: doc.ocrStructuredFields ?? undefined,
-            verifiedFields: doc.verifiedFields ?? undefined,
-            verifiedBy: doc.verifiedBy,
-            verifiedAtZ: doc.verifiedAt,
-            validUntil: doc.validUntil,
-            sections: { create: { startPage: 1, endPage: 1 } },
+    try {
+      await prisma.document.create({
+        data: {
+          documentId: `DOCX-MIG-${doc.docId}`,
+          familyCode: typeDef.familyCode,
+          typeCode: typeDef.code,
+          originalFileName: doc.fileName,
+          mimeType: doc.mimeType,
+          detectedMimeType: null,
+          fileSizeBytes: doc.fileSizeBytes,
+          sha256: hashFile(doc.filePath),
+          status: doc.verifiedAt ? 'READY_FOR_REVIEW' : 'UPLOADED',
+          uploadedBy: doc.uploadedBy,
+          uploadedZ: doc.uploadedZ,
+          sourceDocAttachmentId: doc.docId,
+          versions: {
+            create: {
+              versionNumber: 1,
+              storagePath: path.relative(process.cwd(), path.resolve(LEGACY_UPLOADS_DIR, doc.filePath)).replace(/\\/g, '/'),
+              ocrText: doc.ocrText,
+              ocrStructuredFields: doc.ocrStructuredFields ?? undefined,
+              verifiedFields: doc.verifiedFields ?? undefined,
+              verifiedBy: doc.verifiedBy,
+              verifiedAtZ: doc.verifiedAt,
+              validUntil: doc.validUntil,
+              sections: { create: { startPage: 1, endPage: 1 } },
+            },
           },
+          entityLinks: { create: links },
         },
-        entityLinks: { create: links },
-      },
-    });
+      });
+    } catch (e) {
+      console.error(`FAILED on DocAttachment ${doc.docId} (${migrated} migrated so far)`);
+      throw e;
+    }
     migrated++;
   }
 

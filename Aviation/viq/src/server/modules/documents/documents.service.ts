@@ -88,8 +88,9 @@ export class DocumentsService {
     if (file.size > MAX_FILE_SIZE_BYTES) {
       throw new BadRequestException('File exceeds the 20MB limit.');
     }
+    let detected: Awaited<ReturnType<typeof fromBuffer>> | undefined;
     if (SIGNATURE_VERIFIABLE_MIME_TYPES.has(file.mimetype)) {
-      const detected = await fromBuffer(file.buffer);
+      detected = await fromBuffer(file.buffer);
       if (!detected || detected.mime !== file.mimetype) {
         throw new BadRequestException(`File content does not match its declared type (${file.mimetype}).`);
       }
@@ -108,7 +109,7 @@ export class DocumentsService {
     const storedName = `${documentId}${ext}`;
     await fs.promises.mkdir(UPLOADS_DIR, { recursive: true });
     await fs.promises.writeFile(path.join(UPLOADS_DIR, storedName), file.buffer);
-    const storagePath = path.join(UPLOADS_DIR, storedName).replace(/\\/g, '/');
+    const storagePath = path.relative(process.cwd(), path.resolve(UPLOADS_DIR, storedName)).replace(/\\/g, '/');
 
     const document = await this.prisma.document.create({
       data: {
@@ -117,7 +118,7 @@ export class DocumentsService {
         typeCode: dto.typeCode ?? null,
         originalFileName: file.originalname,
         mimeType: file.mimetype,
-        detectedMimeType: SIGNATURE_VERIFIABLE_MIME_TYPES.has(file.mimetype) ? file.mimetype : null,
+        detectedMimeType: detected?.mime ?? null,
         fileSizeBytes: file.size,
         sha256,
         status: 'UPLOADED',
@@ -153,6 +154,7 @@ export class DocumentsService {
         data: { status: 'FAILED', errorMessage: message, completedAtZ: new Date() },
       });
       await this.prisma.document.update({ where: { documentId }, data: { status: 'PROCESSING_FAILED' } });
+      await this.audit.log(dto.uploadedBy, 'Document', documentId, 'Upload failed to enqueue', '', message);
       throw e;
     }
 

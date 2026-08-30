@@ -20,7 +20,7 @@ model Country {
   aocDocsRequired          Boolean @default(false) @map("aoc_docs_required")
   ciqRequired              Boolean @default(false) @map("ciq_required")
   escalationContact        String? @map("escalation_contact")
-  caaWebsite                String? @map("caa_website")
+  caaWebsite               String? @map("caa_website")
   notes                    String?
   // Approximate geographic centroid — used to attribute great-circle route
   // points to a country when no boundary/polygon data is available.
@@ -94,9 +94,9 @@ model Airport {
 // Free-standing (not FK'd to Country — covers cities outside the operational
 // country set, e.g. hub cities used only for reference lookups).
 model City {
-  id          Int    @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   name        String
-  countryIso2 String @map("country_iso2")
+  countryIso2 String  @map("country_iso2")
   tz          String?
 
   @@unique([name, countryIso2])
@@ -134,25 +134,25 @@ model AircraftType {
 // Per-tail fleet instance. Manufacturer/MTOW/NoiseCert resolve from the
 // matching AircraftType at read time unless an override is set here.
 model Aircraft {
-  registration            String    @id
-  icaoType                String    @map("icao_type")
-  manufacturerOverride    String?   @map("manufacturer_override")
-  modelOverride           String?   @map("model_override")
-  mtowOverrideKg          Float?    @map("mtow_override_kg")
-  maxRangeOverrideNm      Float?    @map("max_range_override_nm")
-  fuelBurnOverrideKgPerHour Float?  @map("fuel_burn_override_kg_per_hour")
-  noiseCertOverride       String?   @map("noise_cert_override")
-  currentOperatorId       String    @map("current_operator_id")
-  colors                  String?
-  operationType           String?   @map("operation_type")
-  previousOperators       String[]  @map("previous_operators")
-  yearOfManufacture       Int?      @map("year_of_manufacture")
-  serialNumber            String?   @map("serial_number")
-  insuranceValidUntil     DateTime? @map("insurance_valid_until")
-  airworthinessValidUntil DateTime? @map("airworthiness_valid_until")
-  homeBaseIcao            String?   @map("home_base_icao")
-  status                  String?   @default("Active")
-  notes                   String?
+  registration              String    @id
+  icaoType                  String    @map("icao_type")
+  manufacturerOverride      String?   @map("manufacturer_override")
+  modelOverride             String?   @map("model_override")
+  mtowOverrideKg            Float?    @map("mtow_override_kg")
+  maxRangeOverrideNm        Float?    @map("max_range_override_nm")
+  fuelBurnOverrideKgPerHour Float?    @map("fuel_burn_override_kg_per_hour")
+  noiseCertOverride         String?   @map("noise_cert_override")
+  currentOperatorId         String    @map("current_operator_id")
+  colors                    String?
+  operationType             String?   @map("operation_type")
+  previousOperators         String[]  @map("previous_operators")
+  yearOfManufacture         Int?      @map("year_of_manufacture")
+  serialNumber              String?   @map("serial_number")
+  insuranceValidUntil       DateTime? @map("insurance_valid_until")
+  airworthinessValidUntil   DateTime? @map("airworthiness_valid_until")
+  homeBaseIcao              String?   @map("home_base_icao")
+  status                    String?   @default("Active")
+  notes                     String?
 
   type     AircraftType @relation(fields: [icaoType], references: [icaoType])
   operator Operator     @relation(fields: [currentOperatorId], references: [operatorId])
@@ -180,17 +180,17 @@ model Operator {
 }
 
 model Provider {
-  providerId    String   @id @map("provider_id")
-  name          String
-  serviceTypes  String[] @map("service_types")
-  scopeType     String   @map("scope_type") // ICAO | Country | Global
-  scope         String
-  workingHoursZ String?  @map("working_hours_z")
-  currency      String?
-  paymentTerms  String?  @map("payment_terms")
-  rating        Int?
-  contractActive Boolean @default(true) @map("contract_active")
-  notes         String?
+  providerId     String   @id @map("provider_id")
+  name           String
+  serviceTypes   String[] @map("service_types")
+  scopeType      String   @map("scope_type") // ICAO | Country | Global
+  scope          String
+  workingHoursZ  String?  @map("working_hours_z")
+  currency       String?
+  paymentTerms   String?  @map("payment_terms")
+  rating         Int?
+  contractActive Boolean  @default(true) @map("contract_active")
+  notes          String?
 
   services   Service[]
   priceItems PriceItem[]
@@ -240,12 +240,12 @@ model DocTemplate {
 }
 
 model PriceItem {
-  id          Int    @id @default(autoincrement())
-  providerId  String @map("provider_id")
-  serviceType String @map("service_type")
+  id          Int     @id @default(autoincrement())
+  providerId  String  @map("provider_id")
+  serviceType String  @map("service_type")
   unit        String?
   price       Float
-  currency    String @default("USD")
+  currency    String  @default("USD")
   notes       String?
 
   provider Provider @relation(fields: [providerId], references: [providerId])
@@ -256,8 +256,8 @@ model PriceItem {
 model ServiceTypeDef {
   code      String  @id
   label     String
-  category  String                    // 'Permit' | 'Handling' | 'Other'
-  variants  Json?                     // Array<{ code: string; label: string }>
+  category  String // 'Permit' | 'Handling' | 'Other'
+  variants  Json? // Array<{ code: string; label: string }>
   active    Boolean @default(true)
   sortOrder Int     @default(0) @map("sort_order")
 
@@ -276,40 +276,40 @@ model LegPurposeDef {
 // ─── Transactional spine ────────────────────────────────────────────────────
 
 model Trip {
-  tripId        String   @id @map("trip_id")
-  client        String
-  clientId      String?  @map("client_id")
-  operator      String?
-  registration  String?
-  status        String   @default("Planning")
-  owner         String?
-  ownerUserId   String?  @map("owner_user_id")
-  team          String?
-  createdZ      DateTime @default(now()) @map("created_z")
-  supportRef    String?  @map("support_ref")
-  operationType String?  @map("operation_type")
-  missionType   String?  @map("mission_type")
-  notes         String?
-  billToAddress String?  @map("bill_to_address")
-  billToAddressLine1 String? @map("bill_to_address_line1")
-  billToAddressLine2 String? @map("bill_to_address_line2")
-  billToCity         String? @map("bill_to_city")
-  billToState        String? @map("bill_to_state")
-  billToPostalCode   String? @map("bill_to_postal_code")
-  billToCountry      String? @map("bill_to_country")
-  billToEmails       String[] @map("bill_to_emails")
-  aircraftIcaoType    String?  @map("aircraft_icao_type")
-  aircraftMtowKg      Float?   @map("aircraft_mtow_kg")
-  aircraftSerialNumber String? @map("aircraft_serial_number")
+  tripId               String   @id @map("trip_id")
+  client               String
+  clientId             String?  @map("client_id")
+  operator             String?
+  registration         String?
+  status               String   @default("Planning")
+  owner                String?
+  ownerUserId          String?  @map("owner_user_id")
+  team                 String?
+  createdZ             DateTime @default(now()) @map("created_z")
+  supportRef           String?  @map("support_ref")
+  operationType        String?  @map("operation_type")
+  missionType          String?  @map("mission_type")
+  notes                String?
+  billToAddress        String?  @map("bill_to_address")
+  billToAddressLine1   String?  @map("bill_to_address_line1")
+  billToAddressLine2   String?  @map("bill_to_address_line2")
+  billToCity           String?  @map("bill_to_city")
+  billToState          String?  @map("bill_to_state")
+  billToPostalCode     String?  @map("bill_to_postal_code")
+  billToCountry        String?  @map("bill_to_country")
+  billToEmails         String[] @map("bill_to_emails")
+  aircraftIcaoType     String?  @map("aircraft_icao_type")
+  aircraftMtowKg       Float?   @map("aircraft_mtow_kg")
+  aircraftSerialNumber String?  @map("aircraft_serial_number")
 
-  clientRecord Client? @relation(fields: [clientId], references: [clientId])
-  ownerUser    User?   @relation(fields: [ownerUserId], references: [id])
-  legs        Leg[]
-  stops       Stop[]
-  services    Service[]
-  docs        DocAttachment[]
-  comms       Comm[]
-  invoices    Invoice[]
+  clientRecord Client?         @relation(fields: [clientId], references: [clientId])
+  ownerUser    User?           @relation(fields: [ownerUserId], references: [id])
+  legs         Leg[]
+  stops        Stop[]
+  services     Service[]
+  docs         DocAttachment[]
+  comms        Comm[]
+  invoices     Invoice[]
 
   @@index([status])
   @@index([createdZ])
@@ -323,9 +323,9 @@ model Trip {
 // client have one. Kept as its own entity (not folded into Operator)
 // because most clients never need a fleet/aircraft relation at all.
 model Client {
-  clientId   String   @id @map("client_id")
-  name       String
-  isOperator Boolean  @default(false) @map("is_operator")
+  clientId         String  @id @map("client_id")
+  name             String
+  isOperator       Boolean @default(false) @map("is_operator")
   linkedOperatorId String? @map("linked_operator_id")
 
   billingAddressLine1 String? @map("billing_address_line1")
@@ -337,7 +337,7 @@ model Client {
 
   notes String?
 
-  linkedOperator Operator? @relation(fields: [linkedOperatorId], references: [operatorId])
+  linkedOperator Operator?        @relation(fields: [linkedOperatorId], references: [operatorId])
   trips          Trip[]
   channels       ContactChannel[]
 
@@ -349,13 +349,13 @@ model Client {
 // DocAttachment's tripId/personId/aircraftRegistration exclusivity
 // (enforced in ContactChannelsService, not a DB constraint).
 model ContactChannel {
-  id          Int      @id @default(autoincrement())
-  channelType String   @map("channel_type") // Email | Phone | SMS | WhatsApp
+  id          Int     @id @default(autoincrement())
+  channelType String  @map("channel_type") // Email | Phone | SMS | WhatsApp
   value       String
   label       String?
-  preferred   Boolean  @default(false)
-  forBilling  Boolean  @default(false) @map("for_billing")
-  sortOrder   Int      @default(0) @map("sort_order")
+  preferred   Boolean @default(false)
+  forBilling  Boolean @default(false) @map("for_billing")
+  sortOrder   Int     @default(0) @map("sort_order")
 
   providerId String? @map("provider_id")
   operatorId String? @map("operator_id")
@@ -423,7 +423,7 @@ model Leg {
   includeFirs        String[] @map("include_firs")
   routing            String?
 
-  trip        Trip                   @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  trip        Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   assignments LegPersonAssignment[]
 
   @@index([tripId])
@@ -544,18 +544,18 @@ model DocAttachment {
   fileName             String    @map("file_name")
   filePath             String    @map("file_path")
   mimeType             String    @map("mime_type")
-  fileSizeBytes         Int       @map("file_size_bytes")
+  fileSizeBytes        Int       @map("file_size_bytes")
   uploadedZ            DateTime  @default(now()) @map("uploaded_z")
   uploadedBy           String    @map("uploaded_by")
-  validUntil            DateTime? @map("valid_until")
-  ocrStatus             String?   @map("ocr_status")
-  ocrText               String?   @map("ocr_text")
-  ocrStructuredFields   Json?     @map("ocr_structured_fields")
-  ocrError              String?   @map("ocr_error")
-  ocrProcessedAt        DateTime? @map("ocr_processed_at")
-  verifiedFields        Json?     @map("verified_fields")
-  verifiedBy            String?   @map("verified_by")
-  verifiedAt            DateTime? @map("verified_at")
+  validUntil           DateTime? @map("valid_until")
+  ocrStatus            String?   @map("ocr_status")
+  ocrText              String?   @map("ocr_text")
+  ocrStructuredFields  Json?     @map("ocr_structured_fields")
+  ocrError             String?   @map("ocr_error")
+  ocrProcessedAt       DateTime? @map("ocr_processed_at")
+  verifiedFields       Json?     @map("verified_fields")
+  verifiedBy           String?   @map("verified_by")
+  verifiedAt           DateTime? @map("verified_at")
 
   trip   Trip?   @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   person Person? @relation(fields: [personId], references: [personId], onDelete: Cascade)
@@ -595,18 +595,18 @@ model DocumentTypeDefinition {
 }
 
 model Document {
-  documentId            String    @id @map("document_id")
-  familyCode            String?   @map("family_code")
-  typeCode              String?   @map("type_code")
-  originalFileName      String    @map("original_file_name")
-  mimeType               String    @map("mime_type")
-  detectedMimeType        String?   @map("detected_mime_type")
-  fileSizeBytes             Int       @map("file_size_bytes")
-  sha256                     String?   @map("sha256")
-  status                      String    @default("UPLOADED")
-  uploadedBy                   String    @map("uploaded_by")
-  uploadedZ                     DateTime  @default(now()) @map("uploaded_z")
-  sourceDocAttachmentId           String?   @unique @map("source_doc_attachment_id")
+  documentId            String   @id @map("document_id")
+  familyCode            String?  @map("family_code")
+  typeCode              String?  @map("type_code")
+  originalFileName      String   @map("original_file_name")
+  mimeType              String   @map("mime_type")
+  detectedMimeType      String?  @map("detected_mime_type")
+  fileSizeBytes         Int      @map("file_size_bytes")
+  sha256                String?  @map("sha256")
+  status                String   @default("UPLOADED")
+  uploadedBy            String   @map("uploaded_by")
+  uploadedZ             DateTime @default(now()) @map("uploaded_z")
+  sourceDocAttachmentId String?  @unique @map("source_doc_attachment_id")
 
   family         DocumentFamily?         @relation(fields: [familyCode], references: [code])
   type           DocumentTypeDefinition? @relation(fields: [typeCode], references: [code])
@@ -622,18 +622,18 @@ model Document {
 }
 
 model DocumentVersion {
-  id                   Int       @id @default(autoincrement())
-  documentId           String    @map("document_id")
-  versionNumber        Int       @default(1) @map("version_number")
-  storagePath          String    @map("storage_path")
-  ocrText              String?   @map("ocr_text")
-  ocrStructuredFields  Json?     @map("ocr_structured_fields")
-  verifiedFields       Json?     @map("verified_fields")
-  verifiedBy           String?   @map("verified_by")
-  verifiedAtZ          DateTime? @map("verified_at_z")
-  validUntil           DateTime? @map("valid_until")
-  supersedesVersionId  Int?      @map("supersedes_version_id")
-  createdAtZ           DateTime  @default(now()) @map("created_at_z")
+  id                  Int       @id @default(autoincrement())
+  documentId          String    @map("document_id")
+  versionNumber       Int       @default(1) @map("version_number")
+  storagePath         String    @map("storage_path")
+  ocrText             String?   @map("ocr_text")
+  ocrStructuredFields Json?     @map("ocr_structured_fields")
+  verifiedFields      Json?     @map("verified_fields")
+  verifiedBy          String?   @map("verified_by")
+  verifiedAtZ         DateTime? @map("verified_at_z")
+  validUntil          DateTime? @map("valid_until")
+  supersedesVersionId Int?      @map("supersedes_version_id")
+  createdAtZ          DateTime  @default(now()) @map("created_at_z")
 
   document Document          @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
   sections DocumentSection[]
@@ -673,14 +673,14 @@ model DocumentEntityLink {
 }
 
 model DocumentProcessingJob {
-  id            Int       @id @default(autoincrement())
-  documentId    String    @map("document_id")
-  queueJobId    String?   @map("queue_job_id")
-  status        String    @default("QUEUED")
-  errorMessage  String?   @map("error_message")
-  attempts      Int       @default(0)
-  createdAtZ    DateTime  @default(now()) @map("created_at_z")
-  completedAtZ  DateTime? @map("completed_at_z")
+  id           Int       @id @default(autoincrement())
+  documentId   String    @map("document_id")
+  queueJobId   String?   @map("queue_job_id")
+  status       String    @default("QUEUED")
+  errorMessage String?   @map("error_message")
+  attempts     Int       @default(0)
+  createdAtZ   DateTime  @default(now()) @map("created_at_z")
+  completedAtZ DateTime? @map("completed_at_z")
 
   document Document @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
 
@@ -690,17 +690,17 @@ model DocumentProcessingJob {
 }
 
 model Comm {
-  commId     String   @id @map("comm_id")
-  direction  String
-  tripId     String   @map("trip_id")
-  svcId      String?  @map("svc_id")
-  token      String?
-  from       String
-  to         String
-  subject    String
-  body       String
-  timestampZ DateTime @default(now()) @map("timestamp_z")
-  status     String   @default("Draft")
+  commId       String    @id @map("comm_id")
+  direction    String
+  tripId       String    @map("trip_id")
+  svcId        String?   @map("svc_id")
+  token        String?
+  from         String
+  to           String
+  subject      String
+  body         String
+  timestampZ   DateTime  @default(now()) @map("timestamp_z")
+  status       String    @default("Draft")
   sentAtZ      DateTime? @map("sent_at_z")
   errorMessage String?   @map("error_message")
 

@@ -13,7 +13,7 @@ export class DocumentsController {
   }
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
   upload(@UploadedFile() file: Express.Multer.File, @Body() dto: UploadDocumentDto) {
     if (!file) throw new NotFoundException('No file provided.');
     return this.documents.upload(file, dto);
