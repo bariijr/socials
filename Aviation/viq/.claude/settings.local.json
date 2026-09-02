@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(curl.exe -s -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbXQ5dHFydjUwMDAweHJ1Z3V2YXkyZHNkIiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJBZG1pbiIsImlhdCI6MTc4Nzg2MDc1MiwiZXhwIjoxNzg3OTAzOTUyfQ.-yz-cl63YyaxNIWwJVo91_dLKQbuPilz05O22nK58rI\" http://localhost:4001/api/trips/2608001)"
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Cool cyan-tinted light theme — same hue family as the dark (primary)
+     identity below, so toggling theme doesn't feel like a different app. */
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 8%;
+    --primary: 189 85% 42%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 30% 93%;
+    --secondary-foreground: 222 47% 15%;
+    --muted: 210 30% 93%;
+    --muted-foreground: 215 20% 45%;
+    --accent: 189 60% 92%;
+    --accent-foreground: 189 85% 25%;
+    --destructive: 0 84.2% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 25% 88%;
+    --input: 214 25% 88%;
+    --ring: 189 85% 42%;
+    --radius: 0.625rem;
+    --sidebar-background: 210 40% 96%;
+    --sidebar-foreground: 222 47% 15%;
+    --sidebar-primary: 189 85% 42%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 189 60% 92%;
+    --sidebar-accent-foreground: 189 85% 25%;
+    --sidebar-border: 214 25% 88%;
+    --sidebar-ring: 189 85% 42%;
+  }
+
+  /* The primary identity — deep space-navy panels, electric-cyan accent,
+     violet secondary. This is the theme "sci-fi movie HUD" actually means
+     here; the light theme above exists for daylight use but isn't the
+     design's centerpiece. */
+  .dark {
+    --background: 224 32% 6%;
+    --foreground: 210 40% 96%;
+    --card: 223 28% 9%;
+    --card-foreground: 210 40% 96%;
+    --popover: 223 30% 8%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 189 94% 55%;
+    --primary-foreground: 224 32% 6%;
+    --secondary: 255 45% 22%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 222 22% 14%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 222 24% 16%;
+    --accent-foreground: 189 94% 70%;
+    --destructive: 0 85% 62%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 24% 18%;
+    --input: 222 24% 18%;
+    --ring: 189 94% 55%;
+    --sidebar-background: 224 34% 5%;
+    --sidebar-foreground: 210 30% 85%;
+    --sidebar-primary: 189 94% 55%;
+    --sidebar-primary-foreground: 224 32% 6%;
+    --sidebar-accent: 222 24% 14%;
+    --sidebar-accent-foreground: 189 94% 70%;
+    --sidebar-border: 222 24% 16%;
+    --sidebar-ring: 189 94% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Ambient depth for the dark theme — a faint cyan glow anchored to the
+     top of the viewport plus a barely-visible technical grid. Fixed and
+     pointer-events:none so it never interferes with content or scroll. */
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(189 94% 55% / 0.08), transparent),
+      linear-gradient(hsl(210 40% 96% / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(210 40% 96% / 0.025) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px;
+    background-attachment: fixed;
+  }
+}

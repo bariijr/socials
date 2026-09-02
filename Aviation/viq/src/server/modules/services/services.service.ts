@@ -1,0 +1,304 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Service, Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { computeUrgency } from '../../common/geo.util';
+import { CreateServiceDto } from './dto/create-service.dto';
+import { UpdateServiceDto } from './dto/update-service.dto';
+
+type ServiceType = 'Permit' | 'Overflight' | 'GroundHandling';
+
+@Injectable()
+export class ServicesService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
+
+  findAll(tripId?: string) {
+    return this.prisma.service.findMany({
+      where: tripId ? { tripId } : undefined,
+      orderBy: { requiredByZ: 'asc' },
+    });
+  }
+
+  async open(limit: number, search?: string) {
+    const where: Prisma.ServiceWhereInput = { status: { notIn: ['Confirmed', 'Not Required'] } };
+    if (search) {
+      const q = search.trim();
+      where.OR = [
+        { svcId: { contains: q, mode: 'insensitive' } },
+        { serviceType: { contains: q, mode: 'insensitive' } },
+        { tripId: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return this.prisma.service.findMany({
+      where,
+      orderBy: { requiredByZ: 'asc' },
+      take: limit,
+      include: { trip: { select: { tripId: true, registration: true } } },
+    });
+  }
+
+  async findAllPaginated(page: number, limit: number, tripId?: string) {
+    const skip = (page - 1) * limit;
+    const where = tripId ? { tripId } : undefined;
+    const [data, total] = await Promise.all([
+      this.prisma.service.findMany({ where, orderBy: { requiredByZ: 'asc' }, skip, take: limit }),
+      this.prisma.service.count({ where }),
+    ]);
+    return { data, page, limit, total, totalPages: Math.ceil(total / limit) };
+  }
+
+  forScope(scopeType: string, scopeId: string) {
+    return this.prisma.service.findMany({ where: { scopeType, scopeId } });
+  }
+
+  async findOne(svcId: string) {
+    const svc = await this.prisma.service.findUnique({ where: { svcId } });
+    if (!svc) throw new NotFoundException(`Service ${svcId} not found`);
+    return svc;
+  }
+
+  async create(dto: CreateServiceDto) {
+    const user = dto.user || 'SYSTEM';
+    const { user: _user, subItems, ...data } = dto;
+    const svc = await this.prisma.service.create({
+      data: {
+        ...data,
+        subItems: subItems as Prisma.InputJsonValue | undefined,
+        urgency: computeUrgency(data.requiredByZ),
+      },
+    });
+    await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
+    return svc;
+  }
+
+  async update(svcId: string, dto: UpdateServiceDto) {
+    const before = await this.findOne(svcId);
+    const user = dto.user || 'SYSTEM';
+    const { user: _user, subItems, ...data } = dto;
+    const requiredByZ = data.requiredByZ ?? before.requiredByZ.toISOString();
+    const svc = await this.prisma.service.update({
+      where: { svcId },
+      data: {
+        ...data,
+        subItems: subItems as Prisma.InputJsonValue | undefined,
+        urgency: computeUrgency(requiredByZ),
+      } as Prisma.ServiceUncheckedUpdateInput,
+    });
+    await this.audit.logDiff(user, 'Service', svcId, before as unknown as Record<string, unknown>, svc as unknown as Record<string, unknown>);
+    return svc;
+  }
+
+  async remove(svcId: string, user = 'SYSTEM') {
+    await this.findOne(svcId);
+    await this.prisma.service.delete({ where: { svcId } });
+    await this.audit.log(user, 'Service', svcId, 'Deleted', svcId, '');
+    return { svcId, deleted: true };
+  }
+
+  // Recomputes Urgency for every non-final service against "now" — call this
+  // periodically (cron) or on-demand from an admin action to keep the
+  // BREACH/URGENT/DUE/OK badges accurate as time passes without user edits.
+  async refreshUrgency() {
+    const open = await this.prisma.service.findMany({
+      where: { status: { notIn: ['Confirmed', 'Cancelled', 'Not Required'] } },
+    });
+    let updated = 0;
+    for (const svc of open) {
+      const urgency = computeUrgency(svc.requiredByZ);
+      if (urgency !== svc.urgency) {
+        await this.prisma.service.update({ where: { svcId: svc.svcId }, data: { urgency } });
+        updated++;
+      }
+    }
+    return { checked: open.length, updated };
+  }
+
+  private async resolveProvider(serviceType: string, icao: string, iso2: string): Promise<string | null> {
+    const byIcao = await this.prisma.provider.findFirst({
+      where: { serviceTypes: { has: serviceType }, scopeType: 'ICAO', scope: icao },
+    });
+    if (byIcao) return byIcao.providerId;
+
+    const byCountry = await this.prisma.provider.findFirst({
+      where: { serviceTypes: { has: serviceType }, scopeType: 'Country', scope: iso2 },
+    });
+    if (byCountry) return byCountry.providerId;
+
+    const global = await this.prisma.provider.findFirst({
+      where: { serviceTypes: { has: serviceType }, scopeType: 'Global' },
+    });
+    return global?.providerId ?? null;
+  }
+
+  private async leadTimeHours(iso2: string, serviceType: string, fallback: number): Promise<number> {
+    const rule = await this.prisma.countryRule.findUnique({
+      where: { countryIso2_serviceType: { countryIso2: iso2, serviceType } },
+    });
+    return rule?.leadTimeHours ?? fallback;
+  }
+
+  private async createOverflightService(
+    leg: { legId: string; tripId: string; depIcao: string; arrIcao: string; etdZ: Date },
+    iso2: string,
+    user: string,
+    notes: string,
+  ): Promise<Service> {
+    const leadHours = await this.leadTimeHours(iso2, 'Overflight', 48);
+    const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
+    const providerId = await this.resolveProvider('Overflight', leg.depIcao, iso2);
+    const svc = await this.prisma.service.create({
+      data: {
+        svcId: `${leg.legId}-OVF-${iso2}`,
+        tripId: leg.tripId,
+        scopeType: 'SEGMENT',
+        scopeId: leg.legId,
+        serviceType: 'Overflight',
+        providerId,
+        status: 'Not Started',
+        basedOnEtdZ: leg.etdZ,
+        requiredByZ,
+        urgency: computeUrgency(requiredByZ),
+        assignedTo: 'Unassigned',
+        notes,
+        countryIso2: iso2,
+      },
+    });
+    await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
+    return svc;
+  }
+
+  // Great-circle-derived overflown countries → one Overflight Service each,
+  // for every country that actually requires an overflight permit. Idempotent:
+  // running it again on the same leg does not create duplicates. Add-only —
+  // see reconcileOverflightServices for the add-and-remove version Item 16's
+  // Avoid/Include FIR editing needs.
+  async generateOverflightServices(legId: string, user = 'SYSTEM') {
+    const leg = await this.prisma.leg.findUnique({ where: { legId } });
+    if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
+
+    const existing = await this.prisma.service.findMany({
+      where: { tripId: leg.tripId, serviceType: 'Overflight', scopeType: 'SEGMENT', scopeId: legId },
+    });
+    const existingCountries = new Set(existing.map((s) => s.countryIso2));
+
+    const created: Service[] = [];
+    for (const iso2 of leg.countriesOverflown) {
+      if (existingCountries.has(iso2)) continue;
+      const country = await this.prisma.country.findUnique({ where: { iso2 } });
+      if (!country?.overflightPermitRequired) continue;
+      created.push(await this.createOverflightService(leg, iso2, user, `Auto-derived from great-circle route ${leg.depIcao}–${leg.arrIcao}.`));
+    }
+    return created;
+  }
+
+  // Item 16: keeps a leg's Overflight services in sync with its current
+  // countriesOverflown (already Avoid/Include-adjusted by LegsService by the
+  // time this runs) — adds services for newly-required countries the same
+  // way generateOverflightServices does, AND removes services for countries
+  // that dropped out (e.g. now avoided). Removal is deliberately narrow: a
+  // service is only ever auto-deleted while it's still 'Not Started' — no
+  // real work done on it yet. Anything with actual progress (Requested,
+  // Confirmed, a RefNumber, etc.) is left alone and flagged in the audit
+  // log instead, the same caution this app already applies elsewhere
+  // (Operator delete guard, Draft-only invoice line-item editing) rather
+  // than silently destroying something a coordinator may have already
+  // acted on.
+  async reconcileOverflightServices(legId: string, user = 'SYSTEM') {
+    const leg = await this.prisma.leg.findUnique({ where: { legId } });
+    if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
+
+    const existing = await this.prisma.service.findMany({
+      where: { tripId: leg.tripId, serviceType: 'Overflight', scopeType: 'SEGMENT', scopeId: legId },
+    });
+    const wantedCountries = new Set(leg.countriesOverflown);
+    const existingCountries = new Set(existing.map((s) => s.countryIso2));
+
+    const created: Service[] = [];
+    for (const iso2 of leg.countriesOverflown) {
+      if (existingCountries.has(iso2)) continue;
+      const country = await this.prisma.country.findUnique({ where: { iso2 } });
+      if (!country?.overflightPermitRequired) continue;
+      created.push(await this.createOverflightService(leg, iso2, user, `Auto-derived from great-circle route ${leg.depIcao}–${leg.arrIcao} (Avoid/Include FIRs applied).`));
+    }
+
+    const removed: Service[] = [];
+    const flagged: Service[] = [];
+    for (const svc of existing) {
+      if (!svc.countryIso2 || wantedCountries.has(svc.countryIso2)) continue;
+      if (svc.status === 'Not Started') {
+        await this.prisma.service.delete({ where: { svcId: svc.svcId } });
+        await this.audit.log(user, 'Service', svc.svcId, 'AutoRemoved', svc.countryIso2, '(no longer overflown — Avoid FIR)');
+        removed.push(svc);
+      } else {
+        await this.audit.log(user, 'Service', svc.svcId, 'FlaggedStale', svc.countryIso2, `Status is ${svc.status} — not auto-removed despite ${svc.countryIso2} being avoided; review manually.`);
+        flagged.push(svc);
+      }
+    }
+
+    return { created, removed, flagged };
+  }
+
+  // Landing permit + ground handling for the leg's arrival country (both
+  // automatic whenever the destination calls for them). Departure-country
+  // ground handling is opt-in — most operators arrange that locally on
+  // request rather than pre-booking it.
+  async generateArrivalServices(legId: string, opts: { departureGroundHandling?: boolean } = {}, user = 'SYSTEM') {
+    const leg = await this.prisma.leg.findUnique({ where: { legId } });
+    if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
+
+    const existing = await this.prisma.service.findMany({
+      where: { tripId: leg.tripId, scopeType: 'LEG', scopeId: legId },
+    });
+    const has = (serviceType: string, iso2: string) =>
+      existing.some((s) => s.serviceType === serviceType && s.countryIso2 === iso2);
+
+    const created: Service[] = [];
+    const make = async (serviceType: ServiceType, iso2: string, icao: string, direction: 'ARR' | 'DEP', notes: string) => {
+      if (has(serviceType, iso2)) return;
+      const leadHours = await this.leadTimeHours(iso2, serviceType, 48);
+      const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
+      const providerId = await this.resolveProvider(serviceType, icao, iso2);
+      const svc = await this.prisma.service.create({
+        data: {
+          svcId: `${legId}-${serviceType.toUpperCase()}-${direction}-${iso2}`,
+          tripId: leg.tripId,
+          scopeType: 'LEG',
+          scopeId: legId,
+          serviceType,
+          providerId,
+          status: 'Not Started',
+          basedOnEtdZ: leg.etdZ,
+          requiredByZ,
+          urgency: computeUrgency(requiredByZ),
+          assignedTo: 'Unassigned',
+          notes,
+          countryIso2: iso2,
+          icao,
+        },
+      });
+      await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
+      created.push(svc);
+    };
+
+    const arrAirport = await this.prisma.airport.findUnique({ where: { icao: leg.arrIcao } });
+    if (arrAirport) {
+      const arrCountry = await this.prisma.country.findUnique({ where: { iso2: arrAirport.countryIso2 } });
+      if (arrCountry?.landingPermitRequired) {
+        await make('Permit', arrAirport.countryIso2, arrAirport.icao, 'ARR', `Landing permit for ${arrAirport.icao} arrival.`);
+      }
+      await make('GroundHandling', arrAirport.countryIso2, arrAirport.icao, 'ARR', `Ground handling at ${arrAirport.icao} arrival.`);
+    }
+
+    if (opts.departureGroundHandling) {
+      const depAirport = await this.prisma.airport.findUnique({ where: { icao: leg.depIcao } });
+      if (depAirport) {
+        await make('GroundHandling', depAirport.countryIso2, depAirport.icao, 'DEP', `Ground handling at ${depAirport.icao} departure — arranged on request.`);
+      }
+    }
+
+    return created;
+  }
+}

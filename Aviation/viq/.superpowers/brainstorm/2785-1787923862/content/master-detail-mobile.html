@@ -1,0 +1,74 @@
+<h2>How should the master-detail pages behave below tablet width?</h2>
+<p class="subtitle">This applies to every page built on the two-pane pattern (AdminTrips, AdminAssets' 9 tabs) — a list on the left, a persistent detail/edit panel on the right. On a narrow screen, both panes can't fit side by side.</p>
+
+<div class="cards">
+  <div class="card" data-choice="stack" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; gap:24px; align-items:center; justify-content:center; padding:16px;">
+        <div style="width:120px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff;">
+          <div style="font-size:9px; color:#888; text-align:center; margin-bottom:4px;">LIST</div>
+          <div class="placeholder" style="height:14px; margin-bottom:4px;"></div>
+          <div class="placeholder" style="height:14px; margin-bottom:4px; background:#dbeafe;"></div>
+          <div class="placeholder" style="height:14px; margin-bottom:4px;"></div>
+          <div class="placeholder" style="height:14px;"></div>
+        </div>
+        <div style="font-size:20px; color:#888;">→</div>
+        <div style="width:120px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff;">
+          <div style="font-size:9px; color:#2563eb; margin-bottom:4px;">← Back</div>
+          <div style="font-size:9px; color:#888; text-align:center; margin-bottom:4px; font-weight:bold;">DETAIL</div>
+          <div class="mock-input" style="margin-bottom:4px; height:10px;"></div>
+          <div class="mock-input" style="height:10px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · Stack (navigate away)</h3>
+      <p>Tapping a list item replaces the screen entirely with the detail/edit panel, full width, with a Back control. Classic mail-app pattern — one thing on screen at a time.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="sheet" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; gap:24px; align-items:center; justify-content:center; padding:16px;">
+        <div style="width:120px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff; position:relative;">
+          <div style="font-size:9px; color:#888; text-align:center; margin-bottom:4px;">LIST</div>
+          <div class="placeholder" style="height:14px; margin-bottom:4px;"></div>
+          <div class="placeholder" style="height:14px; margin-bottom:4px; background:#dbeafe;"></div>
+          <div class="placeholder" style="height:14px;"></div>
+          <div style="position:absolute; left:6px; right:6px; bottom:6px; top:45%; background:#fff; border:2px solid #2563eb; border-radius:8px 8px 0 0; box-shadow:0 -4px 10px rgba(0,0,0,0.15); padding:5px;">
+            <div style="font-size:9px; color:#2563eb; font-weight:bold; text-align:center; margin-bottom:3px;">DETAIL ▲</div>
+            <div class="mock-input" style="height:8px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · Bottom Sheet</h3>
+      <p>The list stays visible underneath; tapping an item slides the detail/edit panel up as a sheet over it. Dismiss to return to the list without losing scroll position.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="tabs" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; gap:24px; align-items:center; justify-content:center; padding:16px;">
+        <div style="width:120px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff;">
+          <div style="display:flex; gap:4px; margin-bottom:5px;">
+            <div style="flex:1; font-size:8px; text-align:center; background:#2563eb; color:#fff; border-radius:4px; padding:2px;">List</div>
+            <div style="flex:1; font-size:8px; text-align:center; background:#eee; color:#888; border-radius:4px; padding:2px;">Detail</div>
+          </div>
+          <div class="placeholder" style="height:12px; margin-bottom:3px;"></div>
+          <div class="placeholder" style="height:12px; margin-bottom:3px; background:#dbeafe;"></div>
+          <div class="placeholder" style="height:12px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · Tab Switcher</h3>
+      <p>Both panes exist on screen at all times; a small tab control at the top switches which one is showing. Selecting a list item auto-switches to the Detail tab.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">For reference — desktop stays exactly as it is today (both panes side by side, list ~320-384px wide, detail filling the rest). This choice only affects what happens below the tablet breakpoint.</p>
+</div>

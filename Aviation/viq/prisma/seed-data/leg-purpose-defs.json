@@ -1,0 +1,11 @@
+[
+  { "code": "Business", "label": "Business", "sortOrder": 10 },
+  { "code": "Charter", "label": "Charter", "sortOrder": 20 },
+  { "code": "Positioning", "label": "Positioning/Ferry", "sortOrder": 30 },
+  { "code": "Maintenance", "label": "Maintenance", "sortOrder": 40 },
+  { "code": "Medical", "label": "Medical/Air Ambulance", "sortOrder": 50 },
+  { "code": "VIP", "label": "VIP/Government", "sortOrder": 60 },
+  { "code": "Cargo", "label": "Cargo", "sortOrder": 70 },
+  { "code": "Training", "label": "Training", "sortOrder": 80 },
+  { "code": "Other", "label": "Other", "sortOrder": 90 }
+]

@@ -1,0 +1,77 @@
+[
+  {
+    "ICAO": "OMDB",
+    "InheritedCountryISO2": "AE",
+    "Rules": [
+      { "ServiceType": "Slot", "LeadTimeHours": 72, "WorkingDaysOnly": true, "Required": true, "Notes": "Slot mandatory for all GA at OMDB." },
+      { "ServiceType": "PPR", "LeadTimeHours": 48, "WorkingDaysOnly": false, "Required": false, "Notes": "PPR not required for OMDB, but slot is." }
+    ],
+    "Exceptions": ["No diplomatic clearance for tech stops under 6h."],
+    "PreferredProviders": ["P001", "P002"]
+  },
+  {
+    "ICAO": "EGLL",
+    "InheritedCountryISO2": "GB",
+    "Rules": [
+      { "ServiceType": "Slot", "LeadTimeHours": 48, "WorkingDaysOnly": true, "Required": true, "Notes": "Heathrow slots extremely tight. Book 48h minimum." },
+      { "ServiceType": "PPR", "LeadTimeHours": 24, "WorkingDaysOnly": false, "Required": false, "Notes": "No PPR required for UK." }
+    ],
+    "Exceptions": ["Night quota restrictions 23:30-06:00."],
+    "PreferredProviders": ["P003"]
+  },
+  {
+    "ICAO": "HKJK",
+    "InheritedCountryISO2": "KE",
+    "Rules": [
+      { "ServiceType": "PPR", "LeadTimeHours": 72, "WorkingDaysOnly": true, "Required": true, "Notes": "PPR required for all GA at JKIA." },
+      { "ServiceType": "Slot", "LeadTimeHours": 48, "WorkingDaysOnly": true, "Required": false, "Notes": "Slot coordination via KCAA." }
+    ],
+    "Exceptions": ["Yellow fever certificate required for all pax."],
+    "PreferredProviders": ["P004"]
+  },
+  {
+    "ICAO": "OERK",
+    "InheritedCountryISO2": "SA",
+    "Rules": [
+      { "ServiceType": "Slot", "LeadTimeHours": 72, "WorkingDaysOnly": true, "Required": true, "Notes": "Slots mandatory at OERK for all ops." }
+    ],
+    "Exceptions": ["Working days: Sun-Thu. Friday/Saturday closed for government processing."],
+    "PreferredProviders": ["P005"]
+  },
+  {
+    "ICAO": "HECA",
+    "InheritedCountryISO2": "EG",
+    "Rules": [
+      { "ServiceType": "Slot", "LeadTimeHours": 48, "WorkingDaysOnly": true, "Required": true, "Notes": "Cairo slot coordination required." }
+    ],
+    "Exceptions": ["Security escort required for aircraft parking."],
+    "PreferredProviders": ["P010"]
+  },
+  {
+    "ICAO": "OOSA",
+    "InheritedCountryISO2": "OM",
+    "Rules": [
+      { "ServiceType": "PPR", "LeadTimeHours": 48, "WorkingDaysOnly": true, "Required": true, "Notes": "PPR required for Salalah." }
+    ],
+    "Exceptions": [],
+    "PreferredProviders": []
+  },
+  {
+    "ICAO": "FACT",
+    "InheritedCountryISO2": "ZA",
+    "Rules": [
+      { "ServiceType": "GroundHandling", "LeadTimeHours": 24, "WorkingDaysOnly": false, "Required": false, "Notes": "VIP handling strongly recommended." }
+    ],
+    "Exceptions": ["Customs assistance mandatory for non-SA registered aircraft."],
+    "PreferredProviders": ["P012"]
+  },
+  {
+    "ICAO": "FALA",
+    "InheritedCountryISO2": "ZA",
+    "Rules": [
+      { "ServiceType": "GroundHandling", "LeadTimeHours": 24, "WorkingDaysOnly": false, "Required": false, "Notes": "Premium FBO available." }
+    ],
+    "Exceptions": [],
+    "PreferredProviders": ["P013"]
+  }
+]

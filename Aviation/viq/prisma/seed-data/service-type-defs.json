@@ -1,0 +1,25 @@
+[
+  { "code": "Permit", "label": "Landing Permit", "category": "Permit", "sortOrder": 10 },
+  { "code": "Overflight", "label": "Overflight Permit", "category": "Permit", "sortOrder": 20 },
+  { "code": "GroundHandling", "label": "Ground Handling", "category": "Handling", "sortOrder": 30 },
+  { "code": "Fuel", "label": "Fuel", "category": "Handling", "sortOrder": 40 },
+  { "code": "Catering", "label": "Catering", "category": "Handling", "sortOrder": 50 },
+  { "code": "CrewTransport", "label": "Crew Transport", "category": "Handling", "sortOrder": 60 },
+  { "code": "CrewSwap", "label": "Crew Swap", "category": "Handling", "sortOrder": 70 },
+  { "code": "Customs", "label": "Customs", "category": "Handling", "sortOrder": 80 },
+  { "code": "Hotel", "label": "Hotel", "category": "Handling", "sortOrder": 90 },
+  {
+    "code": "Visa",
+    "label": "Visa",
+    "category": "Handling",
+    "sortOrder": 100,
+    "variants": [
+      { "code": "PRIOR", "label": "Visa Required Prior to Arrival" },
+      { "code": "ON_ARRIVAL", "label": "Visa on Arrival" }
+    ]
+  },
+  { "code": "VIPLounge", "label": "VIP Lounge", "category": "Handling", "sortOrder": 110 },
+  { "code": "Slot", "label": "Slot", "category": "Other", "sortOrder": 120 },
+  { "code": "PPR", "label": "PPR", "category": "Other", "sortOrder": 130 },
+  { "code": "FlightPlanning", "label": "Flight Planning", "category": "Other", "sortOrder": 140 }
+]

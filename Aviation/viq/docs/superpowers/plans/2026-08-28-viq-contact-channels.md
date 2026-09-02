@@ -584,7 +584,12 @@ Replace `findAll`, `findOne`, `create`, `update`:
     const { user: _user, channels, ...rest } = dto;
     const client = await this.prisma.client.update({ where: { clientId }, data: rest });
     if (channels !== undefined) await this.contactChannels.replace({ clientId }, channels);
-    await this.audit.logDiff(user, 'Client', clientId, before as unknown as Record<string, unknown>, client as unknown as Record<string, unknown>);
+    // `before` includes `channels` (via findOne's CONTACT_CHANNELS_INCLUDE) but the
+    // bare `update()` result never does — diffing them directly would log a spurious
+    // "channels changed" audit entry on every update. Exclude it from both sides of
+    // the comparison; channel changes aren't audited via logDiff in this plan.
+    const { channels: _beforeChannels, ...beforeForDiff } = before as unknown as Record<string, unknown> & { channels?: unknown };
+    await this.audit.logDiff(user, 'Client', clientId, beforeForDiff, client as unknown as Record<string, unknown>);
     return this.findOne(clientId);
   }
 ```
@@ -707,7 +712,11 @@ Replace `findAll`, `findAllPaginated`, `findOne`, `create`, `update`:
       },
     });
     if (channels !== undefined) await this.contactChannels.replace({ personId }, channels);
-    await this.audit.logDiff(user, 'Person', personId, before as unknown as Record<string, unknown>, person as unknown as Record<string, unknown>);
+    // Same before/after asymmetry as ClientsService.update() (Task 4) — `before`
+    // includes `channels` via findOne, the bare `update()` result never does.
+    // Exclude it from both sides so logDiff doesn't record a spurious change.
+    const { channels: _beforeChannels, ...beforeForDiff } = before as unknown as Record<string, unknown> & { channels?: unknown };
+    await this.audit.logDiff(user, 'Person', personId, beforeForDiff, person as unknown as Record<string, unknown>);
     return this.findOne(personId);
   }
 ```
@@ -1089,13 +1098,23 @@ git commit -m "Wire ContactChannelEditor into AdminAssets' Vendor/Operator/Clien
 
 ---
 
-## Task 9: `TripDetail.tsx` — `VendorContactCard` rewrite + crew table
+## Task 9: `TripDetail.tsx` — `VendorContactCard` rewrite + crew table + `PersonDetail.tsx` Phone/Email fields
+
+**Plan amendment (added post-Task-6):** Task 6's typecheck run revealed a
+real gap the plan's original UI call-site list missed —
+`PersonDetail.tsx`'s `BiodataCard` uses a generic
+`field(label, key: keyof Person, type?)` binder for every biodata field,
+including Phone/Email (`field('PHONE', 'Phone')` / `field('EMAIL', 'Email')`
+at what were lines 99-100), which no longer compiles now that `Person` has
+no `Phone`/`Email` keys. Folded into this task since both files are
+person/contact display+edit surfaces already in scope here.
 
 **Files:**
 - Modify: `src/client/pages/TripDetail.tsx`
+- Modify: `src/client/pages/admin/PersonDetail.tsx`
 
 **Interfaces:**
-- Consumes: `getPreferredContact` from `@/lib/dataStore` (Task 6).
+- Consumes: `getPreferredContact`, `setPreferredChannelValue` from `@/lib/dataStore` (Task 6).
 
 - [ ] **Step 1: Rewrite `VendorContactCard`**
 
@@ -1161,16 +1180,57 @@ Replace the two lines at the "CONTACT" column (`{p.Phone && <div>{p.Phone}</div>
 ```
 Add `getPreferredContact` to this file's existing `import { ... } from '@/lib/dataStore'` line.
 
-- [ ] **Step 3: Typecheck and build**
+- [ ] **Step 3: Fix `PersonDetail.tsx`'s Phone/Email fields**
+
+In `src/client/pages/admin/PersonDetail.tsx`'s `BiodataCard` function,
+replace the two lines `{field('PHONE', 'Phone')}` and
+`{field('EMAIL', 'Email')}` (each currently a single call to the
+component's generic `field(label, key: keyof Person, type?)` helper,
+which can no longer accept `'Phone'`/`'Email'` as a `keyof Person`) with
+bespoke inline inputs bound through `getPreferredContact`/
+`setPreferredChannelValue` instead, matching the same visual
+label+input structure every other `field(...)` call renders:
+
+```tsx
+      <label className="text-xs font-medium text-muted-foreground">
+        PHONE
+        <input
+          className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground"
+          type="text"
+          value={getPreferredContact(draft.Channels, 'Phone') || ''}
+          disabled={!editing}
+          onChange={(event) => setDraft({ ...draft, Channels: setPreferredChannelValue(draft.Channels, 'Phone', event.target.value) })}
+        />
+      </label>
+      <label className="text-xs font-medium text-muted-foreground">
+        EMAIL
+        <input
+          className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground"
+          type="text"
+          value={getPreferredContact(draft.Channels, 'Email') || ''}
+          disabled={!editing}
+          onChange={(event) => setDraft({ ...draft, Channels: setPreferredChannelValue(draft.Channels, 'Email', event.target.value) })}
+        />
+      </label>
+```
+
+Add `getPreferredContact, setPreferredChannelValue` to this file's
+existing `import { ... } from '@/lib/dataStore'` line (it already imports
+`getPerson, getPersonRatings, savePerson, ...` from the same module).
+Nothing else in `PersonDetail.tsx` changes — every other `field(...)`
+call (Name, DefaultRole, LicenceNumber, passport fields, etc.) is
+untouched.
+
+- [ ] **Step 4: Typecheck and build**
 
 Run: `npx tsc -p tsconfig.client.json --noEmit && npm run build:client`
-Expected: no errors referencing `TripDetail.tsx`.
+Expected: no errors referencing `TripDetail.tsx` or `PersonDetail.tsx`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/client/pages/TripDetail.tsx
-git commit -m "Rewrite VendorContactCard and crew table for multi-channel contacts"
+git add src/client/pages/TripDetail.tsx src/client/pages/admin/PersonDetail.tsx
+git commit -m "Rewrite VendorContactCard, crew table, and PersonDetail Phone/Email fields for multi-channel contacts"
 ```
 
 ---

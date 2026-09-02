@@ -1,0 +1,111 @@
+[
+  {
+    "OperatorID": "OP-001",
+    "Name": "JetStream Executive Aviation",
+    "Type": "Operator",
+    "Address": "123 Aviation Way, London, UK",
+    "Email": "ops@jetstream.aero",
+    "Phone": "+44 20 7946 0958",
+    "Fleet": [
+      "MABCD",
+      "MWXYZ"
+    ],
+    "PrimaryContact": "Sarah Mitchell",
+    "BillingAddress": "Finance Dept, 123 Aviation Way, London EC2A 4DP",
+    "PaymentTerms": "Net 30",
+    "Status": "Active",
+    "Notes": "UK-based charter operator. Part 135 equivalent."
+  },
+  {
+    "OperatorID": "OP-002",
+    "Name": "Horizon Trust Aviation",
+    "Type": "Private",
+    "Address": "45 Rue de Rivoli, Paris, France",
+    "Email": "flight@horizontrust.com",
+    "Phone": "+33 1 42 60 30 00",
+    "Fleet": [
+      "GTEST"
+    ],
+    "PrimaryContact": "Marie Dubois",
+    "BillingAddress": "45 Rue de Rivoli, 75001 Paris",
+    "PaymentTerms": "Net 15",
+    "Status": "Active",
+    "Notes": "Private principal transport."
+  },
+  {
+    "OperatorID": "OP-003",
+    "Name": "Legacy Aviation Management",
+    "Type": "Management",
+    "Address": "789 Park Ave, New York, NY",
+    "Email": "ops@legacyav.com",
+    "Phone": "+1 212 555 0100",
+    "Fleet": [],
+    "PrimaryContact": "Robert Chen",
+    "BillingAddress": "789 Park Ave, New York, NY 10021",
+    "PaymentTerms": "Net 30",
+    "Status": "Active",
+    "Notes": "Former operator of G-TEST."
+  },
+  {
+    "OperatorID": "OP-004",
+    "Name": "Universal Trip Support Services",
+    "Type": "Trip Support",
+    "Address": "1150 Gemini Blvd, Houston, TX",
+    "Email": "ops@universalweather.com",
+    "Phone": "+1 713 944 1622",
+    "Fleet": [
+      "N868KE"
+    ],
+    "PrimaryContact": "Heather Hobbs",
+    "BillingAddress": "1150 Gemini Blvd, Houston, TX 77058",
+    "PaymentTerms": "Net 30",
+    "Status": "Active",
+    "Notes": "Global trip support provider."
+  },
+  {
+    "OperatorID": "OP-005",
+    "Name": "Solairus Aviation",
+    "Type": "Management",
+    "Address": "2200 Airport Blvd, Santa Rosa, CA",
+    "Email": "ops@solairus.com",
+    "Phone": "+1 707 525 1550",
+    "Fleet": [
+      "N80TE"
+    ],
+    "PrimaryContact": "Joseph Fleming",
+    "BillingAddress": "2200 Airport Blvd, Santa Rosa, CA 95403",
+    "PaymentTerms": "Net 30",
+    "Status": "Active",
+    "Notes": "Aircraft management and charter."
+  },
+  {
+    "OperatorID": "OP-006",
+    "Name": "Universal Aviation Houston",
+    "Type": "FBO / Trip Support",
+    "Address": "8500 Will Clayton Pkwy, Houston, TX",
+    "Email": "hou@universalaviation.aero",
+    "Phone": "+1 713 944 1622",
+    "Fleet": [
+      "N766GD"
+    ],
+    "PrimaryContact": "Ashish Alex",
+    "BillingAddress": "8500 Will Clayton Pkwy, Houston, TX 77038",
+    "PaymentTerms": "Net 30",
+    "Status": "Active",
+    "Notes": "Ground handling and trip support."
+  },
+  {
+    "OperatorID": "OP-007",
+    "Name": "Gulfstream Aerospace Corp",
+    "Type": "Manufacturer",
+    "Address": "500 Gulfstream Rd, Savannah, GA",
+    "Email": "demo@gulfstream.com",
+    "Phone": "+1 912 965 3000",
+    "Fleet": [],
+    "PrimaryContact": "Demo Team",
+    "BillingAddress": "500 Gulfstream Rd, Savannah, GA 31408",
+    "PaymentTerms": "Net 15",
+    "Status": "Active",
+    "Notes": "Aircraft manufacturer. Former operator of N766GD."
+  }
+]

@@ -1,0 +1,132 @@
+[
+  {
+    "DocType": "Registration Certificate",
+    "Category": "Aircraft",
+    "Description": "Official aircraft registration document issued by the state of registry.",
+    "RequiredFor": ["Permit", "Overflight"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "State of Registry",
+    "Format": "PDF / Paper"
+  },
+  {
+    "DocType": "Airworthiness Certificate",
+    "Category": "Aircraft",
+    "Description": "Certificate confirming aircraft meets airworthiness standards.",
+    "RequiredFor": ["Permit", "Overflight"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": 12,
+    "IssuedBy": "State of Registry CAA",
+    "Format": "PDF / Paper"
+  },
+  {
+    "DocType": "Insurance Certificate",
+    "Category": "Aircraft",
+    "Description": "Third-party liability and hull insurance certificate.",
+    "RequiredFor": ["Permit", "Overflight", "GroundHandling"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": 12,
+    "IssuedBy": "Insurance Underwriter",
+    "Format": "PDF"
+  },
+  {
+    "DocType": "Permit Application Form",
+    "Category": "Trip",
+    "Description": "Standardized form for permit/overflight requests.",
+    "RequiredFor": ["Permit", "Overflight"],
+    "ValidityRequired": false,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "Trip Support Provider",
+    "Format": "PDF / Digital"
+  },
+  {
+    "DocType": "AOC",
+    "Category": "Operator",
+    "Description": "Air Operator Certificate confirming operator authorization.",
+    "RequiredFor": ["Permit", "Overflight"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": 12,
+    "IssuedBy": "State CAA",
+    "Format": "PDF / Paper"
+  },
+  {
+    "DocType": "Noise Certificate",
+    "Category": "Aircraft",
+    "Description": "Certificate confirming aircraft noise compliance (Chapter 14/Stage 5).",
+    "RequiredFor": ["Permit", "Overflight"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "State of Registry CAA",
+    "Format": "PDF"
+  },
+  {
+    "DocType": "PAX List",
+    "Category": "Trip",
+    "Description": "Passenger manifest with passport details.",
+    "RequiredFor": ["GroundHandling", "Customs"],
+    "ValidityRequired": false,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "Operator",
+    "Format": "PDF / Digital"
+  },
+  {
+    "DocType": "Crew Licence",
+    "Category": "Crew",
+    "Description": "Pilot/flight crew license document.",
+    "RequiredFor": ["Permit", "Overflight"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": 60,
+    "IssuedBy": "State CAA",
+    "Format": "PDF / Card"
+  },
+  {
+    "DocType": "Medical Certificate",
+    "Category": "Crew",
+    "Description": "Aviation medical certificate for crew members.",
+    "RequiredFor": ["Permit"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": 12,
+    "IssuedBy": "Authorized Medical Examiner",
+    "Format": "PDF / Paper"
+  },
+  {
+    "DocType": "Passport",
+    "Category": "Pax",
+    "Description": "Valid passport for all persons on board.",
+    "RequiredFor": ["Customs", "GroundHandling"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "State of Nationality",
+    "Format": "Physical Document"
+  },
+  {
+    "DocType": "Visa",
+    "Category": "Pax",
+    "Description": "Entry visa where required.",
+    "RequiredFor": ["Customs"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "Destination Country",
+    "Format": "Physical / Digital"
+  },
+  {
+    "DocType": "Yellow Fever Certificate",
+    "Category": "Pax",
+    "Description": "WHO yellow fever vaccination certificate.",
+    "RequiredFor": ["Customs"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": null,
+    "IssuedBy": "WHO Authorized Center",
+    "Format": "Physical / Digital"
+  },
+  {
+    "DocType": "Carnet de Passage",
+    "Category": "Aircraft",
+    "Description": "Temporary import document for aircraft.",
+    "RequiredFor": ["Customs"],
+    "ValidityRequired": true,
+    "DefaultValidityMonths": 12,
+    "IssuedBy": "Automobile Club",
+    "Format": "Paper Booklet"
+  }
+]

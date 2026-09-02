@@ -1,0 +1,65 @@
+<h2>What happens to dense tables (Details view) below tablet width?</h2>
+<p class="subtitle">Reference Data's Airports/Countries/etc. tables, and the "Details" option in every page's Tile/Large/Small/Details view toggle</p>
+
+<div class="cards">
+  <div class="card" data-choice="restrict" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; justify-content:center; padding:16px;">
+        <div style="width:130px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff;">
+          <div style="display:flex; gap:3px; margin-bottom:6px;">
+            <div style="flex:1; font-size:7px; text-align:center; background:#2563eb; color:#fff; border-radius:3px; padding:2px;">Tile</div>
+            <div style="flex:1; font-size:7px; text-align:center; background:#eee; color:#888; border-radius:3px; padding:2px;">Large</div>
+            <div style="flex:1; font-size:7px; text-align:center; background:#eee; color:#888; border-radius:3px; padding:2px;">Small</div>
+            <div style="flex:1; font-size:7px; text-align:center; background:#f5f5f5; color:#ccc; border-radius:3px; padding:2px; text-decoration:line-through;">List</div>
+          </div>
+          <div class="placeholder" style="height:20px; margin-bottom:4px;"></div>
+          <div class="placeholder" style="height:20px; background:#dbeafe;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · Hide "Details" below tablet</h3>
+      <p>The view-mode toggle only offers Tile/Large/Small on phone width — the raw table option isn't shown at all, since it genuinely can't work in that space. Simplest, safest.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="scroll" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; justify-content:center; padding:16px;">
+        <div style="width:130px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff; overflow:hidden;">
+          <div style="font-size:7px; color:#888; margin-bottom:4px;">List (scrolls →)</div>
+          <div style="width:220px; display:flex; gap:2px;">
+            <div class="placeholder" style="height:12px; width:40px;"></div>
+            <div class="placeholder" style="height:12px; width:40px;"></div>
+            <div class="placeholder" style="height:12px; width:40px;"></div>
+            <div class="placeholder" style="height:12px; width:40px; opacity:0.4;"></div>
+            <div class="placeholder" style="height:12px; width:40px; opacity:0.2;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · Keep it, horizontal scroll</h3>
+      <p>Every view mode stays available everywhere, including List/Details. The table just scrolls sideways within its own container on narrow screens. No behavior change, more finger-scrolling.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="restack" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; justify-content:center; padding:16px;">
+        <div style="width:130px; border:2px solid #888; border-radius:10px; padding:6px; background:#fff;">
+          <div style="font-size:7px; color:#888; margin-bottom:4px;">List (row → stacked card)</div>
+          <div style="border:1px solid #ddd; border-radius:4px; padding:4px; margin-bottom:4px;">
+            <div style="font-size:7px; color:#888;">ICAO: <b style="color:#333">OMDB</b></div>
+            <div style="font-size:7px; color:#888;">Name: Dubai Intl</div>
+            <div style="font-size:7px; color:#888;">Country: UAE</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · Auto-restack rows as cards</h3>
+      <p>"Details" stays selectable everywhere, but below tablet width each table row automatically renders as a small stacked label:value card instead of a `&lt;table&gt;` row — no data lost, no sideways scrolling, but more work to build since it changes how every page's Details mode renders on narrow screens.</p>
+    </div>
+  </div>
+</div>
