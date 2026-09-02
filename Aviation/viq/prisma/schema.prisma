@@ -423,8 +423,9 @@ model Leg {
   includeFirs        String[] @map("include_firs")
   routing            String?
 
-  trip        Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
-  assignments LegPersonAssignment[]
+  trip           Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  assignments    LegPersonAssignment[]
+  connectingStop Stop?
 
   @@index([tripId])
   @@index([etdZ])
@@ -439,8 +440,10 @@ model Stop {
   depZ            DateTime @map("dep_z")
   groundTimeHours Float    @map("ground_time_hours")
   purpose         String
+  afterLegId      String?  @unique @map("after_leg_id")
 
-  trip Trip @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  trip     Trip @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  afterLeg Leg? @relation(fields: [afterLegId], references: [legId], onDelete: SetNull)
 
   @@index([tripId])
   @@map("stops")
