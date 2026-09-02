@@ -853,7 +853,7 @@ export async function savePerson(person: Person, user = currentUser()): Promise<
     passportNumber: person.PassportNumber, passportNationality: person.PassportNationality,
     passportIssuingCountry: person.PassportIssuingCountry, passportExpiryDate: person.PassportExpiryDate,
     passportDateOfBirth: person.PassportDateOfBirth, passportSex: person.PassportSex,
-    channels: person.Channels.map((c) => ({ channelType: c.ChannelType, value: c.Value, label: c.Label, preferred: c.Preferred, forBilling: c.ForBilling })),
+    channels: (person.Channels ?? []).map((c) => ({ channelType: c.ChannelType, value: c.Value, label: c.Label, preferred: c.Preferred, forBilling: c.ForBilling })),
     user,
   });
   const row = exists
@@ -1430,7 +1430,7 @@ export async function saveProvider(p: Provider, user = currentUser()): Promise<P
     scopeType: p.ScopeType,
     scope: p.Scope,
     workingHoursZ: p.WorkingHoursZ,
-    channels: p.Channels.map((c) => ({ channelType: c.ChannelType, value: c.Value, label: c.Label, preferred: c.Preferred, forBilling: c.ForBilling })),
+    channels: (p.Channels ?? []).map((c) => ({ channelType: c.ChannelType, value: c.Value, label: c.Label, preferred: c.Preferred, forBilling: c.ForBilling })),
     user,
   });
   const row = exists
@@ -1567,7 +1567,7 @@ export async function saveOperator(o: Operator, user = currentUser()): Promise<O
     paymentTerms: o.PaymentTerms,
     status: o.Status,
     notes: o.Notes,
-    channels: o.Channels.map((c) => ({ channelType: c.ChannelType, value: c.Value, label: c.Label, preferred: c.Preferred, forBilling: c.ForBilling })),
+    channels: (o.Channels ?? []).map((c) => ({ channelType: c.ChannelType, value: c.Value, label: c.Label, preferred: c.Preferred, forBilling: c.ForBilling })),
     user,
   });
   const row = exists
@@ -1622,7 +1622,7 @@ export async function saveClient(c: Client, user = currentUser()): Promise<Clien
     billingPostalCode: c.BillingPostalCode || undefined,
     billingCountry: c.BillingCountry || undefined,
     notes: c.Notes || undefined,
-    channels: c.Channels.map((ch) => ({ channelType: ch.ChannelType, value: ch.Value, label: ch.Label, preferred: ch.Preferred, forBilling: ch.ForBilling })),
+    channels: (c.Channels ?? []).map((ch) => ({ channelType: ch.ChannelType, value: ch.Value, label: ch.Label, preferred: ch.Preferred, forBilling: ch.ForBilling })),
     user,
   });
   const row = exists

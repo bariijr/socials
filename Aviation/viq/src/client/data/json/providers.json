@@ -1,0 +1,230 @@
+[
+  {
+    "ProviderID": "P001",
+    "Name": "Jet Aviation Dubai",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel",
+      "Catering",
+      "CrewTransport"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "OMDB",
+    "WorkingHoursZ": "H24",
+    "Currency": "AED",
+    "PaymentTerms": "Net 7",
+    "Rating": 5,
+    "ContractActive": true,
+    "Notes": "VIP lounge bookable. Full FBO services.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P002",
+    "Name": "ExecuJet Dubai",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "OMDB",
+    "WorkingHoursZ": "H24",
+    "Currency": "AED",
+    "PaymentTerms": "Net 7",
+    "Rating": 4,
+    "ContractActive": true,
+    "Notes": "Competitive fuel pricing.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P003",
+    "Name": "Signature Flight Support LHR",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel",
+      "Catering"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "EGLL",
+    "WorkingHoursZ": "H24",
+    "Currency": "GBP",
+    "PaymentTerms": "Net 14",
+    "Rating": 5,
+    "ContractActive": true,
+    "Notes": "Heathrow slots tight. Book early.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P004",
+    "Name": "African Aviation Services",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel",
+      "CrewTransport"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "HKJK",
+    "WorkingHoursZ": "06:00-22:00Z",
+    "Currency": "KES",
+    "PaymentTerms": "Net 7",
+    "Rating": 4,
+    "ContractActive": true,
+    "Notes": "PPR for JKIA. CIQ assistance.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P005",
+    "Name": "Saudi Ground Services",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "OERK",
+    "WorkingHoursZ": "H24",
+    "Currency": "SAR",
+    "PaymentTerms": "Net 7",
+    "Rating": 4,
+    "ContractActive": true,
+    "Notes": "National handler. Good coverage.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P006",
+    "Name": "Permit Express Ltd",
+    "ServiceTypes": [
+      "Permit",
+      "Overflight"
+    ],
+    "ScopeType": "Global",
+    "Scope": "Global",
+    "WorkingHoursZ": "08:00-18:00Z",
+    "Currency": "USD",
+    "PaymentTerms": "Net 14",
+    "Rating": 5,
+    "ContractActive": true,
+    "Notes": "Specialist permit broker. Fast turnaround.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P007",
+    "Name": "GACA Permit Desk",
+    "ServiceTypes": [
+      "Permit",
+      "Overflight"
+    ],
+    "ScopeType": "Country",
+    "Scope": "SA",
+    "WorkingHoursZ": "Sun-Thu 07:00-15:00Z",
+    "Currency": "SAR",
+    "PaymentTerms": "Government",
+    "Rating": 3,
+    "ContractActive": true,
+    "Notes": "Official government channel. Slow but authoritative.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P008",
+    "Name": "KCAA Permits",
+    "ServiceTypes": [
+      "Permit",
+      "Overflight"
+    ],
+    "ScopeType": "Country",
+    "Scope": "KE",
+    "WorkingHoursZ": "Mon-Fri 06:00-15:00Z",
+    "Currency": "KES",
+    "PaymentTerms": "Government",
+    "Rating": 3,
+    "ContractActive": true,
+    "Notes": "Official government channel.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P009",
+    "Name": "SkyPlan Flight Support",
+    "ServiceTypes": [
+      "Permit",
+      "Overflight",
+      "GroundHandling",
+      "Fuel"
+    ],
+    "ScopeType": "Global",
+    "Scope": "Global",
+    "WorkingHoursZ": "H24",
+    "Currency": "USD",
+    "PaymentTerms": "Net 14",
+    "Rating": 4,
+    "ContractActive": true,
+    "Notes": "Canadian-based global support.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P010",
+    "Name": "Cairo Ground Handling",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "HECA",
+    "WorkingHoursZ": "H24",
+    "Currency": "EGP",
+    "PaymentTerms": "Net 7",
+    "Rating": 4,
+    "ContractActive": true,
+    "Notes": "Established local handler.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P011",
+    "Name": "Universal Weather",
+    "ServiceTypes": [
+      "Permit",
+      "Overflight"
+    ],
+    "ScopeType": "Global",
+    "Scope": "Global",
+    "WorkingHoursZ": "H24",
+    "Currency": "USD",
+    "PaymentTerms": "Net 30",
+    "Rating": 5,
+    "ContractActive": true,
+    "Notes": "Industry leader. Premium pricing.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P012",
+    "Name": "Signature Aviation CPT",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "FACT",
+    "WorkingHoursZ": "H24",
+    "Currency": "ZAR",
+    "PaymentTerms": "Net 14",
+    "Rating": 5,
+    "ContractActive": true,
+    "Notes": "VIP handling. Customs assistance.",
+    "Channels": []
+  },
+  {
+    "ProviderID": "P013",
+    "Name": "Fireblade Aviation",
+    "ServiceTypes": [
+      "GroundHandling",
+      "Fuel",
+      "CrewTransport"
+    ],
+    "ScopeType": "ICAO",
+    "Scope": "FALA",
+    "WorkingHoursZ": "H24",
+    "Currency": "ZAR",
+    "PaymentTerms": "Net 7",
+    "Rating": 5,
+    "ContractActive": true,
+    "Notes": "Premium FBO. O2 service available.",
+    "Channels": []
+  }
+]

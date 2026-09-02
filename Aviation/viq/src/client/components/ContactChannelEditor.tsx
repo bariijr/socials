@@ -33,7 +33,7 @@ export function ContactChannelEditor({ channels, onChange }: {
       <Label>Contact Channels</Label>
       {channels.map((c, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2 rounded-md border p-2">
-          <Select value={c.ChannelType} onValueChange={(v) => update(i, { ChannelType: v as ContactChannel['ChannelType'] })}>
+          <Select value={c.ChannelType} onValueChange={(v) => update(i, { ChannelType: v as ContactChannel['ChannelType'], ForBilling: v === 'Email' ? c.ForBilling : false })}>
             <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
             <SelectContent>
               {CHANNEL_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}

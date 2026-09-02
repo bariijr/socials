@@ -840,10 +840,10 @@ function VendorContactCard({ provider }: { provider: Provider }) {
         <span className="text-xs font-semibold">{provider.Name}</span>
         {provider.WorkingHoursZ && <span className="text-[10px] text-muted-foreground">{provider.WorkingHoursZ}</span>}
       </div>
-      {provider.Channels.length > 0 && (
+      {(provider.Channels ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {provider.Channels.map((c, i) => {
-            const Icon = CHANNEL_ICON[c.ChannelType];
+            const Icon = CHANNEL_ICON[c.ChannelType] ?? Mail;
             return (
               <a
                 key={i}

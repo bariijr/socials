@@ -65,7 +65,7 @@ export function ComposeDrawer({
 
   const action: RequestAction = isRevisionTemplate(template) ? 'Revision' : 'Request';
   const selectedProvider = providers.find((p) => p.ProviderID === providerId) ?? null;
-  const recipients = selectedProvider?.Channels.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
+  const recipients = selectedProvider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
   const countryISO2 = service.ServiceType === 'GroundHandling' ? (arrCountryISO2 ?? null) : (service.CountryISO2 ?? null);
 
   // Re-detect the default Request/Revision on every open (comms may have

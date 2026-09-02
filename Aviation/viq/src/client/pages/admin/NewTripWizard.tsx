@@ -371,7 +371,7 @@ export default function NewTripWizard() {
       setBillToState(c.BillingState || '');
       setBillToPostalCode(c.BillingPostalCode || '');
       setBillToCountry(c.BillingCountry || '');
-      setBillToEmails((c.BillingEmails || []).join(', '));
+      setBillToEmails(c.Channels.filter((ch) => ch.ChannelType === 'Email' && ch.ForBilling).map((ch) => ch.Value).join(', '));
     }
   };
 
@@ -532,7 +532,14 @@ export default function NewTripWizard() {
         BillingState: billToState || undefined,
         BillingPostalCode: billToPostalCode || undefined,
         BillingCountry: billToCountry || undefined,
-        BillingEmails: billToEmails.split(',').map((e) => e.trim()).filter(Boolean),
+        // Client lost its single BillingEmails string[] field when Task 6
+        // moved contact data onto the shared Channels model — each
+        // billing email becomes its own Email channel marked ForBilling,
+        // matching how Task 6's migration represents pre-existing
+        // billingEmails values (see plan Task 12 Step 4).
+        Channels: billToEmails.split(',').map((e) => e.trim()).filter(Boolean).map((email) => ({
+          ID: 0, ChannelType: 'Email' as const, Value: email, Preferred: false, ForBilling: true,
+        })),
       });
       resolvedClientId = created.ClientID;
     }
@@ -583,9 +590,7 @@ export default function NewTripWizard() {
     }
 
     // Save persons
-    persons.forEach((p) => {
-      savePerson(p as Person);
-    });
+    await Promise.all(persons.map((p) => savePerson(p as Person)));
 
     setConfirmOpen(true);
     } catch (e) {

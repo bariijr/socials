@@ -647,7 +647,7 @@ export default function ReferencePage() {
           <div className="mb-4 flex items-center justify-end gap-2">
             <Input placeholder="Search providers..." value={providerFilter.query} onChange={(e) => providerFilter.setQuery(e.target.value)} className="h-9 w-56" />
             <ViewModeToggle value={providerViewStored} onChange={setProviderView} />
-            <Button size="sm" variant="outline" onClick={() => exportToExcel(providers.map(({ Channels, ...rest }) => rest), 'providers.xlsx', 'Providers')}>
+            <Button size="sm" variant="outline" onClick={() => exportToExcel(providers.map(({ Channels, ...rest }) => ({ ...rest, Email: getPreferredContact(Channels, 'Email'), Phone: getPreferredContact(Channels, 'Phone') })), 'providers.xlsx', 'Providers')}>
               <Download className="h-4 w-4" /> Download
             </Button>
             <label className="inline-flex">
@@ -666,7 +666,11 @@ export default function ReferencePage() {
                         ProviderID: row.ProviderID, Name: row.Name,
                         ServiceTypes: parseListCell(row.ServiceTypes),
                         ScopeType: row.ScopeType as Provider['ScopeType'], Scope: row.Scope,
-                        WorkingHoursZ: row.WorkingHoursZ, Channels: [],
+                        WorkingHoursZ: row.WorkingHoursZ,
+                        Channels: [
+                          ...(row.Email ? [{ ID: 0, ChannelType: 'Email' as const, Value: row.Email, Preferred: true, ForBilling: false }] : []),
+                          ...(row.Phone ? [{ ID: 0, ChannelType: 'Phone' as const, Value: row.Phone, Preferred: true, ForBilling: false }] : []),
+                        ],
                       });
                       ok++;
                     } catch (err) {

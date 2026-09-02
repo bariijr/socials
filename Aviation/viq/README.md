@@ -1717,6 +1717,12 @@ instead of exactly one email and one phone.
   Providers tile and details views, and `NewTripWizard.tsx`'s quick-add
   person row all now read and write through `Channels` rather than the
   removed flat fields.
+- `dataStore.ts` and `NewTripWizard.tsx` both carry `// @ts-nocheck`, so
+  `tsc` alone is not a sufficient regression gate for future changes
+  touching contact-channel code in those two files. A manual "temporarily
+  remove `@ts-nocheck`, read every error, triage caused-by-this-change vs
+  pre-existing" pass is recommended for any future contact-model change
+  touching them.
 
 ## What's not done yet
 
