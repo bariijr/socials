@@ -30,5 +30,10 @@ export class CreateStopDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
+  afterLegId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
   user?: string;
 }

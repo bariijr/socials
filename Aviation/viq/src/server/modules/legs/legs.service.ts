@@ -95,25 +95,27 @@ export class LegsService {
     return [...new Set(resolved)];
   }
 
-  // Item 16: when consecutive legs connect (this leg's arrival = another
-  // leg's departure, or vice versa), that airport is a real stop the trip
-  // makes — ensure a Stop row exists for it instead of requiring it to be
-  // added by hand. Ground handling itself doesn't depend on this Stop row
-  // existing (ServicesService.generateArrivalServices already fires per-leg
-  // arrival unconditionally) — this only fixes the Stops tab/summary being
-  // silently incomplete for a connecting airport.
+  // Item 16 (extended): when consecutive legs connect (this leg's arrival
+  // = the next leg's departure), that airport is a real stop the trip
+  // makes -- ensure a Stop row exists for it instead of requiring it to
+  // be added by hand. Idempotency is checked per leg-transition
+  // (Stop.afterLegId), never by ICAO alone -- a repeated-ICAO itinerary
+  // (a demo flight landing at the same airport twice, or revisiting an
+  // airport later in the trip) must get one Stop row per transition, not
+  // one Stop row per distinct ICAO. See the Phase 0 assessment's
+  // Conflict #1 for why the previous ICAO-Set-based dedup was wrong.
   private async ensureConnectingStops(tripId: string, user: string) {
     const legs = await this.prisma.leg.findMany({ where: { tripId }, orderBy: { seq: 'asc' } });
-    const existingStops = await this.prisma.stop.findMany({ where: { tripId } });
-    const stopIcaos = new Set(existingStops.map((s) => s.icao));
 
     for (let i = 0; i < legs.length - 1; i++) {
       const current = legs[i];
       const next = legs[i + 1];
       if (current.arrIcao !== next.depIcao) continue; // not a connecting route
-      const icao = current.arrIcao;
-      if (stopIcaos.has(icao)) continue;
 
+      const already = await this.prisma.stop.findUnique({ where: { afterLegId: current.legId } });
+      if (already) continue; // this specific transition already has its stop
+
+      const icao = current.arrIcao;
       const stopId = `${tripId}-STOP-${icao}-${Date.now().toString(36).toUpperCase()}`;
       const groundTimeHours = Math.max(0, (next.etdZ.getTime() - current.etaZ.getTime()) / (1000 * 60 * 60));
       await this.stops.create({
@@ -124,9 +126,9 @@ export class LegsService {
         depZ: next.etdZ.toISOString(),
         groundTimeHours,
         purpose: 'Tech',
+        afterLegId: current.legId,
         user,
       });
-      stopIcaos.add(icao); // don't create a second Stop for the same airport within this pass
     }
   }
 
