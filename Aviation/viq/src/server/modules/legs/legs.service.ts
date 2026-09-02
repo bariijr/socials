@@ -104,6 +104,19 @@ export class LegsService {
   // airport later in the trip) must get one Stop row per transition, not
   // one Stop row per distinct ICAO. See the Phase 0 assessment's
   // Conflict #1 for why the previous ICAO-Set-based dedup was wrong.
+  //
+  // Final-review fix: before creating a brand-new Stop for a connecting
+  // transition, first look for a pre-existing *unlinked* Stop at that ICAO
+  // on this trip (afterLegId: null) and claim it instead. Every trip that
+  // existed before this Stop.afterLegId feature landed has stops in
+  // exactly that shape (see prisma/seed.ts's OMDB stop on trip 2608001),
+  // and the same shape reappears any time a leg is deleted (the FK is
+  // onDelete: SetNull, so deleting a leg orphans its stop rather than
+  // removing it) or a stop is added by hand. Creating unconditionally
+  // there produced a silent duplicate Stop row and orphaned the original
+  // -- along with any GroundHandling/Fuel services scoped to it. This
+  // claim-before-create step mirrors scripts/backfill-stop-after-leg-id.ts,
+  // which performs the same repair for pre-existing trips in bulk.
   private async ensureConnectingStops(tripId: string, user: string) {
     const legs = await this.prisma.leg.findMany({ where: { tripId }, orderBy: { seq: 'asc' } });
 
@@ -116,14 +129,44 @@ export class LegsService {
       if (already) continue; // this specific transition already has its stop
 
       const icao = current.arrIcao;
-      const stopId = `${tripId}-STOP-${icao}-${Date.now().toString(36).toUpperCase()}`;
+      const arrZ = current.etaZ.toISOString();
+      const depZ = next.etdZ.toISOString();
       const groundTimeHours = Math.max(0, (next.etdZ.getTime() - current.etaZ.getTime()) / (1000 * 60 * 60));
+
+      // Claim an existing unlinked Stop at this ICAO on this trip instead
+      // of creating a duplicate, if one is available. Goes straight to
+      // Prisma (not StopsService.update/UpdateStopDto) because afterLegId
+      // is deliberately excluded from the public update DTO -- it's an
+      // internal linkage the generator (and the backfill script) own, not
+      // something a PATCH /stops/:id caller should be able to rewrite.
+      const unclaimed = await this.prisma.stop.findFirst({ where: { tripId, icao, afterLegId: null } });
+      if (unclaimed) {
+        const updated = await this.prisma.stop.update({
+          where: { stopId: unclaimed.stopId },
+          data: { afterLegId: current.legId },
+        });
+        await this.audit.logDiff(
+          user,
+          'Stop',
+          updated.stopId,
+          unclaimed as unknown as Record<string, unknown>,
+          updated as unknown as Record<string, unknown>,
+        );
+        continue;
+      }
+
+      // legId is already guaranteed unique per leg, so it's a safer
+      // uniqueness source for stopId than Date.now() -- repeated-ICAO
+      // transitions handled within the same loop pass (e.g.
+      // FALA -> FALA -> FALA) could otherwise collide on the same
+      // millisecond and violate the Stop primary key.
+      const stopId = `${tripId}-STOP-${icao}-${current.legId}`;
       await this.stops.create({
         stopId,
         tripId,
         icao,
-        arrZ: current.etaZ.toISOString(),
-        depZ: next.etdZ.toISOString(),
+        arrZ,
+        depZ,
         groundTimeHours,
         purpose: 'Tech',
         afterLegId: current.legId,

@@ -24,7 +24,10 @@ export async function backfillStopAfterLegId(
   for (const { tripId } of allTrips) {
     const [tripLegs, unlinkedStops] = await Promise.all([
       prisma.leg.findMany({ where: { tripId }, orderBy: { seq: 'asc' } }),
-      prisma.stop.findMany({ where: { tripId, afterLegId: null } }),
+      // orderBy arrZ so that, when multiple unlinked stops share an ICAO,
+      // findIndex below picks the earliest one deterministically rather
+      // than whatever order Postgres happens to return rows in.
+      prisma.stop.findMany({ where: { tripId, afterLegId: null }, orderBy: { arrZ: 'asc' } }),
     ]);
     const unclaimed = [...unlinkedStops];
     let claimed = 0;
@@ -38,14 +41,28 @@ export async function backfillStopAfterLegId(
       const alreadyLinked = await prisma.stop.findUnique({ where: { afterLegId: current.legId } });
       if (alreadyLinked) continue;
 
+      const groundTimeHours = Math.max(0, (next.etdZ.getTime() - current.etaZ.getTime()) / (1000 * 60 * 60));
+
       const matchIdx = unclaimed.findIndex((s) => s.icao === current.arrIcao);
       if (matchIdx >= 0) {
         const [match] = unclaimed.splice(matchIdx, 1);
-        await prisma.stop.update({ where: { stopId: match.stopId }, data: { afterLegId: current.legId } });
+        // Reconcile the claimed row's own timestamps to the transition it
+        // now represents -- the matching here is best-effort (this is
+        // exactly the ambiguous case the old ICAO-dedup bug created), so
+        // the row's arrZ/depZ/groundTimeHours may belong to a different
+        // leg pair than the one it's being claimed for. Without this, a
+        // claimed stop keeps whatever timestamps it originally had, which
+        // can be wrong for its new transition.
+        await prisma.stop.update({
+          where: { stopId: match.stopId },
+          data: { afterLegId: current.legId, arrZ: current.etaZ, depZ: next.etdZ, groundTimeHours },
+        });
         claimed += 1;
       } else {
-        const stopId = `${tripId}-STOP-${current.arrIcao}-${Date.now().toString(36).toUpperCase()}-BF`;
-        const groundTimeHours = Math.max(0, (next.etdZ.getTime() - current.etaZ.getTime()) / (1000 * 60 * 60));
+        // legId is already guaranteed unique per leg -- a safer uniqueness
+        // source for stopId than Date.now(), which could collide within
+        // the same millisecond across repeated-ICAO transitions.
+        const stopId = `${tripId}-STOP-${current.arrIcao}-${current.legId}-BF`;
         await prisma.stop.create({
           data: {
             stopId,
