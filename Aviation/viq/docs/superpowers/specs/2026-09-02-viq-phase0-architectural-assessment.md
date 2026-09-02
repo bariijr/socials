@@ -226,23 +226,36 @@ evidence, with three adjustments:
    dependency pressure from earlier phases, heaviest external-licensing
    surface.
 
-## Open questions for the user
+## Decisions (resolved 2026-09-02)
 
-1. Conflict #1 (stop dedup) needs your decision on the resolution proposed
-   above before Phase 3 is spec'd.
-2. Conflict #3 (Organization/OrganizationRole) — recommend explicit
-   rejection; confirm.
-3. §83 (Action Board content) needs a direct read of `Dashboard.tsx` this
-   assessment didn't reach — fine to pick up when that phase is spec'd.
+1. **Conflict #1 (stop dedup) — RESOLVED: remove auto-dedup entirely.**
+   `ensureConnectingStops` will no longer skip creating a connecting stop
+   because the same ICAO already appears elsewhere on the trip — every leg
+   transition gets its own stop record, implicit or manual, regardless of
+   repeated ICAOs. This is broader than the originally-proposed "only
+   dedup implicit-vs-implicit" compromise; it fully honors §29's "no
+   deduplication by ICAO, ever" requirement, including for auto-generated
+   connecting stops. To be carried into the Phase 3 design: audit every
+   stop-count/stop-list UI for an assumption that stops are unique per
+   ICAO before this lands, since none should exist afterward.
+2. **Conflict #3 (Organization/OrganizationRole) — RESOLVED: adopt.**
+   Proceed with a generic `Organization` + `OrganizationRole` model
+   unifying Client/Vendor/Operator, accepting the migration cost now. This
+   is **not** part of the Phase 1+3 sub-project below — it belongs to the
+   Vendor Upgrade phase (source doc Phase 10) alongside Vendor IDs and
+   questionnaires, and should be brainstormed as its own spec when that
+   phase starts, informed by this decision.
+3. §83 (Action Board content) still needs a direct read of `Dashboard.tsx`
+   this assessment didn't reach — pick up when that phase is spec'd.
 4. External licensing (Mapbox, OpenAIP, RocketRoute/ForeFlight) all need
-   your own accounts/keys and ToS review before Phase 12 starts — flagging
-   now so it isn't a late surprise.
+   the user's own accounts/keys and ToS review before Phase 12 starts —
+   flagged, not yet actioned.
 
-## Recommended next step
+## Next step (in progress)
 
 Per the brainstorming process, this assessment is not itself an
-implementation plan. The next step is to pick **one** phase above and run
-it through its own brainstorm → spec → plan cycle. Given the sequencing
-above, **Phase 1 (test foundation) + Phase 3 (Leg/Stop correction)** is the
-natural first sub-project — it's the one every later phase depends on, and
-conflict #1 makes it more than pure UI cleanup.
+implementation plan. **Phase 1 (test foundation) + Phase 3 (Leg/Stop
+correction)** was selected as the first sub-project — it's the one every
+later phase depends on, and the stop-dedup decision above makes it more
+than pure UI cleanup. That work gets its own brainstorm → spec → plan
+cycle, starting now.
