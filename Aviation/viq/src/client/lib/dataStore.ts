@@ -523,7 +523,13 @@ export async function getTripsPaginated(
     data: res.data.map((row: any) => ({
       ...mapTripFromApi(row),
       Legs: row.legs.map(mapLegFromApi),
-      Counts: { Stops: row._count.stops, Services: row._count.services, Comms: row._count.comms },
+      // "N Stops" means arrival events (one per leg, destination included),
+      // not the Stop table's row count -- that table tracks a different
+      // concept (connecting/technical layovers between two legs). A
+      // single-leg trip (e.g. HTDA -> FALA) has zero connecting Stop rows
+      // but is legitimately "1 stop: FALA" from a coordinator's point of
+      // view. See docs/superpowers/specs/2026-09-02-viq-test-foundation-leg-stop-correction-design.md.
+      Counts: { Stops: row.legs.length, Services: row._count.services, Comms: row._count.comms },
     })),
     page: res.page, limit: res.limit, total: res.total, totalPages: res.totalPages,
   };
