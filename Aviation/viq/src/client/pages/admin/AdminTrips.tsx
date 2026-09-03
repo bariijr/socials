@@ -292,6 +292,7 @@ function AddServiceDialog({
       ServiceType: serviceType,
       ProviderID: providerId || null,
       Status: 'Not Started',
+      Version: 1,
       RefNumber: '',
       BasedOnETDZ: new Date().toISOString(),
       RequiredByZ: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
@@ -431,6 +432,7 @@ function AddLegDialog({
       CrewCount: crewCount,
       CountriesOverflown: countries,
       Revision: 1,
+      Version: 1,
       CallSign: callSign || undefined,
     };
     onAdd(leg);

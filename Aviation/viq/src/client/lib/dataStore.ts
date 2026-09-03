@@ -174,19 +174,27 @@ export const refPricelist: PriceItem[] = pricelistJson as PriceItem[];
 // responses are camelCase (Prisma/NestJS convention); frontend types in
 // data/types.ts are PascalCase. These are mechanical field renames, no logic.
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  body: unknown;
+  constructor(message: string, status: number, body: unknown) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
 async function apiJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await apiFetch(path, options);
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new ApiError(`${options.method ?? 'GET'} ${path} failed: ${res.status} ${body}`, res.status);
+    const text = await res.text().catch(() => '');
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : undefined;
+    } catch {
+      // Not JSON -- keep the raw text as the body.
+    }
+    throw new ApiError(`${options.method ?? 'GET'} ${path} failed: ${res.status} ${text}`, res.status, body);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -244,6 +252,10 @@ function mapTripFromApi(t: any): Trip {
     Operator: t.operator ?? '',
     Registration: t.registration ?? '',
     Status: t.status,
+    Version: t.version,
+    StatusChangedAt: t.statusChangedAt ?? undefined,
+    StatusChangedBy: t.statusChangedBy ?? undefined,
+    AllowedTransitions: t.allowedTransitions ?? undefined,
     Owner: t.owner ?? '',
     OwnerUserID: t.ownerUserId ?? undefined,
     Team: t.team ?? undefined,
@@ -274,6 +286,7 @@ function mapTripToApi(trip: Trip): Record<string, unknown> {
     operator: trip.Operator,
     registration: trip.Registration,
     status: trip.Status,
+    version: trip.Version,
     owner: trip.Owner,
     ownerUserId: trip.OwnerUserID,
     team: trip.Team,
@@ -309,6 +322,7 @@ function mapLegFromApi(l: any): Leg {
     CrewCount: l.crewCount,
     CountriesOverflown: l.countriesOverflown ?? [],
     Revision: l.revision,
+    Version: l.version,
     CallSign: l.callSign ?? undefined,
     Purpose: l.purpose ?? undefined,
     AvoidFIRs: l.avoidFirs ?? undefined,
@@ -331,6 +345,7 @@ function mapLegToApi(leg: Leg): Record<string, unknown> {
     crewCount: leg.CrewCount,
     countriesOverflown: leg.CountriesOverflown,
     revision: leg.Revision,
+    version: leg.Version,
     callSign: leg.CallSign,
     purpose: leg.Purpose,
     avoidFirs: leg.AvoidFIRs,
@@ -372,6 +387,10 @@ function mapServiceFromApi(s: any): Service {
     ServiceType: s.serviceType,
     ProviderID: s.providerId ?? null,
     Status: s.status,
+    Version: s.version,
+    StatusChangedAt: s.statusChangedAt ?? undefined,
+    StatusChangedBy: s.statusChangedBy ?? undefined,
+    AllowedTransitions: s.allowedTransitions ?? undefined,
     RefNumber: s.refNumber,
     BasedOnETDZ: s.basedOnEtdZ,
     RequiredByZ: s.requiredByZ,
@@ -399,6 +418,7 @@ function mapServiceToApi(service: Service): Record<string, unknown> {
     serviceType: service.ServiceType,
     providerId: service.ProviderID,
     status: service.Status,
+    version: service.Version,
     refNumber: service.RefNumber,
     basedOnEtdZ: service.BasedOnETDZ,
     requiredByZ: service.RequiredByZ,

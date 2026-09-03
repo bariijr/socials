@@ -341,6 +341,7 @@ function LegEditor({
       ServiceType: serviceType,
       ProviderID: null,
       Status: 'Not Started',
+      Version: 1,
       RefNumber: '',
       BasedOnETDZ: draft.ETDZ,
       RequiredByZ: draft.ETDZ,
@@ -1528,6 +1529,7 @@ export default function TripDetail() {
       CrewCount: 0,
       CountriesOverflown: [],
       Revision: 1,
+      Version: 1,
       Purpose: '',
       Routing: '',
     };

@@ -151,6 +151,10 @@ export interface Trip {
   Operator: string;
   Registration: string;
   Status: TripStatus;
+  Version: number;
+  StatusChangedAt?: string;
+  StatusChangedBy?: string;
+  AllowedTransitions?: string[];
   Owner: string;
   OwnerUserID?: string;
   Team?: string;
@@ -187,6 +191,7 @@ export interface Leg {
   CrewCount: number;
   CountriesOverflown: string[];
   Revision: number;
+  Version: number;
   CallSign?: string; // e.g. ACW169 per leg
   Purpose?: string;
   AvoidFIRs?: string[];
@@ -212,6 +217,10 @@ export interface Service {
   ServiceType: ServiceType;
   ProviderID: string | null;
   Status: ServiceStatus;
+  Version: number;
+  StatusChangedAt?: string;
+  StatusChangedBy?: string;
+  AllowedTransitions?: string[];
   RefNumber: string;
   BasedOnETDZ: string;
   RequiredByZ: string;
