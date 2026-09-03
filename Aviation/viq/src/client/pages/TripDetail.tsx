@@ -7,6 +7,7 @@ import {
   uploadDoc, downloadDocFile, deleteDoc, runDocOcr,
   getPersonRoster, assignPersonToLeg, assignPersonToAllLegs, unassignPersonFromLeg,
   getClientList, saveClient, getUserDirectory, getPreferredContact,
+  ApiError,
 } from '@/lib/dataStore';
 import { haversineNM } from '@/lib/geo';
 import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel } from '@/data/types';
@@ -32,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Combobox } from '@/components/ui/combobox';
 import { ComposeDrawer } from '@/components/ComposeDrawer';
 import { DocVerifyDialog } from '@/components/DocVerifyDialog';
+import { ConflictDialog } from '@/components/ConflictDialog';
 import { useAuth } from '@/lib/authContext';
 
 const SERVICE_STATUSES: ServiceStatus[] = [
@@ -1233,6 +1235,7 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
   const [saving, setSaving] = useState(false);
   const [billToEmailsText, setBillToEmailsText] = useState((trip.BillToEmails || []).join(', '));
   const [userDirectory, setUserDirectory] = useState<UserDirectoryEntry[]>([]);
+  const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
 
   useEffect(() => { getUserDirectory().then(setUserDirectory); }, []);
   useEffect(() => { setDraft(trip); setBillToEmailsText((trip.BillToEmails || []).join(', ')); }, [trip]);
@@ -1288,9 +1291,21 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
       setDraft(resolvedDraft);
       setEditing(false);
       await onSaved();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
+        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: body.current ?? {} });
+      } else {
+        throw err;
+      }
     } finally {
       setSaving(false);
     }
+  };
+
+  const reloadAfterConflict = async () => {
+    setConflict(null);
+    await onSaved();
   };
 
   const selectAircraft = (registration: string) => {
@@ -1425,6 +1440,18 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
           <textarea className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm text-foreground" rows={2} disabled={!editing} value={draft.Notes || ''} onChange={(event) => setDraft({ ...draft, Notes: event.target.value })} />
         </label>
       </CardContent>
+      {conflict && (
+        <ConflictDialog
+          open={!!conflict}
+          onOpenChange={(open) => !open && setConflict(null)}
+          entityLabel="Trip"
+          changedBy={conflict.changedBy}
+          changedAt={conflict.changedAt}
+          draft={draft as unknown as Record<string, unknown>}
+          current={conflict.current}
+          onReload={reloadAfterConflict}
+        />
+      )}
     </Card>
   );
 }
