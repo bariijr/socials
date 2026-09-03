@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Service, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { computeUrgency } from '../../common/geo.util';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
+import { isValidServiceTransition, withServiceTransitions } from '../../common/statusTransitions';
 
 type ServiceType = 'Permit' | 'Overflight' | 'GroundHandling';
 
@@ -57,7 +58,7 @@ export class ServicesService {
   async findOne(svcId: string) {
     const svc = await this.prisma.service.findUnique({ where: { svcId } });
     if (!svc) throw new NotFoundException(`Service ${svcId} not found`);
-    return svc;
+    return withServiceTransitions(svc);
   }
 
   async create(dto: CreateServiceDto) {
@@ -71,24 +72,47 @@ export class ServicesService {
       },
     });
     await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
-    return svc;
+    return withServiceTransitions(svc);
   }
 
   async update(svcId: string, dto: UpdateServiceDto) {
-    const before = await this.findOne(svcId);
+    const before = await this.prisma.service.findUnique({ where: { svcId } });
+    if (!before) throw new NotFoundException(`Service ${svcId} not found`);
     const user = dto.user || 'SYSTEM';
-    const { user: _user, subItems, ...data } = dto;
+    const { user: _user, subItems, version, ...data } = dto;
+
+    if (data.status && data.status !== before.status && !isValidServiceTransition(before.status, data.status)) {
+      throw new BadRequestException(`Cannot transition Service from "${before.status}" to "${data.status}"`);
+    }
+
     const requiredByZ = data.requiredByZ ?? before.requiredByZ.toISOString();
-    const svc = await this.prisma.service.update({
-      where: { svcId },
+    const statusChanging = data.status !== undefined && data.status !== before.status;
+    const result = await this.prisma.service.updateMany({
+      where: { svcId, version },
       data: {
         ...data,
         subItems: subItems as Prisma.InputJsonValue | undefined,
         urgency: computeUrgency(requiredByZ),
+        version: { increment: 1 },
+        ...(statusChanging ? { statusChangedAt: new Date(), statusChangedBy: user } : {}),
       } as Prisma.ServiceUncheckedUpdateInput,
     });
+
+    if (result.count === 0) {
+      const current = await this.prisma.service.findUnique({ where: { svcId } });
+      const history = await this.audit.forRecord('Service', svcId);
+      const latest = history[0];
+      throw new ConflictException({
+        message: `Service ${svcId} was modified by someone else`,
+        current: withServiceTransitions(current!),
+        changedBy: latest?.user,
+        changedAt: latest?.timestampZ,
+      });
+    }
+
+    const svc = await this.prisma.service.findUnique({ where: { svcId } });
     await this.audit.logDiff(user, 'Service', svcId, before as unknown as Record<string, unknown>, svc as unknown as Record<string, unknown>);
-    return svc;
+    return withServiceTransitions(svc!);
   }
 
   async remove(svcId: string, user = 'SYSTEM') {
