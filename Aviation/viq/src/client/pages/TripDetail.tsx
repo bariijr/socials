@@ -34,11 +34,9 @@ import { Combobox } from '@/components/ui/combobox';
 import { ComposeDrawer } from '@/components/ComposeDrawer';
 import { DocVerifyDialog } from '@/components/DocVerifyDialog';
 import { ConflictDialog } from '@/components/ConflictDialog';
+import { TransitionMenu } from '@/components/TransitionMenu';
 import { useAuth } from '@/lib/authContext';
 
-const SERVICE_STATUSES: ServiceStatus[] = [
-  'Not Required', 'Not Started', 'Requested', 'Chasing', 'Confirmed', 'Re-confirm Required', 'Cancelled',
-];
 const DOC_TYPES = [
   'Registration Certificate', 'Airworthiness Certificate', 'Insurance Certificate',
   'Permit Application Form', 'AOC', 'Noise Certificate', 'PAX List',
@@ -1018,9 +1016,12 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
                 <option value="">NO PROVIDER</option>
                 {providerOptions.map((p) => <option key={p.ProviderID} value={p.ProviderID}>{p.Name}</option>)}
               </select>
-              <select className="h-8 min-w-0 rounded border bg-background px-1 text-xs" disabled={!editing} value={draft.Status} onChange={(event) => setDraft({ ...draft, Status: event.target.value as ServiceStatus })} title="Status">
-                {SERVICE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
+              <TransitionMenu
+                status={draft.Status}
+                allowedTransitions={service.AllowedTransitions ?? []}
+                disabled={!editing}
+                onChange={(next) => setDraft({ ...draft, Status: next as ServiceStatus })}
+              />
             </div>
             {selectedProvider && <VendorContactCard provider={selectedProvider} />}
             <textarea className="w-full rounded border bg-background px-2 py-1 text-xs" disabled={!editing} value={draft.Notes} placeholder="Confirmatory note" rows={3} onChange={(event) => setDraft({ ...draft, Notes: event.target.value })} />
@@ -1469,9 +1470,12 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
           {field('TEAM', 'Team')}
           <label className="text-xs font-medium text-muted-foreground">
             STATUS
-            <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" disabled={!editing} value={draft.Status} onChange={(event) => setDraft({ ...draft, Status: event.target.value as TripStatus })}>
-              {(['Planning', 'Active', 'Complete', 'Cancelled'] as TripStatus[]).map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
+            <TransitionMenu
+              status={draft.Status}
+              allowedTransitions={trip.AllowedTransitions ?? []}
+              disabled={!editing}
+              onChange={(next) => setDraft({ ...draft, Status: next as TripStatus })}
+            />
           </label>
           {field('CLIENT REF', 'SupportRef')}
           {field('OPERATION TYPE', 'OperationType')}
