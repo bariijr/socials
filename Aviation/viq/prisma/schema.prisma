@@ -301,6 +301,9 @@ model Trip {
   aircraftIcaoType     String?  @map("aircraft_icao_type")
   aircraftMtowKg       Float?   @map("aircraft_mtow_kg")
   aircraftSerialNumber String?  @map("aircraft_serial_number")
+  version              Int      @default(1)
+  statusChangedAt      DateTime? @map("status_changed_at")
+  statusChangedBy      String?  @map("status_changed_by")
 
   clientRecord Client?         @relation(fields: [clientId], references: [clientId])
   ownerUser    User?           @relation(fields: [ownerUserId], references: [id])
@@ -422,6 +425,7 @@ model Leg {
   avoidFirs          String[] @map("avoid_firs")
   includeFirs        String[] @map("include_firs")
   routing            String?
+  version            Int      @default(1)
 
   trip           Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   assignments    LegPersonAssignment[]
@@ -472,6 +476,9 @@ model Service {
   countryIso2   String?   @map("country_iso2")
   icao          String?
   variant       String?
+  version       Int       @default(1)
+  statusChangedAt DateTime? @map("status_changed_at")
+  statusChangedBy String?  @map("status_changed_by")
 
   trip     Trip      @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   provider Provider? @relation(fields: [providerId], references: [providerId])
