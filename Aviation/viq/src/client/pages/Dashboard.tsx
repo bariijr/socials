@@ -67,10 +67,10 @@ export default function Dashboard() {
     return { totalTrips, activeTrips, openServices: openServicesCount, urgent };
   }, [trips, services]);
 
-  async function handleClose(svcId: string) {
+  async function handleClose(svcId: string, version: number) {
     setClosingId(svcId);
     try {
-      await closeService(svcId);
+      await closeService(svcId, version);
       setReloadServicesToken((n) => n + 1);
     } finally {
       setClosingId(null);
@@ -172,7 +172,7 @@ export default function Dashboard() {
                       size="sm"
                       className="h-6 px-2 text-[10px] shrink-0"
                       disabled={closingId === svc.SVCID}
-                      onClick={(e) => { e.preventDefault(); handleClose(svc.SVCID); }}
+                      onClick={(e) => { e.preventDefault(); handleClose(svc.SVCID, svc.Version); }}
                       title="Mark as Not Required"
                     >
                       <X className="h-3 w-3 mr-1" />

@@ -7,6 +7,7 @@ import {
   uploadDoc, downloadDocFile, deleteDoc, runDocOcr,
   getPersonRoster, assignPersonToLeg, assignPersonToAllLegs, unassignPersonFromLeg,
   getClientList, saveClient, getUserDirectory, getPreferredContact,
+  mapTripFromApi, mapLegFromApi, mapServiceFromApi,
   ApiError,
 } from '@/lib/dataStore';
 import { haversineNM } from '@/lib/geo';
@@ -212,6 +213,16 @@ function AddManifestPersonDialog({ legId, tripId, existingPersonIds, open, onClo
   );
 }
 
+// Non-409 save failures (an illegal status transition rejected with 400, a
+// validation error, a dropped connection) used to be rethrown from inside a
+// bare async click handler, which becomes a silent unhandled promise
+// rejection. There is no toast surface mounted in this app, so surface the
+// message directly and keep the stack in devtools.
+function reportSaveError(err: unknown) {
+  console.error(err);
+  window.alert(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+}
+
 function LegEditor({
   leg,
   trip,
@@ -408,13 +419,13 @@ function LegEditor({
         AvoidFIRs: (draft.AvoidFIRs || []).map(normalizeFIR),
         IncludeFIRs: (draft.IncludeFIRs || []).map(normalizeFIR),
       };
-      await saveLeg(updated);
+      const saved = await saveLeg(updated);
       const [overflightCreated, arrivalCreated] = await Promise.all([
         generateOverflightServices(updated.LegID),
         generateArrivalServices(updated.LegID),
       ]);
       const newlySuggested = [...overflightCreated, ...arrivalCreated];
-      setDraft(updated);
+      setDraft(saved);
       setEditing(false);
       await onSaved();
       if (newlySuggested.length > 0) {
@@ -425,9 +436,12 @@ function LegEditor({
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
-        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: body.current ?? {} });
+        // The 409 body carries the raw (camelCase) server record; map it into
+        // the same PascalCase shape as `draft` so ConflictDialog's field diff
+        // compares like with like instead of two disjoint key sets.
+        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: mapLegFromApi(body.current ?? {}) as unknown as Record<string, unknown> });
       } else {
-        throw err;
+        reportSaveError(err);
       }
     }
   };
@@ -900,15 +914,16 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const save = async () => {
     try {
-      await saveService(draft);
-      setSavedDraft(draft);
+      const saved = await saveService(draft);
+      setDraft(saved);
+      setSavedDraft(saved);
       await onSaved();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
-        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: body.current ?? {} });
+        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: mapServiceFromApi(body.current ?? {}) as unknown as Record<string, unknown> });
       } else {
-        throw err;
+        reportSaveError(err);
       }
     }
   };
@@ -1089,10 +1104,27 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
     const legIds = selectedLegs[country] || [];
     if (!legIds.length) return;
     const ref = requestRefs[country] || `REQ-${country}-${Date.now()}`;
+    // The server enforces the status graph, so a service that can't legally
+    // reach 'Requested' (already Confirmed, Not Required, Cancelled, …) would
+    // 400 and abort the rest of the batch. Each service already carries its
+    // own AllowedTransitions from the API — use that rather than duplicating
+    // the transition graph client-side, and skip anything it rules out.
+    const skipped: Service[] = [];
     for (const service of countryServices.filter((service) => legIds.includes(service.ScopeID))) {
+      if (service.Status === 'Requested') continue;
+      if (!(service.AllowedTransitions ?? []).includes('Requested')) {
+        skipped.push(service);
+        continue;
+      }
       await saveService({ ...service, Status: 'Requested', RefNumber: ref, Notes: `${service.Notes} Included in combined ${country} permit request.`.trim() });
     }
     await onSaved();
+    if (skipped.length > 0) {
+      window.alert(
+        `${skipped.length} service(s) were skipped because their current status cannot move to Requested:\n` +
+        skipped.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.Status})`).join('\n'),
+      );
+    }
   };
 
   return (
@@ -1358,9 +1390,9 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
-        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: body.current ?? {} });
+        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: mapTripFromApi(body.current ?? {}) as unknown as Record<string, unknown> });
       } else {
-        throw err;
+        reportSaveError(err);
       }
     } finally {
       setSaving(false);

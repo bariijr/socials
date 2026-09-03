@@ -11,13 +11,20 @@ import type { AuditEntry } from '@/data/types';
 export function StatusTimeline({ table, recordId }: { table: string; recordId: string }) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch must not read as "no history" -- this is a
+  // compliance-adjacent view, so an empty list has to mean genuinely empty.
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setFailed(false);
     getAuditForRecord(table, recordId)
       .then((rows) => {
         if (!cancelled) setEntries(rows.filter((r) => r.Field === 'status'));
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -26,6 +33,7 @@ export function StatusTimeline({ table, recordId }: { table: string; recordId: s
   }, [table, recordId]);
 
   if (loading) return <p className="text-xs text-muted-foreground">Loading status history…</p>;
+  if (failed) return <p className="text-xs text-destructive">Couldn't load status history.</p>;
   if (entries.length === 0) return <p className="text-xs text-muted-foreground">No status changes yet.</p>;
 
   return (

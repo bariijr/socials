@@ -20,12 +20,12 @@ export const TRIP_TRANSITIONS: Record<string, string[]> = {
 
 export const SERVICE_TRANSITIONS: Record<string, string[]> = {
   'Not Started': ['Requested', 'Not Required', 'Cancelled'],
-  'Requested': ['Chasing', 'Confirmed', 'Cancelled'],
-  'Chasing': ['Requested', 'Confirmed', 'Cancelled'],
+  'Requested': ['Chasing', 'Confirmed', 'Not Required', 'Cancelled'],
+  'Chasing': ['Requested', 'Confirmed', 'Not Required', 'Cancelled'],
   'Confirmed': ['Re-confirm Required', 'Cancelled'],
-  'Re-confirm Required': ['Confirmed', 'Cancelled'],
+  'Re-confirm Required': ['Confirmed', 'Not Required', 'Cancelled'],
   'Not Required': ['Not Started'],
-  'Cancelled': ['Not Started'],
+  'Cancelled': ['Not Started', 'Not Required'],
 };
 
 export function isValidTripTransition(from: string, to: string): boolean {

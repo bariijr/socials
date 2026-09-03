@@ -244,7 +244,7 @@ export function setPreferredChannelValue(channels: ContactChannel[], type: Conta
   return [...others, { ID: 0, ChannelType: type, Value: value, Preferred: true, ForBilling: false }];
 }
 
-function mapTripFromApi(t: any): Trip {
+export function mapTripFromApi(t: any): Trip {
   return {
     TripID: t.tripId,
     Client: t.client,
@@ -308,7 +308,7 @@ function mapTripToApi(trip: Trip): Record<string, unknown> {
   };
 }
 
-function mapLegFromApi(l: any): Leg {
+export function mapLegFromApi(l: any): Leg {
   return {
     LegID: l.legId,
     TripID: l.tripId,
@@ -378,7 +378,7 @@ function mapStopToApi(stop: Stop): Record<string, unknown> {
   };
 }
 
-function mapServiceFromApi(s: any): Service {
+export function mapServiceFromApi(s: any): Service {
   return {
     SVCID: s.svcId,
     TripID: s.tripId,
@@ -667,10 +667,10 @@ export async function getOpenServicesWidget(limit: number, search?: string): Pro
   }));
 }
 
-export async function closeService(svcId: string, user = currentUser()): Promise<void> {
+export async function closeService(svcId: string, version: number, user = currentUser()): Promise<void> {
   await apiJson(`/services/${svcId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ status: 'Not Required', user }),
+    body: JSON.stringify({ status: 'Not Required', version, user }),
   });
 }
 

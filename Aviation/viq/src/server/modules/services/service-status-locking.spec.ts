@@ -66,7 +66,7 @@ describe('Service status transitions', () => {
 
     const updated = await services.update(created.svcId, { status: 'Requested', version: created.version });
     expect(updated.status).toBe('Requested');
-    expect(updated.allowedTransitions).toEqual(['Chasing', 'Confirmed', 'Cancelled']);
+    expect(updated.allowedTransitions).toEqual(['Chasing', 'Confirmed', 'Not Required', 'Cancelled']);
   });
 
   it('rejects an undefined transition (Not Started -> Confirmed) with a 400', async () => {
