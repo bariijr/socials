@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { isValidTripTransition, tripAllowedTransitions, withTripTransitions, withServiceTransitions } from '../../common/statusTransitions';
+import { isValidTripTransition, withTripTransitions, withServiceTransitions } from '../../common/statusTransitions';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
