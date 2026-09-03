@@ -267,6 +267,7 @@ function LegEditor({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [keptSuggestionIds, setKeptSuggestionIds] = useState<Set<string>>(new Set());
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
   const toggleIcao = (icao: string) => {
     setExpandedIcaos((current) => {
       const next = new Set(current);
@@ -397,30 +398,44 @@ function LegEditor({
   };
 
   const save = async () => {
-    const airportsChanged = draft.DepICAO !== leg.DepICAO || draft.ArrICAO !== leg.ArrICAO;
-    const updated = {
-      ...draft,
-      Revision: draft.Revision + 1,
-      CountriesOverflown: airportsChanged
-        ? await computeCountriesOverflown(draft.DepICAO, draft.ArrICAO)
-        : draft.CountriesOverflown,
-      AvoidFIRs: (draft.AvoidFIRs || []).map(normalizeFIR),
-      IncludeFIRs: (draft.IncludeFIRs || []).map(normalizeFIR),
-    };
-    await saveLeg(updated);
-    const [overflightCreated, arrivalCreated] = await Promise.all([
-      generateOverflightServices(updated.LegID),
-      generateArrivalServices(updated.LegID),
-    ]);
-    const newlySuggested = [...overflightCreated, ...arrivalCreated];
-    setDraft(updated);
-    setEditing(false);
-    await onSaved();
-    if (newlySuggested.length > 0) {
-      setSuggested(newlySuggested);
-      setKeptSuggestionIds(new Set(newlySuggested.map((s) => s.SVCID)));
-      setReviewOpen(false);
+    try {
+      const airportsChanged = draft.DepICAO !== leg.DepICAO || draft.ArrICAO !== leg.ArrICAO;
+      const updated = {
+        ...draft,
+        Revision: draft.Revision + 1,
+        CountriesOverflown: airportsChanged
+          ? await computeCountriesOverflown(draft.DepICAO, draft.ArrICAO)
+          : draft.CountriesOverflown,
+        AvoidFIRs: (draft.AvoidFIRs || []).map(normalizeFIR),
+        IncludeFIRs: (draft.IncludeFIRs || []).map(normalizeFIR),
+      };
+      await saveLeg(updated);
+      const [overflightCreated, arrivalCreated] = await Promise.all([
+        generateOverflightServices(updated.LegID),
+        generateArrivalServices(updated.LegID),
+      ]);
+      const newlySuggested = [...overflightCreated, ...arrivalCreated];
+      setDraft(updated);
+      setEditing(false);
+      await onSaved();
+      if (newlySuggested.length > 0) {
+        setSuggested(newlySuggested);
+        setKeptSuggestionIds(new Set(newlySuggested.map((s) => s.SVCID)));
+        setReviewOpen(false);
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
+        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: body.current ?? {} });
+      } else {
+        throw err;
+      }
     }
+  };
+
+  const reloadAfterConflict = async () => {
+    setConflict(null);
+    await onSaved();
   };
 
   const dismissSuggestions = () => setSuggested([]);
@@ -809,6 +824,18 @@ function LegEditor({
           />
         )}
       </div>
+      {conflict && (
+        <ConflictDialog
+          open={!!conflict}
+          onOpenChange={(open) => !open && setConflict(null)}
+          entityLabel="Leg"
+          changedBy={conflict.changedBy}
+          changedAt={conflict.changedAt}
+          draft={draft as unknown as Record<string, unknown>}
+          current={conflict.current}
+          onReload={reloadAfterConflict}
+        />
+      )}
     </div>
   );
 }
@@ -870,8 +897,27 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const [savedDraft, setSavedDraft] = useState(service);
   const [composeOpen, setComposeOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
-  const save = async () => { await saveService(draft); setSavedDraft(draft); await onSaved(); };
+  const save = async () => {
+    try {
+      await saveService(draft);
+      setSavedDraft(draft);
+      await onSaved();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
+        setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: body.current ?? {} });
+      } else {
+        throw err;
+      }
+    }
+  };
+
+  const reloadAfterConflict = async () => {
+    setConflict(null);
+    await onSaved();
+  };
   const activeVariantDef = serviceTypes.find((d) => d.code === draft.ServiceType);
 
   const providers = getProviderList();
@@ -998,6 +1044,19 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
         onClose={() => setComposeOpen(false)}
         onSent={onSaved}
       />
+
+      {conflict && (
+        <ConflictDialog
+          open={!!conflict}
+          onOpenChange={(open) => !open && setConflict(null)}
+          entityLabel="Service"
+          changedBy={conflict.changedBy}
+          changedAt={conflict.changedAt}
+          draft={draft as unknown as Record<string, unknown>}
+          current={conflict.current}
+          onReload={reloadAfterConflict}
+        />
+      )}
     </>
   );
 }
