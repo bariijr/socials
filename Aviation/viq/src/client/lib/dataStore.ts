@@ -1081,6 +1081,11 @@ export async function getAudit(): Promise<AuditEntry[]> {
   return rows.map(mapAuditEntryFromApi);
 }
 
+export async function getAuditForRecord(table: string, recordId: string): Promise<AuditEntry[]> {
+  const rows = await apiJson<any[]>(`/audit/${encodeURIComponent(table)}/${encodeURIComponent(recordId)}`);
+  return rows.map(mapAuditEntryFromApi);
+}
+
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
 export interface Invoice {

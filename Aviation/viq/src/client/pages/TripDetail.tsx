@@ -35,6 +35,7 @@ import { ComposeDrawer } from '@/components/ComposeDrawer';
 import { DocVerifyDialog } from '@/components/DocVerifyDialog';
 import { ConflictDialog } from '@/components/ConflictDialog';
 import { TransitionMenu } from '@/components/TransitionMenu';
+import { StatusTimeline } from '@/components/StatusTimeline';
 import { useAuth } from '@/lib/authContext';
 
 const DOC_TYPES = [
@@ -1023,6 +1024,9 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
                 onChange={(next) => setDraft({ ...draft, Status: next as ServiceStatus })}
               />
             </div>
+            <div className="mt-1">
+              <StatusTimeline table="Service" recordId={service.SVCID} />
+            </div>
             {selectedProvider && <VendorContactCard provider={selectedProvider} />}
             <textarea className="w-full rounded border bg-background px-2 py-1 text-xs" disabled={!editing} value={draft.Notes} placeholder="Confirmatory note" rows={3} onChange={(event) => setDraft({ ...draft, Notes: event.target.value })} />
             <div className="grid grid-cols-2 gap-2">
@@ -1476,6 +1480,9 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
               disabled={!editing}
               onChange={(next) => setDraft({ ...draft, Status: next as TripStatus })}
             />
+            <div className="mt-2">
+              <StatusTimeline table="Trip" recordId={trip.TripID} />
+            </div>
           </label>
           {field('CLIENT REF', 'SupportRef')}
           {field('OPERATION TYPE', 'OperationType')}
