@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -225,7 +225,7 @@ export class LegsService {
   async update(legId: string, dto: UpdateLegDto) {
     const before = await this.findOne(legId);
     const user = dto.user || 'SYSTEM';
-    const { user: _user, generateServices, departureGroundHandling, ...data } = dto;
+    const { user: _user, generateServices, departureGroundHandling, version, ...data } = dto;
 
     // Route or Avoid/Include FIRs changed → recompute overflown countries,
     // unless the caller passed an explicit list. Item 16: this is also what
@@ -248,7 +248,24 @@ export class LegsService {
       reconcileOverflight = true;
     }
 
-    const leg = await this.prisma.leg.update({ where: { legId }, data });
+    const result = await this.prisma.leg.updateMany({
+      where: { legId, version },
+      data: { ...data, version: { increment: 1 } },
+    });
+
+    if (result.count === 0) {
+      const current = await this.prisma.leg.findUnique({ where: { legId } });
+      const history = await this.audit.forRecord('Leg', legId);
+      const latest = history[0];
+      throw new ConflictException({
+        message: `Leg ${legId} was modified by someone else`,
+        current,
+        changedBy: latest?.user,
+        changedAt: latest?.timestampZ,
+      });
+    }
+
+    const leg = await this.findOne(legId);
     await this.audit.logDiff(user, 'Leg', legId, before as unknown as Record<string, unknown>, leg as unknown as Record<string, unknown>);
 
     if (reconcileOverflight) {
