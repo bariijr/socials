@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/lib/authContext';
 import {
-  saveTrip, saveLeg, saveStop, savePerson,
+  saveTrip, saveLeg, saveStop, savePerson, assignPersonToAllLegs,
   refOperators, refAircraftTypes, nextTripId,
   getAircraftType, getAircraftList, saveAircraft, normalizeRegistration,
   computeCountriesOverflown, generateOverflightServices, generateArrivalServices,
@@ -589,8 +589,14 @@ export default function NewTripWizard() {
       await saveStop(s as Stop);
     }
 
-    // Save persons
-    await Promise.all(persons.map((p) => savePerson(p as Person)));
+    // Save persons, then assign each to every leg of this new trip so they
+    // actually appear in the Crew & Pax Register -- savePerson() alone only
+    // creates the Person row, it does not create the LegPersonAssignment
+    // rows the register reads from. The wizard's per-person "Role" field is
+    // also threaded into DefaultRole here, since savePerson() otherwise has
+    // no other source for it.
+    await Promise.all(persons.map((p) => savePerson({ ...p, DefaultRole: p.Role } as Person)));
+    await Promise.all(persons.map((p) => assignPersonToAllLegs(p.PersonID!, { tripId, role: p.Role || 'Pax' })));
 
     setConfirmOpen(true);
     } catch (e) {
