@@ -34,9 +34,19 @@
 // see scripts/setup-test-db.ts). If a future change makes another file
 // dynamically import a real ESM package at runtime (the same
 // `importEsm` pattern is already used for `pdfjs-dist` in both OCR
-// services), route it through its own invocation here too rather than
-// letting it share a process with mrz-extraction.spec.ts or
-// ocr.service.spec.ts.
+// services), add it to `isolatedSpecs` below rather than letting it
+// share a process with mrz-extraction.spec.ts or ocr.service.spec.ts --
+// the exclusion pattern for the third (remaining-suites) invocation is
+// derived from that same array, so there is exactly one place to update.
+//
+// Two properties this script preserves relative to a single
+// `jest --runInBand`, on purpose:
+//  - every sub-invocation always runs, regardless of whether an earlier
+//    one failed, so a broken `npm test` still reports the full picture
+//    (all three summaries print; nothing is skipped because something
+//    upstream failed) -- exactly what one triaging a red run needs.
+//  - the overall process exit code is non-zero if *any* sub-invocation
+//    failed, so CI/`&&` chains still see the run as failed overall.
 const { spawnSync } = require('child_process');
 const path = require('path');
 
@@ -55,9 +65,11 @@ function runJest(args, extraEnv) {
     env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
   });
   if (result.error) throw result.error;
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
+  return result.status ?? 1;
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const esmEnv = { NODE_OPTIONS: '--experimental-vm-modules' };
@@ -75,15 +87,28 @@ if (passthroughArgs.length > 0) {
   // deterministic. Just forward straight to jest with the ESM flag
   // enabled (needed unconditionally in case the pattern matches one of
   // the dynamic-import specs).
-  runJest(['--runInBand', ...passthroughArgs], esmEnv);
+  process.exit(runJest(['--runInBand', ...passthroughArgs], esmEnv));
 } else {
-  for (const spec of isolatedSpecs) {
-    runJest(['--runInBand', spec], esmEnv);
-  }
+  // Exclusion pattern for the third invocation, derived directly from
+  // isolatedSpecs (the single source of truth) rather than hand-copied,
+  // and anchored to each spec's full path (not just its basename) so it
+  // can't accidentally swallow a same-named spec file living elsewhere
+  // (e.g. a hypothetical src/server/modules/docs/ocr.service.spec.ts).
+  // `[\\/]` matches either path-separator style so this works whether
+  // Jest's internal path matching sees `/` or `\`.
+  const ignorePattern =
+    '(' +
+    isolatedSpecs
+      .map((spec) => spec.split('/').map(escapeRegExp).join('[\\\\/]'))
+      .join('|') +
+    ')$';
 
-  runJest([
-    '--runInBand',
-    '--testPathIgnorePatterns',
-    '/(mrz-extraction|ocr\\.service)\\.spec\\.ts$',
-  ]);
+  const exitCodes = [];
+  for (const spec of isolatedSpecs) {
+    exitCodes.push(runJest(['--runInBand', spec], esmEnv));
+  }
+  exitCodes.push(runJest(['--runInBand', '--testPathIgnorePatterns', ignorePattern]));
+
+  const failed = exitCodes.some((code) => code !== 0);
+  process.exit(failed ? 1 : 0);
 }
