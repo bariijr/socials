@@ -76,6 +76,17 @@ const esmEnv = { NODE_OPTIONS: '--experimental-vm-modules' };
 const isolatedSpecs = [
   'src/server/modules/documents/mrz-extraction.spec.ts',
   'src/server/modules/documents/ocr.service.spec.ts',
+  // document-processing.processor.spec.ts imports DocumentsService, which
+  // statically imports `@nestjs/bullmq` -- an ESM-only package ("type":
+  // "module" in its package.json, both its "import" and "require" export
+  // conditions point at the same ESM dist/index.js). A plain CJS
+  // `require()` of it (what ts-jest's commonjs-targeted output does)
+  // throws "Must use import to load ES Module" unless
+  // NODE_OPTIONS=--experimental-vm-modules is set, same as the two specs
+  // above need for their own (different) ESM-interop reason. No other
+  // spec file reaches app.module.ts/documents.module.ts/documents.service.ts
+  // today, so this is the first place the requirement surfaces.
+  'src/server/modules/documents/document-processing.processor.spec.ts',
 ];
 
 const passthroughArgs = process.argv.slice(2);
