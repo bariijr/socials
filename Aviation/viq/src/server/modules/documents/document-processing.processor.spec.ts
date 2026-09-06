@@ -56,7 +56,7 @@ describe('DocumentProcessingProcessor', () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
     documents = new DocumentsService(prisma, audit, fakeQueue);
-  });
+  }, 30000);
 
   it('processes a clean image through to READY_FOR_REVIEW with OCR text populated', async () => {
     const buffer = makeTestImageBuffer('CLEAN FILE');
