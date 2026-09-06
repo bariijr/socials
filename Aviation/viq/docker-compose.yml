@@ -31,6 +31,22 @@ services:
       timeout: 5s
       retries: 10
 
+  clamav:
+    image: clamav/clamav:latest
+    container_name: jetflow_api_clamav
+    restart: unless-stopped
+    ports:
+      - "3320:3310"
+    volumes:
+      - jetflow_clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+
 volumes:
   jetflow_pg_data:
   jetflow_redis_data:
+  jetflow_clamav_data:
