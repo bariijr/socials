@@ -243,7 +243,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Test: `src/server/modules/documents/ocr.service.spec.ts`
 
 **Interfaces:**
-- Produces: `export function extractMrzFields(rawText: string): Record<string, unknown> | null` (in `mrz-extraction.ts`); `export interface OcrResult { text: string; structuredFields: Record<string, unknown> | null }`, `export class OcrService implements OnModuleInit, OnModuleDestroy { async extract(filePath: string, mimeType: string): Promise<OcrResult> }` (in `ocr.service.ts`). Task 4 injects `OcrService` into `DocumentProcessingProcessor` and calls `extract()`.
+- Produces: `export async function extractMrzFields(rawText: string): Promise<Record<string, unknown> | null>` (in `mrz-extraction.ts` — async because it dynamically imports the ESM-only `mrz` package via the same `importEsm` pattern the old service already uses for `pdfjs-dist`); `export interface OcrResult { text: string; structuredFields: Record<string, unknown> | null }`, `export class OcrService implements OnModuleInit, OnModuleDestroy { async extract(filePath: string, mimeType: string): Promise<OcrResult> }` (in `ocr.service.ts`). Task 4 injects `OcrService` into `DocumentProcessingProcessor` and calls `extract()`.
 
 This task ports `src/server/modules/docs/ocr.service.ts` (read it first for context — it is NOT modified by this task, it keeps serving the old `docs` module unchanged) onto the new module, dropping DOCX/plain-text support, and pulls the private `tryExtractMrz` method out into its own standalone, independently-testable function (it never referenced `this`, so this is a pure extraction, not a behavior change).
 
@@ -258,9 +258,24 @@ Create `src/server/modules/documents/mrz-extraction.ts`:
 // function -- it never referenced instance state, and isolating it makes
 // it independently testable with a real MRZ string instead of needing a
 // rendered/OCR'd image to exercise it.
-import { parse } from 'mrz';
+//
+// The `mrz` package is ESM-only (package.json declares "type": "module"
+// with no CJS export condition). This project compiles to CommonJS, and
+// Jest's own CJS module loader rejects a plain `import`/`require` of an
+// ESM-only package outright (`createRequireEsmError`) even on a Node
+// version whose native `require(esm)` would otherwise handle it -- Jest
+// intercepts before Node's loader gets the chance. The same problem (and
+// the same fix) already exists in the old docs module's OcrService for
+// `pdfjs-dist`: going through `new Function` for the import expression
+// bypasses TypeScript's `module: commonjs` transform (which would
+// otherwise rewrite `await import(...)` into a `require()` call) and
+// reaches Node's native dynamic import directly, which Jest does not
+// intercept.
+const importEsm = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
 
-export function extractMrzFields(rawText: string): Record<string, unknown> | null {
+export async function extractMrzFields(rawText: string): Promise<Record<string, unknown> | null> {
+  const { parse } = await importEsm('mrz');
+
   const candidateLines = rawText
     .split('\n')
     .map((line) => line.replace(/\s/g, '').toUpperCase())
@@ -300,16 +315,16 @@ const SAMPLE_MRZ_TEXT = [
 ].join('\n');
 
 describe('extractMrzFields', () => {
-  it('parses a valid passport MRZ embedded in surrounding text', () => {
-    const result = extractMrzFields(SAMPLE_MRZ_TEXT);
+  it('parses a valid passport MRZ embedded in surrounding text', async () => {
+    const result = await extractMrzFields(SAMPLE_MRZ_TEXT);
     expect(result).not.toBeNull();
     expect(result?.format).toBe('TD3');
     expect((result as any).firstName).toContain('ANNA');
     expect((result as any).lastName).toBe('ERIKSSON');
   });
 
-  it('returns null when no MRZ-shaped lines are present', () => {
-    const result = extractMrzFields('Just a regular paragraph of text.\nNothing MRZ-like here.');
+  it('returns null when no MRZ-shaped lines are present', async () => {
+    const result = await extractMrzFields('Just a regular paragraph of text.\nNothing MRZ-like here.');
     expect(result).toBeNull();
   });
 });
@@ -394,7 +409,7 @@ export class OcrService implements OnModuleInit, OnModuleDestroy {
   private async extractImage(filePathOrBuffer: string | Buffer): Promise<OcrResult> {
     if (!this.worker) throw new Error('OCR worker not initialized');
     const { data } = await this.worker.recognize(filePathOrBuffer);
-    return { text: data.text, structuredFields: extractMrzFields(data.text) };
+    return { text: data.text, structuredFields: await extractMrzFields(data.text) };
   }
 
   private async extractPdf(filePath: string): Promise<OcrResult> {
@@ -419,7 +434,7 @@ export class OcrService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (textLayer.trim().length >= PDF_TEXT_LAYER_MIN_CHARS) {
-      return { text: textLayer.trim(), structuredFields: extractMrzFields(textLayer) };
+      return { text: textLayer.trim(), structuredFields: await extractMrzFields(textLayer) };
     }
 
     // No usable text layer (scanned/faxed document) — rasterize each page
@@ -433,7 +448,7 @@ export class OcrService implements OnModuleInit, OnModuleDestroy {
       const { text: pageText } = await this.extractImage(canvas.toBuffer('image/png'));
       ocrText += pageText + '\n';
     }
-    return { text: ocrText.trim(), structuredFields: extractMrzFields(ocrText) };
+    return { text: ocrText.trim(), structuredFields: await extractMrzFields(ocrText) };
   }
 }
 ```
