@@ -34,12 +34,12 @@ export class PermitAuthorizationsController {
   }
 
   @Post(':id/verify')
-  verify(@Param('id') id: string, @CurrentUser() currentUser?: CurrentUserPayload, @Query('user') userOverride?: string) {
-    return this.authorizations.verify(id, currentUser?.role, userOverride ?? currentUser?.username);
+  verify(@Param('id') id: string, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.authorizations.verify(id, currentUser?.role, currentUser?.username);
   }
 
   @Post(':id/revoke')
-  revoke(@Param('id') id: string, @CurrentUser() currentUser?: CurrentUserPayload, @Query('user') userOverride?: string) {
-    return this.authorizations.revoke(id, currentUser?.role, userOverride ?? currentUser?.username);
+  revoke(@Param('id') id: string, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.authorizations.revoke(id, currentUser?.role, currentUser?.username);
   }
 }

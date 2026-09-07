@@ -65,4 +65,31 @@ describe('PermitAuthorizationsService', () => {
     await authorizations.verify(created.id, 'Admin');
     await expect(authorizations.update(created.id, { referenceNumber: 'REF-5' })).rejects.toThrow();
   });
+
+  it('blocks editing once Revoked (Draft -> Revoked directly, without ever passing through Verified)', async () => {
+    const created = await authorizations.create({
+      operatorId: 'OP-1', countryIso2: 'KE', serviceType: 'Overflight', authorizationType: 'Blanket',
+      referenceNumber: 'REF-6', validFrom: '2026-01-01T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z',
+    });
+    await authorizations.revoke(created.id, 'Admin');
+    await expect(authorizations.update(created.id, { referenceNumber: 'REF-7' })).rejects.toThrow();
+  });
+
+  it('rejects verifying an authorization that is not in Draft status', async () => {
+    const created = await authorizations.create({
+      operatorId: 'OP-1', countryIso2: 'KE', serviceType: 'Overflight', authorizationType: 'Blanket',
+      referenceNumber: 'REF-8', validFrom: '2026-01-01T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z',
+    });
+    await authorizations.verify(created.id, 'Admin');
+    await expect(authorizations.verify(created.id, 'Admin')).rejects.toThrow();
+  });
+
+  it('rejects revoking an authorization that is already Revoked', async () => {
+    const created = await authorizations.create({
+      operatorId: 'OP-1', countryIso2: 'KE', serviceType: 'Overflight', authorizationType: 'Blanket',
+      referenceNumber: 'REF-9', validFrom: '2026-01-01T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z',
+    });
+    await authorizations.revoke(created.id, 'Admin');
+    await expect(authorizations.revoke(created.id, 'Admin')).rejects.toThrow();
+  });
 });

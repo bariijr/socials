@@ -52,8 +52,8 @@ export class PermitAuthorizationsService {
 
   async update(id: string, dto: UpdatePermitAuthorizationDto) {
     const before = await this.findOne(id);
-    if (before.status === 'Verified') {
-      throw new BadRequestException('Cannot edit a Verified authorization — revoke it first');
+    if (before.status !== 'Draft') {
+      throw new BadRequestException(`Cannot edit an authorization with status "${before.status}" — only Draft authorizations can be edited`);
     }
     const user = dto.user || 'SYSTEM';
     const { user: _user, ...data } = dto;
