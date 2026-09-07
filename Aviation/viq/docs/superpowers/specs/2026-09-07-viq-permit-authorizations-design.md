@@ -57,10 +57,15 @@ Explicitly out of scope:
   `documents` module's still-unfinished verification UI — an authorization's
   optional supporting document links to the existing, working `DocAttachment`
   model instead (see "Document linkage" below).
-- Auto-expiring authorizations via a cron job — `status: 'Expired'` is set
-  manually or computed at read time for display; no scheduled job in this
-  slice (matches the project's existing `refreshUrgency` being manually/
-  cron-triggered rather than assumed-implicit elsewhere).
+- Auto-expiring authorizations via a cron job, and any stored `'Expired'`
+  status value. `status` has exactly three stored values: `'Draft'`,
+  `'Verified'`, `'Revoked'`. Whether an authorization has run past its
+  `validUntil` is computed at read time for display only (an "Expired"
+  badge shown alongside `Verified` in the Admin UI) — it never changes
+  the stored `status`, and it doesn't need to: `resolveAuthorization`'s
+  date-range check already excludes a past-`validUntil` authorization from
+  matching regardless of its `status` value, so there is no separate
+  "expire" action to build.
 
 ## Coverage matching
 
@@ -96,7 +101,7 @@ model PermitAuthorization {
   referenceNumber   String    @map("reference_number")
   validFrom         DateTime  @map("valid_from")
   validUntil        DateTime  @map("valid_until")
-  status            String    @default("Draft")          // 'Draft' | 'Verified' | 'Expired' | 'Revoked'
+  status            String    @default("Draft")          // 'Draft' | 'Verified' | 'Revoked'
   docId             String?   @map("doc_id")
   notes             String?
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -256,15 +261,20 @@ link" above).
 
 ## Client types
 
+`PermitAuthorization` is reference data managed only via Admin > Assets,
+like `Operator`/`CountryFee` — so, matching that existing precedent, its
+type is defined in `src/client/lib/dataStore.ts` (not `data/types.ts`,
+which is reserved for the core Trip/Leg/Stop/Service transactional spine):
+
 ```ts
 export type AuthorizationType = 'Blanket' | 'Block' | 'Seasonal';
-export type AuthorizationStatus = 'Draft' | 'Verified' | 'Expired' | 'Revoked';
+export type AuthorizationStatus = 'Draft' | 'Verified' | 'Revoked';
 
 export interface PermitAuthorization {
   ID: string;
   OperatorID: string;
   CountryISO2: string;
-  ServiceType: ServiceType;
+  ServiceType: string;
   AuthorizationType: AuthorizationType;
   ReferenceNumber: string;
   ValidFrom: string;
@@ -279,7 +289,9 @@ export interface PermitAuthorization {
 }
 ```
 
-`Service` gains `AuthorizationID?: string;`.
+`Service` (in `data/types.ts`, the core spine) gains
+`AuthorizationID?: string;` — read-only from the client's perspective via
+normal service edits; only the link-authorization endpoint sets it.
 
 ## Testing
 
