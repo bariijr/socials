@@ -3,7 +3,7 @@ import {
   generateEmail, SERVICE_TYPE_TO_TEMPLATE, hasRequestRevisionToggle, defaultTemplateFor,
   toggleTemplateAction, isRevisionTemplate, type TemplateType, type RequestAction,
 } from '@/lib/emailTemplates';
-import { saveComm, sendComm, getProviderList, getAirport } from '@/lib/dataStore';
+import { saveComm, sendComm, getProviderList, getAirport, getPreviousLegItinerary } from '@/lib/dataStore';
 import type { Service, Leg, Trip, Comm, TripPersonView } from '@/data/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -80,13 +80,20 @@ export function ComposeDrawer({
   useEffect(() => {
     if (!open) return;
     setResult(null);
-    const generated = generateEmail(
-      template, trip.TripID, leg.LegID, service.SVCID, legs, persons, '',
-      trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
-      trip.Client, trip.Operator, trip.SupportRef || '', countryISO2, recipients
-    );
-    setSubject(generated.subject);
-    setBody(generated.body);
+    let cancelled = false;
+    (async () => {
+      const previousItinerary = isRevisionTemplate(template) ? await getPreviousLegItinerary(leg.LegID) : null;
+      if (cancelled) return;
+      const generated = generateEmail(
+        template, trip.TripID, leg.LegID, service.SVCID, legs, persons, '',
+        trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
+        trip.Client, trip.Operator, trip.SupportRef || '', countryISO2, recipients,
+        previousItinerary, service.RefNumber,
+      );
+      setSubject(generated.subject);
+      setBody(generated.body);
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, template, providerId]);
 

@@ -8,8 +8,9 @@ import {
   getPersonRoster, assignPersonToLeg, assignPersonToAllLegs, unassignPersonFromLeg,
   getClientList, saveClient, getUserDirectory, getPreferredContact,
   mapTripFromApi, mapLegFromApi, mapServiceFromApi,
-  ApiError,
+  ApiError, saveComm, sendComm, getPreviousLegItinerary,
 } from '@/lib/dataStore';
+import { generateEmail, defaultTemplateFor } from '@/lib/emailTemplates';
 import { haversineNM } from '@/lib/geo';
 import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel, ServiceResponsibility } from '@/data/types';
 import type { Invoice, TripSheet, Client, UserDirectoryEntry, AuthorizationCandidate } from '@/lib/dataStore';
@@ -1172,6 +1173,14 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   );
 }
 
+// Grouping key combines country + service type: a landing permit and an
+// overflight permit for the same country are different applications to
+// different desks, so they never share one combined request/reference
+// number. Neither piece contains a literal '-', so a single split is safe.
+function submissionGroupKey(countryIso2: string, serviceType: string): string {
+  return `${countryIso2}-${serviceType}`;
+}
+
 function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; services: Service[]; onSaved: () => Promise<void> | void }) {
   const [selectedLegs, setSelectedLegs] = useState<Record<string, string[]>>({});
   const [requestRefs, setRequestRefs] = useState<Record<string, string>>({});
@@ -1182,31 +1191,35 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
     // never become bulk-submission candidates here -- VIQ isn't chasing
     // something the client or operator arranges themselves.
     && service.Responsibility === 'VIQ Arrangement'
+    // A service that can't legally reach 'Requested' (already Confirmed --
+    // including via a §14 authorization match -- Not Required, Cancelled)
+    // has nothing left to submit, so it shouldn't clutter the checklist.
+    && (service.AllowedTransitions ?? []).includes('Requested')
   );
   const grouped = permitServices.reduce<Record<string, Service[]>>((groups, service) => {
-    const country = service.CountryISO2 as string;
-    groups[country] = [...(groups[country] || []), service];
+    const key = submissionGroupKey(service.CountryISO2 as string, service.ServiceType);
+    groups[key] = [...(groups[key] || []), service];
     return groups;
   }, {});
 
-  const toggleLeg = (country: string, legId: string) => {
+  const toggleLeg = (key: string, legId: string) => {
     setSelectedLegs((current) => {
-      const selected = current[country] || [];
-      return { ...current, [country]: selected.includes(legId) ? selected.filter((id) => id !== legId) : [...selected, legId] };
+      const selected = current[key] || [];
+      return { ...current, [key]: selected.includes(legId) ? selected.filter((id) => id !== legId) : [...selected, legId] };
     });
   };
 
-  const submitCountryRequest = async (country: string, countryServices: Service[]) => {
-    const legIds = selectedLegs[country] || [];
+  const submitGroupRequest = async (key: string, country: string, groupServices: Service[]) => {
+    const legIds = selectedLegs[key] || [];
     if (!legIds.length) return;
-    const ref = requestRefs[country] || `REQ-${country}-${Date.now()}`;
+    const ref = requestRefs[key] || `REQ-${key}-${Date.now()}`;
     // The server enforces the status graph, so a service that can't legally
     // reach 'Requested' (already Confirmed, Not Required, Cancelled, …) would
     // 400 and abort the rest of the batch. Each service already carries its
     // own AllowedTransitions from the API — use that rather than duplicating
     // the transition graph client-side, and skip anything it rules out.
     const skipped: Service[] = [];
-    for (const service of countryServices.filter((service) => legIds.includes(service.ScopeID))) {
+    for (const service of groupServices.filter((service) => legIds.includes(service.ScopeID))) {
       if (service.Status === 'Requested') continue;
       if (!(service.AllowedTransitions ?? []).includes('Requested')) {
         skipped.push(service);
@@ -1225,25 +1238,27 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
 
   return (
     <div className="space-y-4">
-      {Object.entries(grouped).map(([country, countryServices]) => {
-        const selected = selectedLegs[country] || [];
+      {Object.entries(grouped).map(([key, groupServices]) => {
+        const country = groupServices[0].CountryISO2 as string;
+        const serviceType = groupServices[0].ServiceType;
+        const selected = selectedLegs[key] || [];
         return (
-          <Card key={country}>
+          <Card key={key}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle className="text-base font-semibold">{(getCountry(country)?.Name || country).toUpperCase()} PERMIT REQUEST</CardTitle>
-                <p className="text-xs text-muted-foreground">Select multiple itinerary legs for one country request.</p>
+                <CardTitle className="text-base font-semibold">{(getCountry(country)?.Name || country).toUpperCase()} — {serviceLabel(serviceType).toUpperCase()} REQUEST</CardTitle>
+                <p className="text-xs text-muted-foreground">Select multiple itinerary legs for one combined request.</p>
               </div>
               <Badge variant="outline">{selected.length} LEGS SELECTED</Badge>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {countryServices.map((service) => {
+                {groupServices.map((service) => {
                   const leg = legs.find((item) => item.LegID === service.ScopeID);
                   if (!leg) return null;
                   return (
                     <label key={service.SVCID} className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/30">
-                      <input type="checkbox" className="mt-1" checked={selected.includes(leg.LegID)} onChange={() => toggleLeg(country, leg.LegID)} />
+                      <input type="checkbox" className="mt-1" checked={selected.includes(leg.LegID)} onChange={() => toggleLeg(key, leg.LegID)} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">LEG {leg.Seq}: {leg.DepICAO} → {leg.ArrICAO} <StatusBadge status={service.Status} entityType="service" className="text-[10px] uppercase" /></div>
                         <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground"><span>{leg.PaxCount} PAX</span><span>{leg.CrewCount} CREW</span><span>PURPOSE: {(leg.Purpose || 'Not specified').toUpperCase()}</span><span>{serviceLabel(service.ServiceType).toUpperCase()}</span></div>
@@ -1253,8 +1268,8 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
                 })}
               </div>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <input className="h-9 rounded-md border bg-background px-2 text-sm" placeholder="Request reference (optional)" value={requestRefs[country] || ''} onChange={(event) => setRequestRefs({ ...requestRefs, [country]: event.target.value })} />
-                <Button size="sm" disabled={!selected.length} onClick={() => submitCountryRequest(country, countryServices)}><FileText className="h-4 w-4" /> SUBMIT {country} REQUEST</Button>
+                <input className="h-9 rounded-md border bg-background px-2 text-sm" placeholder="Request reference (optional)" value={requestRefs[key] || ''} onChange={(event) => setRequestRefs({ ...requestRefs, [key]: event.target.value })} />
+                <Button size="sm" disabled={!selected.length} onClick={() => submitGroupRequest(key, country, groupServices)}><FileText className="h-4 w-4" /> SUBMIT {country} REQUEST</Button>
               </div>
             </CardContent>
           </Card>
@@ -1264,7 +1279,131 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
   );
 }
 
-// ─── Deadline Rail Component ────────────────────────────────────────────────
+// Same country+serviceType grouping as PermitSubmissionGroups, for services
+// a coordinator has manually marked 'Re-confirm Required' (a route/schedule
+// change on the underlying leg). "Submitting" a revision isn't a status
+// transition the way a fresh request is -- the service is already
+// Confirmed-then-flagged -- so this loops over the selected legs and sends
+// one revision email per service via the same generateEmail/saveComm/
+// sendComm primitives ComposeDrawer uses for a single service, rather than
+// bulk-transitioning status. The move back to 'Confirmed' once the provider
+// acknowledges stays a separate manual step, same as it is today.
+function PermitRevisionGroups({ legs, services, trip, persons, onSaved }: { legs: Leg[]; services: Service[]; trip: Trip; persons: TripPersonView[]; onSaved: () => Promise<void> | void }) {
+  const [selectedLegs, setSelectedLegs] = useState<Record<string, string[]>>({});
+  const [sendingKey, setSendingKey] = useState<string | null>(null);
+  const revisionServices = services.filter((service) =>
+    (service.ServiceType === 'Permit' || service.ServiceType === 'Overflight') && service.CountryISO2
+    && service.Responsibility === 'VIQ Arrangement'
+    && service.Status === 'Re-confirm Required'
+  );
+  const grouped = revisionServices.reduce<Record<string, Service[]>>((groups, service) => {
+    const key = submissionGroupKey(service.CountryISO2 as string, service.ServiceType);
+    groups[key] = [...(groups[key] || []), service];
+    return groups;
+  }, {});
+
+  if (Object.keys(grouped).length === 0) return null;
+
+  const toggleLeg = (key: string, legId: string) => {
+    setSelectedLegs((current) => {
+      const selected = current[key] || [];
+      return { ...current, [key]: selected.includes(legId) ? selected.filter((id) => id !== legId) : [...selected, legId] };
+    });
+  };
+
+  const sendGroupRevisions = async (key: string, groupServices: Service[]) => {
+    const legIds = selectedLegs[key] || [];
+    if (!legIds.length) return;
+    setSendingKey(key);
+    const failed: Service[] = [];
+    for (const service of groupServices.filter((service) => legIds.includes(service.ScopeID))) {
+      const leg = legs.find((item) => item.LegID === service.ScopeID);
+      if (!leg) continue;
+      try {
+        const previousItinerary = await getPreviousLegItinerary(leg.LegID);
+        const providers = getProviderList();
+        const provider = providers.find((p) => p.ProviderID === service.ProviderID) ?? null;
+        const recipients = provider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
+        const template = defaultTemplateFor(service.ServiceType, 'Revision');
+        const generated = generateEmail(
+          template, trip.TripID, leg.LegID, service.SVCID, legs, persons, '',
+          trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
+          trip.Client, trip.Operator, trip.SupportRef || '', service.CountryISO2 ?? null, recipients,
+          previousItinerary, service.RefNumber,
+        );
+        const comm: Comm = {
+          CommID: `COMM-${service.SVCID}-${Date.now()}`,
+          Direction: 'OUTBOUND',
+          TripID: trip.TripID,
+          SVCID: service.SVCID,
+          Token: service.SVCID,
+          From: 'operations@viq.local',
+          To: recipients.join(', '),
+          Subject: generated.subject,
+          Body: generated.body,
+          TimestampZ: new Date().toISOString(),
+          Status: 'Draft',
+        };
+        await saveComm(comm);
+        const sent = await sendComm(comm.CommID);
+        if (sent.Status !== 'Sent') failed.push(service);
+      } catch {
+        failed.push(service);
+      }
+    }
+    setSendingKey(null);
+    await onSaved();
+    if (failed.length > 0) {
+      window.alert(
+        `${failed.length} revision(s) failed to send:\n` +
+        failed.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.SVCID})`).join('\n'),
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {Object.entries(grouped).map(([key, groupServices]) => {
+        const country = groupServices[0].CountryISO2 as string;
+        const serviceType = groupServices[0].ServiceType;
+        const selected = selectedLegs[key] || [];
+        return (
+          <Card key={key} className="border-rose-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base font-semibold text-rose-800">{(getCountry(country)?.Name || country).toUpperCase()} — {serviceLabel(serviceType).toUpperCase()} REVISION</CardTitle>
+                <p className="text-xs text-muted-foreground">Select legs to send a combined revision notice for the itinerary change.</p>
+              </div>
+              <Badge variant="outline">{selected.length} LEGS SELECTED</Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {groupServices.map((service) => {
+                  const leg = legs.find((item) => item.LegID === service.ScopeID);
+                  if (!leg) return null;
+                  return (
+                    <label key={service.SVCID} className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/30">
+                      <input type="checkbox" className="mt-1" checked={selected.includes(leg.LegID)} onChange={() => toggleLeg(key, leg.LegID)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">LEG {leg.Seq}: {leg.DepICAO} → {leg.ArrICAO} <StatusBadge status={service.Status} entityType="service" className="text-[10px] uppercase" /></div>
+                        <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">{service.RefNumber && <span>ISSUED REF: {service.RefNumber}</span>}<span>{serviceLabel(service.ServiceType).toUpperCase()}</span></div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" variant="destructive" disabled={!selected.length || sendingKey === key} onClick={() => sendGroupRevisions(key, groupServices)}>
+                  <Send className="h-4 w-4" /> {sendingKey === key ? 'SENDING…' : `SEND ${country} REVISION`}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
 
 // "What needs my attention?" — the trip header's Level-1 status line.
 // Every open service falls into exactly one bucket (priority order below),
@@ -1914,6 +2053,13 @@ export default function TripDetail() {
           <PermitSubmissionGroups
             legs={legs}
             services={services}
+            onSaved={reload}
+          />
+          <PermitRevisionGroups
+            legs={legs}
+            services={services}
+            trip={trip}
+            persons={persons}
             onSaved={reload}
           />
           {permitServices.length > 0 && (

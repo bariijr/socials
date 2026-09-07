@@ -124,6 +124,7 @@ REF: OVERFLY PERMIT REVISION FOR {{COUNTRY_NAME}}:
 A. OPERATOR: {{OPERATOR}}
 B. REGISTRY: {{REG}}  ACFT TYPE: {{ACTYPE}}   MTOW: {{MTOW}} LB
 C. AIRCRAFT CLASSIFICATION: Private - Non Revenue
+D. PREVIOUSLY GRANTED CLEARANCE REF: {{ISSUED_REF}}
 
 PREVIOUS ITINERARY:
         ETD {{DEP_NAME}} / {{DEP}}          {{PREV_ETD}}
@@ -178,6 +179,7 @@ REF: LANDING PERMIT REVISION FOR {{COUNTRY_NAME}}:
 A. OPERATOR: {{OPERATOR}}
 B. REGISTRY: {{REG}}  ACFT TYPE: {{ACTYPE}}   MTOW: {{MTOW}} LB
 C. AIRCRAFT CLASSIFICATION: Private - Non Revenue
+D. PREVIOUSLY GRANTED CLEARANCE REF: {{ISSUED_REF}}
 
 PREVIOUS ITINERARY:
         ETD {{DEP_NAME}} / {{DEP}}          {{PREV_ETD}}
@@ -315,7 +317,9 @@ export function generateEmail(
   operator: string,
   supportRef: string,
   countryISO2: string | null = null,
-  recipients: string[] = []
+  recipients: string[] = [],
+  previousItinerary: { etdZ: string; etaZ: string } | null = null,
+  issuedRef: string = ''
 ): { subject: string; body: string; token: string } {
   const token = svcId || `${tripId}/GEN-${Date.now().toString(36).toUpperCase()}`;
   const leg = legId ? legs.find(l => l.LegID === legId) : null;
@@ -338,8 +342,14 @@ export function generateEmail(
     const isRevision = template === 'VIQ_OverflyRevision' || template === 'VIQ_LandingRevision' || template === 'VIQ_GroundHandlingRevision';
     const isOverfly = template === 'VIQ_OverflyRequest' || template === 'VIQ_OverflyRevision';
     const lookupCountry = isOverfly ? countryISO2 : arrCountryISO2;
-    const prevEtd = isRevision && leg ? new Date(new Date(leg.ETDZ).getTime() - 60 * 60 * 1000).toISOString() : etd;
-    const prevEta = isRevision && leg ? new Date(new Date(leg.ETAZ).getTime() - 60 * 60 * 1000).toISOString() : eta;
+    // Real previous values come from the leg's audit trail (see
+    // getPreviousLegItinerary in dataStore.ts) -- callers fetch them
+    // asynchronously and pass the result in, since this function stays a
+    // pure sync renderer. Falling back to the current itinerary (no visible
+    // diff) only when no prior audit entry exists for that field, e.g. a
+    // Revision template selected on a leg that was never actually edited.
+    const prevEtd = isRevision && previousItinerary?.etdZ ? previousItinerary.etdZ : etd;
+    const prevEta = isRevision && previousItinerary?.etaZ ? previousItinerary.etaZ : eta;
     const vars: Record<string, string> = {
       OPERATOR: operator.toUpperCase(),
       REG: reg,
@@ -353,6 +363,7 @@ export function generateEmail(
       ETA: formatUWDate(leg?.ETAZ || eta),
       PREV_ETD: isRevision ? formatUWDate(prevEtd) : '',
       PREV_ETA: isRevision ? formatUWDate(prevEta) : '',
+      ISSUED_REF: issuedRef || 'N/A',
       CLIENT: client.toUpperCase(),
       SUPPORT_REF: supportRef || 'TBD',
       PIC: pic?.Name?.toUpperCase() || 'TBD',

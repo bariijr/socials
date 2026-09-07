@@ -1116,6 +1116,24 @@ export async function getAuditForRecord(table: string, recordId: string): Promis
   return rows.map(mapAuditEntryFromApi);
 }
 
+// Real "what did the itinerary used to say" for a revision email, sourced
+// from the leg's own audit trail (every Leg update is logged field-by-field
+// via the server's AuditService.logDiff) rather than a fabricated offset.
+// AuditEntry.OldValue is a String(Date)-coerced value (see AuditService),
+// which `new Date(...)` round-trips correctly back into a real Date. Returns
+// null only when the leg has no logged etdZ/etaZ change at all -- e.g. a
+// Revision template picked on a leg that was never actually edited.
+export async function getPreviousLegItinerary(legId: string): Promise<{ etdZ: string; etaZ: string } | null> {
+  const entries = await getAuditForRecord('Leg', legId);
+  const prevEtdEntry = entries.find((e) => e.Field === 'etdZ');
+  const prevEtaEntry = entries.find((e) => e.Field === 'etaZ');
+  if (!prevEtdEntry && !prevEtaEntry) return null;
+  return {
+    etdZ: prevEtdEntry ? new Date(prevEtdEntry.OldValue).toISOString() : '',
+    etaZ: prevEtaEntry ? new Date(prevEtaEntry.OldValue).toISOString() : '',
+  };
+}
+
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
 export interface Invoice {
