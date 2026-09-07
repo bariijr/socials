@@ -12,7 +12,8 @@ import {
 } from '@/lib/dataStore';
 import { haversineNM } from '@/lib/geo';
 import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel, ServiceResponsibility } from '@/data/types';
-import type { Invoice, TripSheet, Client, UserDirectoryEntry } from '@/lib/dataStore';
+import type { Invoice, TripSheet, Client, UserDirectoryEntry, AuthorizationCandidate } from '@/lib/dataStore';
+import { getServiceAuthorizationCandidates, linkServiceAuthorization, getPermitAuthorizationList } from '@/lib/dataStore';
 import { Typeahead } from '@/components/ui/typeahead';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -918,6 +919,8 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const [composeOpen, setComposeOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
+  const [candidates, setCandidates] = useState<AuthorizationCandidate[] | null>(null);
+  const [linking, setLinking] = useState(false);
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const save = async () => {
     try {
@@ -1058,6 +1061,59 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
             >
               {SERVICE_RESPONSIBILITIES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
+            {draft.AuthorizationID ? (
+              (() => {
+                const auth = getPermitAuthorizationList().find((a) => a.ID === draft.AuthorizationID);
+                return auth ? (
+                  <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-800">
+                    Covered by {auth.AuthorizationType} permit {auth.ReferenceNumber} (valid until {new Date(auth.ValidUntil).toLocaleDateString()}).
+                  </div>
+                ) : null;
+              })()
+            ) : (draft.ServiceType === 'Permit' || draft.ServiceType === 'Overflight') && editing && (
+              <div className="space-y-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px]"
+                  onClick={async () => setCandidates(await getServiceAuthorizationCandidates(service.SVCID))}
+                >
+                  Link existing permit
+                </Button>
+                {candidates && (
+                  <div className="space-y-1 rounded border p-2">
+                    {candidates.length === 0 && <div className="text-[10px] text-muted-foreground">No matching authorizations found.</div>}
+                    {candidates.map((c) => (
+                      <div key={c.Authorization.ID} className="flex items-center justify-between gap-2 text-[10px]">
+                        <span className={c.Eligible ? '' : 'text-muted-foreground'}>
+                          {c.Authorization.ReferenceNumber} ({c.Authorization.AuthorizationType}){!c.Eligible && ` — ${c.Reason}`}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-5 px-2 text-[9px]"
+                          disabled={!c.Eligible || linking}
+                          onClick={async () => {
+                            setLinking(true);
+                            try {
+                              const saved = await linkServiceAuthorization(service.SVCID, c.Authorization.ID, draft.Version);
+                              setDraft(saved);
+                              setSavedDraft(saved);
+                              setCandidates(null);
+                              await onSaved();
+                            } finally {
+                              setLinking(false);
+                            }
+                          }}
+                        >
+                          Link
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="mt-1">
               <StatusTimeline table="Service" recordId={service.SVCID} />
             </div>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices } from '@/lib/dataStore';
+import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList } from '@/lib/dataStore';
 import type { TripSheet } from '@/lib/dataStore';
 import type { Trip, Leg, Service, ServiceResponsibility } from '@/data/types';
 
@@ -159,6 +159,17 @@ function ServiceEditorDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {service.AuthorizationID && (
+            <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+              {(() => {
+                const auth = getPermitAuthorizationList().find((a) => a.ID === service.AuthorizationID);
+                return auth
+                  ? `Covered by ${auth.AuthorizationType} permit ${auth.ReferenceNumber} (valid until ${new Date(auth.ValidUntil).toLocaleDateString()}).`
+                  : 'Covered by a permit authorization.';
+              })()}
+            </div>
+          )}
 
           <div>
             <Label>Reference / Permit Number</Label>
