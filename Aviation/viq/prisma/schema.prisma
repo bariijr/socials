@@ -31,6 +31,7 @@ model Country {
   countryRules     CountryRule[]
   messageTemplates MessageTemplate[]
   fees             CountryFee[]
+  permitAuthorizations PermitAuthorization[]
 
   @@map("countries")
 }
@@ -175,6 +176,7 @@ model Operator {
   aircraft Aircraft[]
   clients  Client[]
   channels ContactChannel[]
+  permitAuthorizations PermitAuthorization[]
 
   @@map("operators")
 }
@@ -262,6 +264,31 @@ model ServiceTypeDef {
   sortOrder Int     @default(0) @map("sort_order")
 
   @@map("service_type_defs")
+}
+
+model PermitAuthorization {
+  id                String    @id @default(cuid())
+  operatorId        String    @map("operator_id")
+  countryIso2       String    @map("country_iso2")
+  serviceType       String    @map("service_type")       // 'Permit' | 'Overflight'
+  authorizationType String    @map("authorization_type") // 'Blanket' | 'Block' | 'Seasonal'
+  referenceNumber   String    @map("reference_number")
+  validFrom         DateTime  @map("valid_from")
+  validUntil        DateTime  @map("valid_until")
+  status            String    @default("Draft")          // 'Draft' | 'Verified' | 'Revoked'
+  docId             String?   @map("doc_id")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  createdBy         String    @map("created_by")
+  verifiedBy        String?   @map("verified_by")
+  verifiedAt        DateTime? @map("verified_at")
+
+  operator Operator  @relation(fields: [operatorId], references: [operatorId])
+  country  Country   @relation(fields: [countryIso2], references: [iso2])
+  services Service[]
+
+  @@index([operatorId, countryIso2, serviceType, status])
+  @@map("permit_authorizations")
 }
 
 model LegPurposeDef {
@@ -480,9 +507,11 @@ model Service {
   statusChangedAt DateTime? @map("status_changed_at")
   statusChangedBy String?  @map("status_changed_by")
   responsibility  String  @default("VIQ Arrangement")
+  authorizationId String? @map("authorization_id")
 
-  trip     Trip      @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
-  provider Provider? @relation(fields: [providerId], references: [providerId])
+  trip          Trip                 @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  provider      Provider?            @relation(fields: [providerId], references: [providerId])
+  authorization PermitAuthorization? @relation(fields: [authorizationId], references: [id])
 
   @@index([tripId])
   @@index([scopeType, scopeId])
