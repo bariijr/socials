@@ -198,6 +198,8 @@ export class ServicesService {
     const leadHours = await this.leadTimeHours(iso2, 'Overflight', 48);
     const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
     const providerId = await this.resolveProvider('Overflight', leg.depIcao, iso2);
+    const trip = await this.prisma.trip.findUnique({ where: { tripId: leg.tripId }, select: { registration: true } });
+    const auth = await this.resolveAuthorization(trip?.registration ?? null, iso2, 'Overflight', leg.etdZ);
     const svc = await this.prisma.service.create({
       data: {
         svcId: `${leg.legId}-OVF-${iso2}`,
@@ -206,13 +208,16 @@ export class ServicesService {
         scopeId: leg.legId,
         serviceType: 'Overflight',
         providerId,
-        status: 'Not Started',
+        status: auth ? 'Confirmed' : 'Not Started',
         basedOnEtdZ: leg.etdZ,
         requiredByZ,
         urgency: computeUrgency(requiredByZ),
         assignedTo: 'Unassigned',
-        notes,
+        notes: auth ? `${notes} Auto-confirmed via ${auth.authorizationType} permit ${auth.referenceNumber}.` : notes,
         countryIso2: iso2,
+        refNumber: auth?.referenceNumber ?? '',
+        validityZ: auth?.validUntil,
+        authorizationId: auth?.id,
       },
     });
     await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
@@ -252,6 +257,31 @@ export class ServicesService {
       where: { scopeType, scopeId, serviceType },
     });
     return new Set(rows.map((r) => r.countryIso2));
+  }
+
+  // Operator-level match only (see design spec's "Coverage matching" — no
+  // per-aircraft/callsign tracking). Returns null (never throws) whenever
+  // resolution isn't possible, so callers can always fall back to normal
+  // Not Started generation.
+  private async resolveAuthorization(
+    registration: string | null,
+    countryIso2: string,
+    serviceType: string,
+    atDate: Date,
+  ) {
+    if (!registration) return null;
+    const aircraft = await this.prisma.aircraft.findUnique({ where: { registration } });
+    if (!aircraft) return null;
+    return this.prisma.permitAuthorization.findFirst({
+      where: {
+        operatorId: aircraft.currentOperatorId,
+        countryIso2,
+        serviceType,
+        status: 'Verified',
+        validFrom: { lte: atDate },
+        validUntil: { gte: atDate },
+      },
+    });
   }
 
   // Item 16: keeps a leg's Overflight services in sync with its current
@@ -309,6 +339,7 @@ export class ServicesService {
   async generateArrivalServices(legId: string, opts: { departureGroundHandling?: boolean } = {}, user = 'SYSTEM') {
     const leg = await this.prisma.leg.findUnique({ where: { legId } });
     if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
+    const trip = await this.prisma.trip.findUnique({ where: { tripId: leg.tripId }, select: { registration: true } });
 
     const existing = await this.prisma.service.findMany({
       where: { tripId: leg.tripId, scopeType: 'LEG', scopeId: legId },
@@ -327,6 +358,9 @@ export class ServicesService {
       const leadHours = await this.leadTimeHours(iso2, serviceType, 48);
       const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
       const providerId = await this.resolveProvider(serviceType, icao, iso2);
+      const auth = serviceType === 'Permit'
+        ? await this.resolveAuthorization(trip?.registration ?? null, iso2, 'Permit', leg.etdZ)
+        : null;
       const svc = await this.prisma.service.create({
         data: {
           svcId: `${legId}-${serviceType.toUpperCase()}-${direction}-${iso2}`,
@@ -335,14 +369,17 @@ export class ServicesService {
           scopeId: legId,
           serviceType,
           providerId,
-          status: 'Not Started',
+          status: auth ? 'Confirmed' : 'Not Started',
           basedOnEtdZ: leg.etdZ,
           requiredByZ,
           urgency: computeUrgency(requiredByZ),
           assignedTo: 'Unassigned',
-          notes,
+          notes: auth ? `${notes} Auto-confirmed via ${auth.authorizationType} permit ${auth.referenceNumber}.` : notes,
           countryIso2: iso2,
           icao,
+          refNumber: auth?.referenceNumber ?? '',
+          validityZ: auth?.validUntil,
+          authorizationId: auth?.id,
         },
       });
       await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
