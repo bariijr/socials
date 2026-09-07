@@ -15,6 +15,7 @@ import { LegsModule } from './modules/legs/legs.module';
 import { StopsModule } from './modules/stops/stops.module';
 import { ServicesModule } from './modules/services/services.module';
 import { ServiceTypesModule } from './modules/service-types/service-types.module';
+import { PermitAuthorizationsModule } from './modules/permit-authorizations/permit-authorizations.module';
 import { LegPurposesModule } from './modules/leg-purposes/leg-purposes.module';
 import { PersonsModule } from './modules/persons/persons.module';
 import { PersonRatingsModule } from './modules/person-ratings/person-ratings.module';
@@ -52,6 +53,7 @@ import { HealthModule } from './modules/health/health.module';
     StopsModule,
     ServicesModule,
     ServiceTypesModule,
+    PermitAuthorizationsModule,
     LegPurposesModule,
     PersonsModule,
     PersonRatingsModule,
