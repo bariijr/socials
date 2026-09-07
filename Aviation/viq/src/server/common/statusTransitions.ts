@@ -68,6 +68,15 @@ export function withTripTransitions<T extends { status: string }>(
   return { ...trip, allowedTransitions: tripAllowedTransitions(trip.status, role) };
 }
 
+// Linking an already-verified authorization to a service is a system-
+// assisted shortcut, not a coordinator status click -- it may jump
+// straight to Confirmed from any "still working on it" status, but must
+// never override a coordinator's deliberate Cancelled/Not Required call,
+// and linking an already-Confirmed service makes no sense either.
+export function serviceAuthorizationLinkAllowed(status: string): boolean {
+  return ['Not Started', 'Requested', 'Chasing', 'Re-confirm Required'].includes(status);
+}
+
 export function withServiceTransitions<T extends { status: string }>(
   svc: T,
 ): T & { allowedTransitions: string[] } {

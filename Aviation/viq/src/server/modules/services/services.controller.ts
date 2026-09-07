@@ -74,9 +74,9 @@ export class ServicesController {
   @Patch(':svcId/link-authorization')
   linkAuthorization(
     @Param('svcId') svcId: string,
-    @Body() body: { authorizationId: string; user?: string },
+    @Body() body: { authorizationId: string; version: number; user?: string },
   ) {
-    return this.services.linkAuthorization(svcId, body.authorizationId, body.user);
+    return this.services.linkAuthorization(svcId, body.authorizationId, body.version, body.user);
   }
 
   @Get(':svcId/authorization-candidates')

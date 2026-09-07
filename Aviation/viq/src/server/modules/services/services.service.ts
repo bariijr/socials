@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { computeUrgency } from '../../common/geo.util';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { isValidServiceTransition, withServiceTransitions } from '../../common/statusTransitions';
+import { isValidServiceTransition, serviceAuthorizationLinkAllowed, withServiceTransitions } from '../../common/statusTransitions';
 
 type ServiceType = 'Permit' | 'Overflight' | 'GroundHandling';
 
@@ -150,9 +150,14 @@ export class ServicesService {
   // Validates the named authorization actually matches this service (same
   // operator/country/serviceType, and the service's requiredByZ falls in
   // its validity window) before applying — covers the common case where an
-  // authorization is verified after the service already exists.
-  async linkAuthorization(svcId: string, authorizationId: string, user = 'SYSTEM') {
-    const svc = await this.findOne(svcId);
+  // authorization is verified after the service already exists. This is a
+  // system-assisted shortcut to Confirmed, not a coordinator status click,
+  // so it checks serviceAuthorizationLinkAllowed rather than
+  // isValidServiceTransition (see that function's doc comment) — and, like
+  // update(), enforces optimistic locking via `version`.
+  async linkAuthorization(svcId: string, authorizationId: string, version: number, user = 'SYSTEM') {
+    const svc = await this.prisma.service.findUnique({ where: { svcId } });
+    if (!svc) throw new NotFoundException(`Service ${svcId} not found`);
     const auth = await this.prisma.permitAuthorization.findUnique({ where: { id: authorizationId } });
     if (!auth) throw new NotFoundException(`PermitAuthorization ${authorizationId} not found`);
     if (auth.status !== 'Verified') {
@@ -169,19 +174,39 @@ export class ServicesService {
     if (svc.requiredByZ < auth.validFrom || svc.requiredByZ > auth.validUntil) {
       throw new BadRequestException('Authorization validity window does not cover this service’s required date');
     }
+    if (!serviceAuthorizationLinkAllowed(svc.status)) {
+      throw new BadRequestException(`Cannot link an authorization to a service with status "${svc.status}"`);
+    }
 
-    const updated = await this.prisma.service.update({
-      where: { svcId },
+    const result = await this.prisma.service.updateMany({
+      where: { svcId, version },
       data: {
         status: 'Confirmed',
         refNumber: auth.referenceNumber,
         validityZ: auth.validUntil,
         authorizationId: auth.id,
         notes: `${svc.notes} Linked to ${auth.authorizationType} permit ${auth.referenceNumber}.`.trim(),
+        version: { increment: 1 },
+        statusChangedAt: new Date(),
+        statusChangedBy: user,
       },
     });
+
+    if (result.count === 0) {
+      const current = await this.prisma.service.findUnique({ where: { svcId } });
+      const history = await this.audit.forRecord('Service', svcId);
+      const latest = history[0];
+      throw new ConflictException({
+        message: `Service ${svcId} was modified by someone else`,
+        current: withServiceTransitions(current!),
+        changedBy: latest?.user,
+        changedAt: latest?.timestampZ,
+      });
+    }
+
+    const updated = await this.prisma.service.findUnique({ where: { svcId } });
     await this.audit.log(user, 'Service', svcId, 'LinkedAuthorization', '', authorizationId);
-    return withServiceTransitions(updated);
+    return withServiceTransitions(updated!);
   }
 
   // Resolves operator/country/serviceType server-side from the service and

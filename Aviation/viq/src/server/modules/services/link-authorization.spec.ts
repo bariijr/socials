@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ServicesService } from './services.service';
@@ -51,7 +51,7 @@ describe('Manual retroactive authorization link', () => {
         status: 'Verified', createdBy: 'SYSTEM',
       },
     });
-    const linked = await services.linkAuthorization('TEST-LINK-1-SVC-1', auth.id, 'coordinator');
+    const linked = await services.linkAuthorization('TEST-LINK-1-SVC-1', auth.id, 1, 'coordinator');
     expect(linked.status).toBe('Confirmed');
     expect(linked.authorizationId).toBe(auth.id);
     expect(linked.refNumber).toBe('REF-1');
@@ -65,7 +65,36 @@ describe('Manual retroactive authorization link', () => {
         status: 'Verified', createdBy: 'SYSTEM',
       },
     });
-    await expect(services.linkAuthorization('TEST-LINK-1-SVC-1', auth.id, 'coordinator')).rejects.toThrow(BadRequestException);
+    await expect(services.linkAuthorization('TEST-LINK-1-SVC-1', auth.id, 1, 'coordinator')).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects linking with a stale version and does not mutate the service', async () => {
+    const auth = await prisma.permitAuthorization.create({
+      data: {
+        operatorId: 'OP-1', countryIso2: 'KE', serviceType: 'Overflight', authorizationType: 'Blanket',
+        referenceNumber: 'REF-5', validFrom: new Date('2026-01-01'), validUntil: new Date('2027-01-01'),
+        status: 'Verified', createdBy: 'SYSTEM',
+      },
+    });
+    await expect(services.linkAuthorization('TEST-LINK-1-SVC-1', auth.id, 99, 'coordinator')).rejects.toThrow(ConflictException);
+    const unchanged = await prisma.service.findUnique({ where: { svcId: 'TEST-LINK-1-SVC-1' } });
+    expect(unchanged!.status).toBe('Not Started');
+    expect(unchanged!.authorizationId).toBeNull();
+  });
+
+  it('rejects linking a service whose status is Cancelled and does not mutate the service', async () => {
+    await prisma.service.update({ where: { svcId: 'TEST-LINK-1-SVC-1' }, data: { status: 'Cancelled' } });
+    const auth = await prisma.permitAuthorization.create({
+      data: {
+        operatorId: 'OP-1', countryIso2: 'KE', serviceType: 'Overflight', authorizationType: 'Blanket',
+        referenceNumber: 'REF-6', validFrom: new Date('2026-01-01'), validUntil: new Date('2027-01-01'),
+        status: 'Verified', createdBy: 'SYSTEM',
+      },
+    });
+    await expect(services.linkAuthorization('TEST-LINK-1-SVC-1', auth.id, 1, 'coordinator')).rejects.toThrow(BadRequestException);
+    const unchanged = await prisma.service.findUnique({ where: { svcId: 'TEST-LINK-1-SVC-1' } });
+    expect(unchanged!.status).toBe('Cancelled');
+    expect(unchanged!.authorizationId).toBeNull();
   });
 
   it('candidates lists matching authorizations and flags non-Verified ones as ineligible', async () => {
