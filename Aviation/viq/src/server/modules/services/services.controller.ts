@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
+import { LinkAuthorizationDto } from './dto/link-authorization.dto';
 
 @Controller('services')
 export class ServicesController {
@@ -72,10 +73,7 @@ export class ServicesController {
   }
 
   @Patch(':svcId/link-authorization')
-  linkAuthorization(
-    @Param('svcId') svcId: string,
-    @Body() body: { authorizationId: string; version: number; user?: string },
-  ) {
+  linkAuthorization(@Param('svcId') svcId: string, @Body() body: LinkAuthorizationDto) {
     return this.services.linkAuthorization(svcId, body.authorizationId, body.version, body.user);
   }
 
