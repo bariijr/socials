@@ -21,6 +21,8 @@
 - Server tests run against the real `jetflow_test` Postgres database — never a mocked Prisma client.
 - An infected file is a terminal, correct outcome, not a transient failure — it must **not** trigger BullMQ's retry/backoff (no `throw` on that path), unlike a genuine processing error.
 
+**Note (added post-Task 3):** `npm test` now runs through `scripts/run-tests.js` rather than invoking `jest` directly. Two spec files in this plan dynamically `import()` real ESM-only packages, and running them in the same Jest worker process as other specs intermittently crashes the worker (a real jest-runtime@30.5.1 bug). `scripts/run-tests.js` isolates ESM-touching spec files into their own processes to work around this. This emerged as an in-flight necessity partway through Task 3 and is now permanent project infrastructure — informational only, no task text changed.
+
 ---
 
 ## Task 1: ClamAV infrastructure (Docker + env)

@@ -41,4 +41,9 @@ describe('AvScanService', () => {
     const result = await service.scan('/tmp/infected-file.png');
     expect(result).toEqual({ clean: false, signature: 'Test.Signature' });
   });
+
+  it('throws on an indeterminate scan result instead of treating it as clean', async () => {
+    mockIsInfected.mockResolvedValue({ isInfected: null, viruses: [] });
+    await expect(service.scan('/tmp/ambiguous-file.png')).rejects.toThrow();
+  });
 });

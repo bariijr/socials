@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OcrService } from './ocr.service';
 import { AvScanService } from './av-scan.service';
@@ -73,6 +73,21 @@ export class DocumentProcessingProcessor extends WorkerHost {
       const message = e instanceof Error ? e.message : 'Unknown processing error';
       this.logger.error(`Document ${documentId} processing failed: ${message}`);
       await this.prisma.document.update({ where: { documentId }, data: { status: 'PROCESSING_FAILED' } });
+
+      if (e instanceof BadRequestException) {
+        // Deterministic failures (unsupported mime type, password-protected
+        // PDF) can never succeed on retry -- retrying them would waste the
+        // full backoff budget and re-run the AV scan each time before
+        // landing on the exact same failure. Terminal, like the infected-
+        // file early return above, but unlike that path this one did throw,
+        // so it still needs its own non-retrying exit here.
+        await this.prisma.documentProcessingJob.update({
+          where: { id: jobId },
+          data: { status: 'FAILED', errorMessage: message, completedAtZ: new Date() },
+        });
+        return;
+      }
+
       await this.prisma.documentProcessingJob.update({
         where: { id: jobId },
         data: { status: 'FAILED', errorMessage: message, completedAtZ: new Date(), attempts: { increment: 1 } },

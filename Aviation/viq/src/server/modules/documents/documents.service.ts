@@ -10,13 +10,15 @@ import { AuditService } from '../audit/audit.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 
 const UPLOADS_DIR = process.env.DOCUMENTS_UPLOADS_DIR || './uploads/documents';
+// Keep this in sync with ocr.service.ts's IMAGE_MIME_TYPES for any image/*
+// addition -- a mime type accepted here but unsupported there fails
+// downstream after burning BullMQ's retry budget.
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
   'image/png',
   'image/tiff',
   'image/webp',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 // Formats with an unambiguous magic-byte signature — webp and docx are
 // excluded for the same reason docs.service.ts excludes docx: file-type's

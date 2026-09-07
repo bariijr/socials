@@ -17,7 +17,12 @@ export interface OcrResult {
   structuredFields: Record<string, unknown> | null;
 }
 
-const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/bmp']);
+// Keep this in sync with documents.service.ts's ALLOWED_MIME_TYPES for any
+// image/* addition -- a mime type accepted there but unsupported here fails
+// downstream after burning BullMQ's retry budget. (image/gif and image/bmp
+// below are harmless dead branches -- documents.service.ts's upload
+// allowlist doesn't accept them, so they can never be reached.)
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/bmp', 'image/webp']);
 const PDF_MIME = 'application/pdf';
 
 // Below this many characters, a PDF's embedded text layer is treated as
