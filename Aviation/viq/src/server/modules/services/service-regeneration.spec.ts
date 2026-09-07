@@ -141,4 +141,69 @@ describe('generateOverflightServices — dismissal-tracking (Phase 0 Conflict #2
     });
     expect(afterRevert).toHaveLength(1);
   });
+
+  it('auto-removes an auto-confirmed (authorization-matched) service when its country drops off the route, but only flags one a coordinator has since touched', async () => {
+    await prisma.operator.create({ data: { operatorId: 'OP-1', name: 'Test Operator', fleet: [] } });
+    await prisma.aircraftType.create({
+      data: { icaoType: 'GLF6', manufacturer: 'Gulfstream', model: 'G650', mtowKg: 45178, noiseCert: 'Chapter 14' },
+    });
+    await prisma.aircraft.create({ data: { registration: 'N1TEST', icaoType: 'GLF6', currentOperatorId: 'OP-1' } });
+    await prisma.permitAuthorization.create({
+      data: {
+        operatorId: 'OP-1', countryIso2: 'ZZ', serviceType: 'Overflight', authorizationType: 'Blanket',
+        referenceNumber: 'BLANKET-1', validFrom: new Date('2026-01-01'), validUntil: new Date('2027-01-01'),
+        status: 'Verified', createdBy: 'SYSTEM',
+      },
+    });
+
+    // Case A: an untouched, auto-confirmed service.
+    const tripIdA = 'TEST-REGEN-4A';
+    await trips.create({ tripId: tripIdA, client: 'Test Client', registration: 'N1TEST' });
+    const legA = await legs.create({
+      legId: `${tripIdA}-LEG-1`,
+      tripId: tripIdA,
+      seq: 1,
+      depIcao: 'HTDA',
+      arrIcao: 'FALA',
+      etdZ: '2026-10-01T06:00:00.000Z',
+      etaZ: '2026-10-01T09:00:00.000Z',
+      countriesOverflown: ['ZZ'],
+      generateServices: false,
+    });
+    const [createdA] = await services.generateOverflightServices(legA.legId, 'SYSTEM');
+    expect(createdA.status).toBe('Confirmed');
+    expect(createdA.authorizationId).not.toBeNull();
+
+    await prisma.leg.update({ where: { legId: legA.legId }, data: { countriesOverflown: [] } });
+    const { removed: removedA, flagged: flaggedA } = await services.reconcileOverflightServices(legA.legId, 'SYSTEM');
+    expect(removedA).toHaveLength(1);
+    expect(removedA[0].svcId).toBe(createdA.svcId);
+    expect(flaggedA).toHaveLength(0);
+
+    // Case B: same setup, but a coordinator has since made a status-changing
+    // edit -- must be flagged, not removed, exactly like any other
+    // human-touched service.
+    const tripIdB = 'TEST-REGEN-4B';
+    await trips.create({ tripId: tripIdB, client: 'Test Client', registration: 'N1TEST' });
+    const legB = await legs.create({
+      legId: `${tripIdB}-LEG-1`,
+      tripId: tripIdB,
+      seq: 1,
+      depIcao: 'HTDA',
+      arrIcao: 'FALA',
+      etdZ: '2026-10-01T06:00:00.000Z',
+      etaZ: '2026-10-01T09:00:00.000Z',
+      countriesOverflown: ['ZZ'],
+      generateServices: false,
+    });
+    const [createdB] = await services.generateOverflightServices(legB.legId, 'SYSTEM');
+    expect(createdB.status).toBe('Confirmed');
+    await services.update(createdB.svcId, { status: 'Re-confirm Required', version: createdB.version, user: 'coordinator1' });
+
+    await prisma.leg.update({ where: { legId: legB.legId }, data: { countriesOverflown: [] } });
+    const { removed: removedB, flagged: flaggedB } = await services.reconcileOverflightServices(legB.legId, 'SYSTEM');
+    expect(removedB).toHaveLength(0);
+    expect(flaggedB).toHaveLength(1);
+    expect(flaggedB[0].svcId).toBe(createdB.svcId);
+  });
 });

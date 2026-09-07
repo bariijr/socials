@@ -30,6 +30,9 @@ export class PermitAuthorizationsService {
   }
 
   async create(dto: CreatePermitAuthorizationDto) {
+    if (new Date(dto.validFrom) > new Date(dto.validUntil)) {
+      throw new BadRequestException('validFrom must not be after validUntil');
+    }
     const user = dto.user || 'SYSTEM';
     const auth = await this.prisma.permitAuthorization.create({
       data: {
@@ -57,6 +60,11 @@ export class PermitAuthorizationsService {
     }
     const user = dto.user || 'SYSTEM';
     const { user: _user, ...data } = dto;
+    const validFrom = data.validFrom ?? before.validFrom.toISOString();
+    const validUntil = data.validUntil ?? before.validUntil.toISOString();
+    if (new Date(validFrom) > new Date(validUntil)) {
+      throw new BadRequestException('validFrom must not be after validUntil');
+    }
     const auth = await this.prisma.permitAuthorization.update({ where: { id }, data });
     await this.audit.logDiff(user, 'PermitAuthorization', id, before as unknown as Record<string, unknown>, auth as unknown as Record<string, unknown>);
     return auth;

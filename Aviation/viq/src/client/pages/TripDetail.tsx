@@ -1064,11 +1064,13 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
             {draft.AuthorizationID ? (
               (() => {
                 const auth = getPermitAuthorizationList().find((a) => a.ID === draft.AuthorizationID);
-                return auth ? (
+                return (
                   <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-800">
-                    Covered by {auth.AuthorizationType} permit {auth.ReferenceNumber} (valid until {new Date(auth.ValidUntil).toLocaleDateString()}).
+                    {auth
+                      ? `Covered by ${auth.AuthorizationType} permit ${auth.ReferenceNumber} (valid until ${new Date(auth.ValidUntil).toLocaleDateString()}).`
+                      : 'Covered by a permit authorization.'}
                   </div>
-                ) : null;
+                );
               })()
             ) : (draft.ServiceType === 'Permit' || draft.ServiceType === 'Overflight') && editing && (
               <div className="space-y-1">
@@ -1076,7 +1078,13 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
                   size="sm"
                   variant="outline"
                   className="h-6 text-[10px]"
-                  onClick={async () => setCandidates(await getServiceAuthorizationCandidates(service.SVCID))}
+                  onClick={async () => {
+                    try {
+                      setCandidates(await getServiceAuthorizationCandidates(service.SVCID));
+                    } catch (err) {
+                      reportSaveError(err);
+                    }
+                  }}
                 >
                   Link existing permit
                 </Button>

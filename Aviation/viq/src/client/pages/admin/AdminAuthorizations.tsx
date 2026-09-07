@@ -74,7 +74,7 @@ function AuthorizationPanel({ authorization, isNew, isAdmin, onSaved, onCancel }
         AuthorizationType: authorizationType,
         ReferenceNumber: referenceNumber.trim(),
         ValidFrom: new Date(validFrom).toISOString(),
-        ValidUntil: new Date(validUntil).toISOString(),
+        ValidUntil: new Date(validUntil + 'T23:59:59.999Z').toISOString(),
         Notes: notes.trim() || undefined,
       });
       onSaved(saved.ID);

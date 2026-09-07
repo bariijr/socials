@@ -171,7 +171,7 @@ export class ServicesService {
     if (!aircraft || aircraft.currentOperatorId !== auth.operatorId) {
       throw new BadRequestException('Authorization operator does not match this trip’s aircraft operator');
     }
-    if (svc.requiredByZ < auth.validFrom || svc.requiredByZ > auth.validUntil) {
+    if (svc.basedOnEtdZ < auth.validFrom || svc.basedOnEtdZ > auth.validUntil) {
       throw new BadRequestException('Authorization validity window does not cover this service’s required date');
     }
     if (!serviceAuthorizationLinkAllowed(svc.status)) {
@@ -205,7 +205,7 @@ export class ServicesService {
     }
 
     const updated = await this.prisma.service.findUnique({ where: { svcId } });
-    await this.audit.log(user, 'Service', svcId, 'LinkedAuthorization', '', authorizationId);
+    await this.audit.logDiff(user, 'Service', svcId, svc as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>);
     return withServiceTransitions(updated!);
   }
 
@@ -224,10 +224,13 @@ export class ServicesService {
       orderBy: { createdAt: 'desc' },
     });
     return matches.map((authorization) => {
+      if (authorization.status === 'Revoked') {
+        return { authorization, eligible: false, reason: 'Revoked' };
+      }
       if (authorization.status !== 'Verified') {
         return { authorization, eligible: false, reason: `${authorization.status} — not yet verified` };
       }
-      if (svc.requiredByZ < authorization.validFrom || svc.requiredByZ > authorization.validUntil) {
+      if (svc.basedOnEtdZ < authorization.validFrom || svc.basedOnEtdZ > authorization.validUntil) {
         return { authorization, eligible: false, reason: 'Validity window does not cover this service’s required date' };
       }
       return { authorization, eligible: true };
@@ -350,6 +353,15 @@ export class ServicesService {
   // per-aircraft/callsign tracking). Returns null (never throws) whenever
   // resolution isn't possible, so callers can always fall back to normal
   // Not Started generation.
+  //
+  // IMPORTANT: all four authorization match sites — this function's two call
+  // sites (createOverflightService / generateArrivalServices's make(), both
+  // passing leg.etdZ), linkAuthorization, and authorizationCandidates — must
+  // compare against the leg's actual ETD (Service.basedOnEtdZ), never the
+  // lead-time-adjusted requiredByZ. Matching on requiredByZ lets generation
+  // and manual linking disagree about whether the same authorization covers
+  // the same service; see the "matching-date inconsistency" finding this
+  // comment was added to prevent from reoccurring.
   private async resolveAuthorization(
     registration: string | null,
     countryIso2: string,
@@ -368,6 +380,7 @@ export class ServicesService {
         validFrom: { lte: atDate },
         validUntil: { gte: atDate },
       },
+      orderBy: { validUntil: 'desc' },
     });
   }
 
@@ -376,13 +389,17 @@ export class ServicesService {
   // time this runs) — adds services for newly-required countries the same
   // way generateOverflightServices does, AND removes services for countries
   // that dropped out (e.g. now avoided). Removal is deliberately narrow: a
-  // service is only ever auto-deleted while it's still 'Not Started' — no
-  // real work done on it yet. Anything with actual progress (Requested,
-  // Confirmed, a RefNumber, etc.) is left alone and flagged in the audit
-  // log instead, the same caution this app already applies elsewhere
-  // (Operator delete guard, Draft-only invoice line-item editing) rather
-  // than silently destroying something a coordinator may have already
-  // acted on.
+  // service is only ever auto-deleted while it's still 'Not Started' (no
+  // real work done on it yet), OR it was auto-confirmed by matching a
+  // Verified authorization at generation time (authorizationId set) AND no
+  // coordinator has ever touched its status since (statusChangedBy still
+  // null) — that second case is generation's own work, not a human's, so it
+  // gets the same auto-removal treatment as 'Not Started'. Anything with
+  // actual progress (Requested, Confirmed via a manual link, a RefNumber
+  // typed in by hand, etc.) is left alone and flagged in the audit log
+  // instead, the same caution this app already applies elsewhere (Operator
+  // delete guard, Draft-only invoice line-item editing) rather than silently
+  // destroying something a coordinator may have already acted on.
   async reconcileOverflightServices(legId: string, user = 'SYSTEM') {
     const leg = await this.prisma.leg.findUnique({ where: { legId } });
     if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
@@ -406,7 +423,7 @@ export class ServicesService {
     const flagged: Service[] = [];
     for (const svc of existing) {
       if (!svc.countryIso2 || wantedCountries.has(svc.countryIso2)) continue;
-      if (svc.status === 'Not Started') {
+      if (svc.status === 'Not Started' || (svc.authorizationId !== null && svc.statusChangedBy === null)) {
         await this.prisma.service.delete({ where: { svcId: svc.svcId } });
         await this.audit.log(user, 'Service', svc.svcId, 'AutoRemoved', svc.countryIso2, '(no longer overflown — Avoid FIR)');
         removed.push(svc);

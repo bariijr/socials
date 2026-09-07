@@ -3,6 +3,7 @@ import { PermitAuthorizationsService } from './permit-authorizations.service';
 import { CreatePermitAuthorizationDto } from './dto/create-permit-authorization.dto';
 import { UpdatePermitAuthorizationDto } from './dto/update-permit-authorization.dto';
 import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('permit-authorizations')
 export class PermitAuthorizationsController {
@@ -23,11 +24,13 @@ export class PermitAuthorizationsController {
     return this.authorizations.findOne(id);
   }
 
+  @Roles('Admin')
   @Post()
   create(@Body() dto: CreatePermitAuthorizationDto) {
     return this.authorizations.create(dto);
   }
 
+  @Roles('Admin')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdatePermitAuthorizationDto) {
     return this.authorizations.update(id, dto);
