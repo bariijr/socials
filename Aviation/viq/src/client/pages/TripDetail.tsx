@@ -1101,6 +1101,14 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
                               setSavedDraft(saved);
                               setCandidates(null);
                               await onSaved();
+                            } catch (err) {
+                              if (err instanceof ApiError && err.status === 409) {
+                                const body = err.body as { current?: Record<string, unknown>; changedBy?: string; changedAt?: string };
+                                setConflict({ changedBy: body.changedBy, changedAt: body.changedAt, current: mapServiceFromApi(body.current ?? {}) as unknown as Record<string, unknown> });
+                                setCandidates(null);
+                              } else {
+                                reportSaveError(err);
+                              }
                             } finally {
                               setLinking(false);
                             }
