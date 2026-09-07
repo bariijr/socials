@@ -1,5 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { isValidTripTransition, withTripTransitions, withServiceTransitions } from '../../common/statusTransitions';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { isValidTripTransition, tripReopenAllowed, withTripTransitions, withServiceTransitions } from '../../common/statusTransitions';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -82,15 +82,15 @@ export class TripsService {
     return { data, page, limit, total, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(tripId: string) {
+  async findOne(tripId: string, role?: string) {
     const trip = await this.prisma.trip.findUnique({ where: { tripId } });
     if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
-    return withTripTransitions(trip);
+    return withTripTransitions(trip, role);
   }
 
   // Full trip sheet: trip + legs (each carrying its own leg-scoped
   // persons) + stops + services + docs + comms.
-  async sheet(tripId: string) {
+  async sheet(tripId: string, role?: string) {
     const trip = await this.prisma.trip.findUnique({
       where: { tripId },
       include: {
@@ -107,7 +107,7 @@ export class TripsService {
       persons: assignments.map((a) => ({ ...a.person, role: a.role, commercialFlightEta: a.commercialFlightEta, hotel: a.hotel })),
     }));
     const { legs: _legs, services, ...rest } = trip;
-    return { ...withTripTransitions(rest), legs, services: services.map(withServiceTransitions) };
+    return { ...withTripTransitions(rest, role), legs, services: services.map(withServiceTransitions) };
   }
 
   async create(dto: CreateTripDto) {
@@ -118,14 +118,19 @@ export class TripsService {
     return withTripTransitions(trip);
   }
 
-  async update(tripId: string, dto: UpdateTripDto) {
+  async update(tripId: string, dto: UpdateTripDto, role?: string) {
     const before = await this.prisma.trip.findUnique({ where: { tripId } });
     if (!before) throw new NotFoundException(`Trip ${tripId} not found`);
     const user = dto.user || 'SYSTEM';
     const { user: _user, version, ...data } = dto;
 
-    if (data.status && data.status !== before.status && !isValidTripTransition(before.status, data.status)) {
-      throw new BadRequestException(`Cannot transition Trip from "${before.status}" to "${data.status}"`);
+    if (data.status && data.status !== before.status) {
+      if (!isValidTripTransition(before.status, data.status)) {
+        throw new BadRequestException(`Cannot transition Trip from "${before.status}" to "${data.status}"`);
+      }
+      if (!tripReopenAllowed(before.status, role)) {
+        throw new ForbiddenException('Reopening a Complete trip requires the Admin role');
+      }
     }
 
     const statusChanging = data.status !== undefined && data.status !== before.status;
@@ -144,7 +149,7 @@ export class TripsService {
       const latest = history[0];
       throw new ConflictException({
         message: `Trip ${tripId} was modified by someone else`,
-        current: withTripTransitions(current!),
+        current: withTripTransitions(current!, role),
         changedBy: latest?.user,
         changedAt: latest?.timestampZ,
       });
@@ -152,7 +157,7 @@ export class TripsService {
 
     const trip = await this.prisma.trip.findUnique({ where: { tripId } });
     await this.audit.logDiff(user, 'Trip', tripId, before as unknown as Record<string, unknown>, trip as unknown as Record<string, unknown>);
-    return withTripTransitions(trip!);
+    return withTripTransitions(trip!, role);
   }
 
   async remove(tripId: string, user = 'SYSTEM') {

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { TripsService } from './trips.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
+import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
 
 @Controller('trips')
 export class TripsController {
@@ -32,13 +33,13 @@ export class TripsController {
   }
 
   @Get(':tripId')
-  findOne(@Param('tripId') tripId: string) {
-    return this.trips.findOne(tripId);
+  findOne(@Param('tripId') tripId: string, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.trips.findOne(tripId, currentUser?.role);
   }
 
   @Get(':tripId/sheet')
-  sheet(@Param('tripId') tripId: string) {
-    return this.trips.sheet(tripId);
+  sheet(@Param('tripId') tripId: string, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.trips.sheet(tripId, currentUser?.role);
   }
 
   @Post()
@@ -47,8 +48,8 @@ export class TripsController {
   }
 
   @Patch(':tripId')
-  update(@Param('tripId') tripId: string, @Body() dto: UpdateTripDto) {
-    return this.trips.update(tripId, dto);
+  update(@Param('tripId') tripId: string, @Body() dto: UpdateTripDto, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.trips.update(tripId, dto, currentUser?.role);
   }
 
   @Delete(':tripId')

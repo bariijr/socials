@@ -82,6 +82,66 @@ describe('Trip status transitions', () => {
   });
 });
 
+describe('Reopening a Complete trip (Admin-gated)', () => {
+  let prisma: PrismaService;
+  let trips: TripsService;
+
+  beforeAll(() => {
+    prisma = new PrismaService();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(prisma);
+    const audit = new AuditService(prisma);
+    trips = new TripsService(prisma, audit);
+  });
+
+  async function makeCompleteTrip(tripId: string) {
+    const created = await trips.create({ tripId, client: 'Test Client' });
+    const active = await trips.update(tripId, { status: 'Active', version: created.version });
+    return trips.update(tripId, { status: 'Complete', version: active.version });
+  }
+
+  it('does not offer Active as an allowed transition on a Complete trip without an Admin role', async () => {
+    const complete = await makeCompleteTrip('TEST-REOPEN-1');
+    expect(complete.allowedTransitions).toEqual([]);
+
+    const asCoordinator = await trips.findOne('TEST-REOPEN-1', 'Coordinator');
+    expect(asCoordinator.allowedTransitions).toEqual([]);
+  });
+
+  it('offers Active as an allowed transition on a Complete trip for an Admin', async () => {
+    await makeCompleteTrip('TEST-REOPEN-2');
+    const asAdmin = await trips.findOne('TEST-REOPEN-2', 'Admin');
+    expect(asAdmin.allowedTransitions).toEqual(['Active']);
+  });
+
+  it('rejects Complete -> Active with a 403 for a non-Admin role', async () => {
+    const complete = await makeCompleteTrip('TEST-REOPEN-3');
+
+    let caught: any;
+    try {
+      await trips.update('TEST-REOPEN-3', { status: 'Active', version: complete.version }, 'Coordinator');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeDefined();
+    expect(caught.status).toBe(403);
+  });
+
+  it('allows Complete -> Active for an Admin', async () => {
+    const complete = await makeCompleteTrip('TEST-REOPEN-4');
+
+    const reopened = await trips.update('TEST-REOPEN-4', { status: 'Active', version: complete.version }, 'Admin');
+    expect(reopened.status).toBe('Active');
+    expect(reopened.allowedTransitions).toEqual(['Complete', 'Cancelled', 'Planning']);
+  });
+});
+
 describe('Trip optimistic locking', () => {
   let prisma: PrismaService;
   let trips: TripsService;
