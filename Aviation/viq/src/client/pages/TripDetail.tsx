@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router';
 import { useState, useEffect, useMemo } from 'react';
 import {
   getTripSheet, getAirport, getAirportList, getProvider, getProviderList, getAircraft, getCountry,
-  getCountryList, refICaoRules, getCallSign, getAircraftList, getAircraftType, getOperator, formatZ, urgencyColor, statusColor, saveLeg, saveService, deleteService,
+  getCountryList, refICaoRules, getCallSign, getAircraftList, getAircraftType, getOperator, formatZ, urgencyColor, saveLeg, saveService, deleteService,
   saveTrip, getAudit, getInvoices, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getServiceTypes, getLegPurposes,
   uploadDoc, downloadDocFile, deleteDoc, runDocOcr,
   getPersonRoster, assignPersonToLeg, assignPersonToAllLegs, unassignPersonFromLeg,
@@ -37,6 +37,7 @@ import { DocVerifyDialog } from '@/components/DocVerifyDialog';
 import { ConflictDialog } from '@/components/ConflictDialog';
 import { TransitionMenu } from '@/components/TransitionMenu';
 import { StatusTimeline } from '@/components/StatusTimeline';
+import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/lib/authContext';
 
 const DOC_TYPES = [
@@ -970,7 +971,7 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
             {activeVariantDef?.variants?.length && service.Variant && (
               <span className="text-[10px] text-muted-foreground">({activeVariantDef.variants.find((v) => v.code === service.Variant)?.label || service.Variant})</span>
             )}
-            <Badge variant="secondary" className={`text-[9px] ${statusColor(service.Status)}`}>{service.Status.toUpperCase()}</Badge>
+            <StatusBadge status={service.Status} entityType="service" className="text-[9px] uppercase" />
             <Badge variant="outline" className={`text-[9px] ${urgencyColor(service.Urgency)}`}>{service.Urgency}</Badge>
           </div>
           <div className="mt-0.5 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
@@ -1149,7 +1150,7 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
                     <label key={service.SVCID} className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/30">
                       <input type="checkbox" className="mt-1" checked={selected.includes(leg.LegID)} onChange={() => toggleLeg(country, leg.LegID)} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">LEG {leg.Seq}: {leg.DepICAO} → {leg.ArrICAO} <Badge variant="secondary" className="text-[10px]">{service.Status.toUpperCase()}</Badge></div>
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">LEG {leg.Seq}: {leg.DepICAO} → {leg.ArrICAO} <StatusBadge status={service.Status} entityType="service" className="text-[10px] uppercase" /></div>
                         <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground"><span>{leg.PaxCount} PAX</span><span>{leg.CrewCount} CREW</span><span>PURPOSE: {(leg.Purpose || 'Not specified').toUpperCase()}</span><span>{serviceLabel(service.ServiceType).toUpperCase()}</span></div>
                       </div>
                     </label>
@@ -1945,7 +1946,7 @@ export default function TripDetail() {
                           <TableCell>
                             <div className="flex items-center gap-1">
                               {svcStatusIcon(svc.Status)}
-                              <Badge variant="secondary" className={`text-[10px] ${statusColor(svc.Status)}`}>{svc.Status.toUpperCase()}</Badge>
+                              <StatusBadge status={svc.Status} entityType="service" className="text-[10px] uppercase" />
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1998,7 +1999,7 @@ export default function TripDetail() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {svcStatusIcon(svc.Status)}
-                            <Badge variant="secondary" className={`text-[10px] ${statusColor(svc.Status)}`}>{svc.Status.toUpperCase()}</Badge>
+                            <StatusBadge status={svc.Status} entityType="service" className="text-[10px] uppercase" />
                           </div>
                         </TableCell>
                         <TableCell>

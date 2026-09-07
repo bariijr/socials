@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, statusColor, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices } from '@/lib/dataStore';
+import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices } from '@/lib/dataStore';
 import type { TripSheet } from '@/lib/dataStore';
 import type { Trip, Leg, Service } from '@/data/types';
 
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/StatusBadge';
 import { } from '@/components/ui/separator';
 import { MasterDetailShell } from '@/components/ui/master-detail-shell';
 import {
@@ -130,12 +131,14 @@ function ServiceEditorDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Not Started">Not Started</SelectItem>
-                <SelectItem value="Requested">Requested</SelectItem>
-                <SelectItem value="Chasing">Chasing</SelectItem>
-                <SelectItem value="Confirmed">Confirmed</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-                <SelectItem value="Re-confirm Required">Re-confirm Required</SelectItem>
+                {/* Restricted to what the server's transition graph actually
+                    allows from the last-saved status -- same [current,
+                    ...allowedTransitions] pattern as TransitionMenu, just
+                    rendered through this dialog's existing shadcn Select
+                    for visual consistency with its other fields. */}
+                {[service.Status, ...(service.AllowedTransitions ?? []).filter((s) => s !== service.Status)].map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -557,9 +560,7 @@ function ServiceRow({ svc, onEdit }: { svc: Service; onEdit: () => void }) {
         <div className="flex items-center gap-2">
           {statusIcon(svc.Status)}
           <span className="font-medium text-sm">{svc.ServiceType}</span>
-          <Badge variant="secondary" className={`text-[10px] ${statusColor(svc.Status)}`}>
-            {svc.Status}
-          </Badge>
+          <StatusBadge status={svc.Status} entityType="service" className="text-[10px]" />
           {urgency && urgency !== 'OK' && (
             <Badge variant="outline" className={`text-[10px] ${urgencyColor(urgency)}`}>
               {urgency}
@@ -889,9 +890,7 @@ export default function AdminTrips() {
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-sm font-bold">{trip.TripID} <span className="font-normal text-muted-foreground">|</span> {trip.Registration}</div>
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 shrink-0">
-                      {trip.Status}
-                    </Badge>
+                    <StatusBadge status={trip.Status} entityType="trip" className="text-[9px] px-1.5 py-0 h-4 shrink-0" />
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {trip.Client}{!sameClientOperator && trip.Operator ? ` | ${trip.Operator}` : ''}
@@ -952,7 +951,7 @@ export default function AdminTrips() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold">{selectedTrip.TripID}</h2>
-                      <Badge variant="secondary">{selectedTrip.Status}</Badge>
+                      <StatusBadge status={selectedTrip.Status} entityType="trip" />
                       {selectedTrip.SupportRef && (
                         <Badge variant="outline" className="font-mono text-xs">
                           REF:{selectedTrip.SupportRef}

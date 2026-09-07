@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getTripsPaginated, formatDate } from '@/lib/dataStore';
 import type { Trip, Leg } from '@/data/types';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,16 +10,6 @@ import { Plane, Search, LayoutGrid, List, Grid2X2, Grid3X3 } from 'lucide-react'
 import { Link } from 'react-router';
 
 type PagedTrip = Trip & { Legs: Leg[]; Counts: { Stops: number; Services: number; Comms: number } };
-
-function tripStatusColor(s: string) {
-  switch (s) {
-    case 'Planning': return 'bg-blue-100 text-blue-700';
-    case 'Active': return 'bg-emerald-100 text-emerald-700';
-    case 'Complete': return 'bg-slate-100 text-slate-600';
-    case 'Cancelled': return 'bg-red-100 text-red-700';
-    default: return 'bg-gray-100';
-  }
-}
 
 const PAGE_SIZE = 24;
 
@@ -52,7 +42,7 @@ function TripCard({ trip, size }: { trip: PagedTrip; size: 'tile' | 'large' }) {
               <span className="text-muted-foreground font-normal">|</span>
               <span>{trip.Registration}</span>
             </div>
-            <Badge variant="secondary" className={tripStatusColor(trip.Status)}>{trip.Status}</Badge>
+            <StatusBadge status={trip.Status} entityType="trip" />
           </div>
 
           <div className={`flex items-baseline gap-2 ${large ? 'text-sm' : 'text-xs'} text-muted-foreground`}>
@@ -93,7 +83,7 @@ function SmallIconCard({ trip }: { trip: PagedTrip }) {
         <CardContent className="p-3 space-y-1">
           <div className="flex items-center justify-between gap-1">
             <Plane className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <Badge variant="secondary" className={`text-[9px] px-1.5 py-0 h-4 ${tripStatusColor(trip.Status)}`}>{trip.Status}</Badge>
+            <StatusBadge status={trip.Status} entityType="trip" className="text-[9px] px-1.5 py-0 h-4" />
           </div>
           <div className="text-sm font-bold text-primary group-hover:underline truncate">{trip.TripID}</div>
           <div className="text-xs text-muted-foreground truncate">{trip.Registration} · {trip.Client}</div>
@@ -227,7 +217,7 @@ export default function TripsPage() {
                         <TableCell>{trip.Operator || '—'}</TableCell>
                         <TableCell>{trip.Registration}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className={tripStatusColor(trip.Status)}>{trip.Status}</Badge>
+                          <StatusBadge status={trip.Status} entityType="trip" />
                         </TableCell>
                         <TableCell>{trip.Owner}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">

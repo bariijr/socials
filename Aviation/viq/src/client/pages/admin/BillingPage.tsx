@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/authContext';
 import {
   getInvoices, saveInvoice, getTrips, getTrip,
   getServicesForTrip, generateInvoiceFromTrip, generateQRCode,
-  formatDate, formatZ, statusColor, resolveBillToAddress
+  formatDate, formatZ, resolveBillToAddress
 } from '@/lib/dataStore';
 import type { Invoice, InvoiceChange, InvoiceLineItem } from '@/lib/dataStore';
 import type { Trip } from '@/data/types';

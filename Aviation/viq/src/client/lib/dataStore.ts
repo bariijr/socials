@@ -2174,18 +2174,6 @@ export function serviceCountryName(service: { CountryISO2?: string | null; ICAO?
   return '';
 }
 
-export function statusColor(s: string): string {
-  switch (s) {
-    case 'Confirmed': return 'bg-emerald-100 text-emerald-700';
-    case 'Requested': return 'bg-blue-100 text-blue-700';
-    case 'Chasing': return 'bg-amber-100 text-amber-700';
-    case 'Not Started': return 'bg-slate-100 text-slate-600';
-    case 'Cancelled': return 'bg-gray-100 text-gray-500';
-    case 'Re-confirm Required': return 'bg-rose-100 text-rose-700';
-    default: return 'bg-slate-100 text-slate-600';
-  }
-}
-
 // ─── Trip Sheet builder ───────────────────────────────────────────────────────
 
 export interface TripSheet {

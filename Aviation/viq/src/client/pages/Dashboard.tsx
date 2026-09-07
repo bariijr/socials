@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getTrips, getServices, getUpcomingLegs, getOpenServicesWidget, closeService, formatZ, urgencyColor, statusColor, serviceCountryName } from '@/lib/dataStore';
+import { getTrips, getServices, getUpcomingLegs, getOpenServicesWidget, closeService, formatZ, urgencyColor, serviceCountryName } from '@/lib/dataStore';
 import type { Trip, Service, Leg } from '@/data/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Link } from 'react-router';
@@ -164,7 +165,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-muted-foreground">{formatZ(svc.RequiredByZ)}</span>
                         <Badge variant="outline" className={`text-[9px] ${urgencyColor(svc.Urgency)}`}>{svc.Urgency}</Badge>
-                        <Badge variant="secondary" className={`text-[9px] ${statusColor(svc.Status)}`}>{svc.Status}</Badge>
+                        <StatusBadge status={svc.Status} entityType="service" className="text-[9px]" />
                       </div>
                     </Link>
                     <Button
