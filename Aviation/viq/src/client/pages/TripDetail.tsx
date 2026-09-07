@@ -11,7 +11,7 @@ import {
   ApiError,
 } from '@/lib/dataStore';
 import { haversineNM } from '@/lib/geo';
-import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel } from '@/data/types';
+import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel, ServiceResponsibility } from '@/data/types';
 import type { Invoice, TripSheet, Client, UserDirectoryEntry } from '@/lib/dataStore';
 import { Typeahead } from '@/components/ui/typeahead';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -45,6 +45,11 @@ const DOC_TYPES = [
   'Permit Application Form', 'AOC', 'Noise Certificate', 'PAX List',
   'Crew Licence', 'Medical Certificate', 'Other',
 ];
+
+// Not a state machine (unlike Status) -- a coordinator can freely reclassify
+// who's arranging a service at any time, so this is a plain fixed list, not
+// a server-driven transition graph.
+const SERVICE_RESPONSIBILITIES: ServiceResponsibility[] = ['VIQ Arrangement', 'Client Own', 'Operator Own', 'Other'];
 
 // `defs` is the fetched, admin-editable catalog — falls back to the
 // pre-catalog "Permit" special case (and the raw code) when defs haven't
@@ -356,6 +361,7 @@ function LegEditor({
       ProviderID: null,
       Status: 'Not Started',
       Version: 1,
+      Responsibility: 'VIQ Arrangement',
       RefNumber: '',
       BasedOnETDZ: draft.ETDZ,
       RequiredByZ: draft.ETDZ,
@@ -973,6 +979,9 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
             )}
             <StatusBadge status={service.Status} entityType="service" className="text-[9px] uppercase" />
             <Badge variant="outline" className={`text-[9px] ${urgencyColor(service.Urgency)}`}>{service.Urgency}</Badge>
+            {service.Responsibility !== 'VIQ Arrangement' && (
+              <Badge variant="outline" className="text-[9px] uppercase">{service.Responsibility}</Badge>
+            )}
           </div>
           <div className="mt-0.5 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
             {service.RefNumber && <span>REF: {service.RefNumber}</span>}
@@ -1040,6 +1049,15 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
                 onChange={(next) => setDraft({ ...draft, Status: next as ServiceStatus })}
               />
             </div>
+            <select
+              className="h-8 min-w-0 rounded border bg-background px-1 text-xs"
+              disabled={!editing}
+              value={draft.Responsibility}
+              onChange={(event) => setDraft({ ...draft, Responsibility: event.target.value as ServiceResponsibility })}
+              title="Responsibility"
+            >
+              {SERVICE_RESPONSIBILITIES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
             <div className="mt-1">
               <StatusTimeline table="Service" recordId={service.SVCID} />
             </div>
@@ -1087,6 +1105,11 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
   const [requestRefs, setRequestRefs] = useState<Record<string, string>>({});
   const permitServices = services.filter((service) =>
     (service.ServiceType === 'Permit' || service.ServiceType === 'Overflight') && service.CountryISO2
+    // Client/operator-owned services stay visible elsewhere (the read-only
+    // PERMITS & OVERFLIGHTS table below) for operational awareness, but
+    // never become bulk-submission candidates here -- VIQ isn't chasing
+    // something the client or operator arranges themselves.
+    && service.Responsibility === 'VIQ Arrangement'
   );
   const grouped = permitServices.reduce<Record<string, Service[]>>((groups, service) => {
     const country = service.CountryISO2 as string;

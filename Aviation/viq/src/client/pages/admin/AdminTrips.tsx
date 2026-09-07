@@ -2,7 +2,10 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices } from '@/lib/dataStore';
 import type { TripSheet } from '@/lib/dataStore';
-import type { Trip, Leg, Service } from '@/data/types';
+import type { Trip, Leg, Service, ServiceResponsibility } from '@/data/types';
+
+// Not a state machine (unlike Status) -- freely reclassifiable at any time.
+const SERVICE_RESPONSIBILITIES: ServiceResponsibility[] = ['VIQ Arrangement', 'Client Own', 'Operator Own', 'Other'];
 
 type PagedTrip = Trip & { Legs: Leg[]; Counts: { Stops: number; Services: number; Comms: number } };
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -70,6 +73,7 @@ function ServiceEditorDialog({
   if (!service) return null;
   const { canEdit } = useAuth();
   const [status, setStatus] = useState(service.Status);
+  const [responsibility, setResponsibility] = useState(service.Responsibility);
   const [refNumber, setRefNumber] = useState(service.RefNumber || '');
   const [notes, setNotes] = useState(service.Notes || '');
   const [confirmedBy, setConfirmedBy] = useState(service.ConfirmedBy || '');
@@ -84,6 +88,7 @@ function ServiceEditorDialog({
     const updated: Service = {
       ...service,
       Status: status,
+      Responsibility: responsibility,
       RefNumber: refNumber,
       Notes: notes,
       ConfirmedBy: confirmedBy || undefined,
@@ -139,6 +144,18 @@ function ServiceEditorDialog({
                 {[service.Status, ...(service.AllowedTransitions ?? []).filter((s) => s !== service.Status)].map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Responsibility</Label>
+            <Select value={responsibility} onValueChange={(v) => setResponsibility(v as ServiceResponsibility)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SERVICE_RESPONSIBILITIES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -296,6 +313,7 @@ function AddServiceDialog({
       ProviderID: providerId || null,
       Status: 'Not Started',
       Version: 1,
+      Responsibility: 'VIQ Arrangement',
       RefNumber: '',
       BasedOnETDZ: new Date().toISOString(),
       RequiredByZ: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),

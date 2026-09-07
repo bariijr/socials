@@ -4,6 +4,7 @@ const SCOPE_TYPES = ['TRIP', 'LEG', 'STOP', 'SEGMENT'] as const;
 const SERVICE_STATUSES = [
   'Not Required', 'Not Started', 'Requested', 'Chasing', 'Confirmed', 'Re-confirm Required', 'Cancelled',
 ] as const;
+export const SERVICE_RESPONSIBILITIES = ['VIQ Arrangement', 'Client Own', 'Operator Own', 'Other'] as const;
 
 export class CreateServiceDto {
   @IsString()
@@ -92,6 +93,10 @@ export class CreateServiceDto {
   @IsString()
   @MaxLength(200)
   variant?: string;
+
+  @IsOptional()
+  @IsIn(SERVICE_RESPONSIBILITIES)
+  responsibility?: (typeof SERVICE_RESPONSIBILITIES)[number];
 
   @IsOptional()
   @IsString()

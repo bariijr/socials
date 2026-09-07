@@ -18,6 +18,8 @@ export type ServiceStatus =
   | 'Re-confirm Required'
   | 'Cancelled';
 
+export type ServiceResponsibility = 'VIQ Arrangement' | 'Client Own' | 'Operator Own' | 'Other';
+
 export type Urgency = 'OK' | 'DUE' | 'URGENT' | 'BREACH';
 
 export type TripStatus = 'Planning' | 'Active' | 'Complete' | 'Cancelled';
@@ -221,6 +223,7 @@ export interface Service {
   StatusChangedAt?: string;
   StatusChangedBy?: string;
   AllowedTransitions?: string[];
+  Responsibility: ServiceResponsibility;
   RefNumber: string;
   BasedOnETDZ: string;
   RequiredByZ: string;

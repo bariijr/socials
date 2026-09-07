@@ -479,6 +479,7 @@ model Service {
   version       Int       @default(1)
   statusChangedAt DateTime? @map("status_changed_at")
   statusChangedBy String?  @map("status_changed_by")
+  responsibility  String  @default("VIQ Arrangement")
 
   trip     Trip      @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   provider Provider? @relation(fields: [providerId], references: [providerId])
