@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Plane, ArrowRight, Clock, Users, Briefcase, Mail, AlertTriangle,
   FileText, Radio, MapPin, DollarSign, MessageSquare,
-  CheckCircle2, XCircle, HelpCircle, Timer, ChevronDown, ChevronRight,
+  CheckCircle2, XCircle, HelpCircle, ChevronDown, ChevronRight,
   Edit3, Save, Plus, Trash2, Send, Building2, Phone, MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -1319,92 +1319,6 @@ function AttentionStrip({ services, legs }: { services: Service[]; legs: Leg[] }
   );
 }
 
-// "290h" -> "12days & 2hrs" (and "-6h" -> "6hrs" for the overdue/BREACH case,
-// which prefixes its own "overdue" wording separately).
-function formatDueDuration(hours: number): string {
-  const total = Math.abs(Math.round(hours));
-  const days = Math.floor(total / 24);
-  const rem = total % 24;
-  const dayPart = days > 0 ? `${days}day${days === 1 ? '' : 's'}` : '';
-  const hourPart = rem > 0 || days === 0 ? `${rem}hr${rem === 1 ? '' : 's'}` : '';
-  return [dayPart, hourPart].filter(Boolean).join(' & ');
-}
-
-function legLabelFor(svc: Service, legs: Leg[]): string {
-  const leg = svc.ScopeType === 'LEG' ? legs.find(l => l.LegID === svc.ScopeID) : undefined;
-  return leg ? `L${String(leg.Seq).padStart(2, '0')}` : '—';
-}
-
-const DEADLINE_CATEGORIES: { title: string; types: Service['ServiceType'][] }[] = [
-  { title: 'LANDING PERMITS', types: ['Permit'] },
-  { title: 'OVERFLY PERMITS', types: ['Overflight'] },
-  { title: 'GROUND HANDLING', types: ['GroundHandling'] },
-];
-
-function DeadlineRail({ services, legs }: { services: Service[]; legs: Leg[] }) {
-  const now = new Date('2026-08-15T12:00:00Z').getTime();
-  const open = services
-    .filter(s => s.Status !== 'Confirmed' && s.Status !== 'Not Required' && s.Status !== 'Cancelled')
-    .map(s => {
-      const diff = new Date(s.RequiredByZ).getTime() - now;
-      return { ...s, hours: Math.round(diff / (1000 * 60 * 60)) };
-    })
-    .sort((a, b) => a.hours - b.hours);
-
-  const categorized = DEADLINE_CATEGORIES.map(cat => ({
-    ...cat,
-    rows: open.filter(s => cat.types.includes(s.ServiceType)),
-  }));
-  const otherRows = open.filter(s => !DEADLINE_CATEGORIES.some(cat => cat.types.includes(s.ServiceType)));
-
-  return (
-    <div className="rounded-lg border bg-card p-3 space-y-3">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <Timer className="h-4 w-4 text-amber-600" />
-        OPEN DEADLINES <Badge variant="outline" className="ml-auto">{open.length} OPEN</Badge>
-      </div>
-      {open.length === 0 && <div className="text-xs text-muted-foreground">No open deadlines. All current services are confirmed, not required, or cancelled.</div>}
-      {[...categorized, ...(otherRows.length ? [{ title: 'OTHER SERVICES', rows: otherRows }] : [])]
-        .filter(cat => cat.rows.length > 0)
-        .map(cat => (
-          <div key={cat.title} className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{cat.title}</div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-muted-foreground">
-                  <th className="w-12 pb-1 font-medium">Leg</th>
-                  <th className="pb-1 font-medium">Country</th>
-                  <th className="pb-1 font-medium">Status</th>
-                  <th className="pb-1 font-medium text-right">Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cat.rows.map(svc => {
-                  const isBreach = svc.hours < 0;
-                  const isUrgent = svc.hours < 12;
-                  const isDue = svc.hours < 48;
-                  const country = svc.CountryISO2 ? (getCountry(svc.CountryISO2)?.Name || svc.CountryISO2) : (svc.ICAO || '—');
-                  return (
-                    <tr key={svc.SVCID} title={svc.SVCID} className="border-t">
-                      <td className="py-1 font-mono">{legLabelFor(svc, legs)}</td>
-                      <td className="py-1">{country}</td>
-                      <td className="py-1"><Badge variant="outline" className="text-[9px]">{svc.Status}</Badge></td>
-                      <td className={`py-1 text-right font-medium ${
-                        isBreach ? 'text-red-700' : isUrgent ? 'text-orange-600' : isDue ? 'text-amber-700' : 'text-muted-foreground'
-                      }`}>
-                        {isBreach ? `BREACH: ${formatDueDuration(svc.hours)} overdue` : `Due in ${formatDueDuration(svc.hours)}`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ))}
-    </div>
-  );
-}
-
 // ─── Leg Register Row ───────────────────────────────────────────────────────
 
 // ─── Service Status Icon ────────────────────────────────────────────────────
@@ -1794,9 +1708,6 @@ export default function TripDetail() {
       <AttentionStrip services={services} legs={legs} />
 
       <TripInfoEditor trip={trip} onSaved={reload} />
-
-      {/* Live Deadline Rail */}
-      <DeadlineRail services={services} legs={legs} />
 
       {/* Main Tabs */}
       <Tabs defaultValue="route">
