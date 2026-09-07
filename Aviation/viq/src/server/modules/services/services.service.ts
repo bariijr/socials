@@ -147,6 +147,68 @@ export class ServicesService {
     return { svcId, deleted: true };
   }
 
+  // Validates the named authorization actually matches this service (same
+  // operator/country/serviceType, and the service's requiredByZ falls in
+  // its validity window) before applying — covers the common case where an
+  // authorization is verified after the service already exists.
+  async linkAuthorization(svcId: string, authorizationId: string, user = 'SYSTEM') {
+    const svc = await this.findOne(svcId);
+    const auth = await this.prisma.permitAuthorization.findUnique({ where: { id: authorizationId } });
+    if (!auth) throw new NotFoundException(`PermitAuthorization ${authorizationId} not found`);
+    if (auth.status !== 'Verified') {
+      throw new BadRequestException(`Authorization ${authorizationId} is not Verified (status: ${auth.status})`);
+    }
+    if (!svc.countryIso2 || auth.countryIso2 !== svc.countryIso2 || auth.serviceType !== svc.serviceType) {
+      throw new BadRequestException('Authorization does not match this service’s country/service type');
+    }
+    const trip = await this.prisma.trip.findUnique({ where: { tripId: svc.tripId }, select: { registration: true } });
+    const aircraft = trip?.registration ? await this.prisma.aircraft.findUnique({ where: { registration: trip.registration } }) : null;
+    if (!aircraft || aircraft.currentOperatorId !== auth.operatorId) {
+      throw new BadRequestException('Authorization operator does not match this trip’s aircraft operator');
+    }
+    if (svc.requiredByZ < auth.validFrom || svc.requiredByZ > auth.validUntil) {
+      throw new BadRequestException('Authorization validity window does not cover this service’s required date');
+    }
+
+    const updated = await this.prisma.service.update({
+      where: { svcId },
+      data: {
+        status: 'Confirmed',
+        refNumber: auth.referenceNumber,
+        validityZ: auth.validUntil,
+        authorizationId: auth.id,
+        notes: `${svc.notes} Linked to ${auth.authorizationType} permit ${auth.referenceNumber}.`.trim(),
+      },
+    });
+    await this.audit.log(user, 'Service', svcId, 'LinkedAuthorization', '', authorizationId);
+    return withServiceTransitions(updated);
+  }
+
+  // Resolves operator/country/serviceType server-side from the service and
+  // its trip (same resolution resolveAuthorization uses) rather than
+  // requiring the client to look up Trip -> Aircraft -> Operator itself.
+  async authorizationCandidates(svcId: string) {
+    const svc = await this.findOne(svcId);
+    if (!svc.countryIso2) return [];
+    const trip = await this.prisma.trip.findUnique({ where: { tripId: svc.tripId }, select: { registration: true } });
+    const aircraft = trip?.registration ? await this.prisma.aircraft.findUnique({ where: { registration: trip.registration } }) : null;
+    if (!aircraft) return [];
+
+    const matches = await this.prisma.permitAuthorization.findMany({
+      where: { operatorId: aircraft.currentOperatorId, countryIso2: svc.countryIso2, serviceType: svc.serviceType },
+      orderBy: { createdAt: 'desc' },
+    });
+    return matches.map((authorization) => {
+      if (authorization.status !== 'Verified') {
+        return { authorization, eligible: false, reason: `${authorization.status} — not yet verified` };
+      }
+      if (svc.requiredByZ < authorization.validFrom || svc.requiredByZ > authorization.validUntil) {
+        return { authorization, eligible: false, reason: 'Validity window does not cover this service’s required date' };
+      }
+      return { authorization, eligible: true };
+    });
+  }
+
   // Recomputes Urgency for every non-final service against "now" — call this
   // periodically (cron) or on-demand from an admin action to keep the
   // BREACH/URGENT/DUE/OK badges accurate as time passes without user edits.

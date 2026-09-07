@@ -70,4 +70,17 @@ export class ServicesController {
   remove(@Param('svcId') svcId: string, @Query('user') user?: string) {
     return this.services.remove(svcId, user);
   }
+
+  @Patch(':svcId/link-authorization')
+  linkAuthorization(
+    @Param('svcId') svcId: string,
+    @Body() body: { authorizationId: string; user?: string },
+  ) {
+    return this.services.linkAuthorization(svcId, body.authorizationId, body.user);
+  }
+
+  @Get(':svcId/authorization-candidates')
+  authorizationCandidates(@Param('svcId') svcId: string) {
+    return this.services.authorizationCandidates(svcId);
+  }
 }
