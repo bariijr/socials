@@ -64,6 +64,33 @@ export interface Operator {
   Channels: ContactChannel[];
 }
 
+export type AuthorizationType = 'Blanket' | 'Block' | 'Seasonal';
+export type AuthorizationStatus = 'Draft' | 'Verified' | 'Revoked';
+
+export interface PermitAuthorization {
+  ID: string;
+  OperatorID: string;
+  CountryISO2: string;
+  ServiceType: string;
+  AuthorizationType: AuthorizationType;
+  ReferenceNumber: string;
+  ValidFrom: string;
+  ValidUntil: string;
+  Status: AuthorizationStatus;
+  DocID?: string;
+  Notes?: string;
+  CreatedAt: string;
+  CreatedBy: string;
+  VerifiedBy?: string;
+  VerifiedAt?: string;
+}
+
+export interface AuthorizationCandidate {
+  Authorization: PermitAuthorization;
+  Eligible: boolean;
+  Reason?: string;
+}
+
 export interface Client {
   ClientID: string;
   Name: string;
@@ -391,6 +418,7 @@ export function mapServiceFromApi(s: any): Service {
     StatusChangedAt: s.statusChangedAt ?? undefined,
     StatusChangedBy: s.statusChangedBy ?? undefined,
     AllowedTransitions: s.allowedTransitions ?? undefined,
+    AuthorizationID: s.authorizationId ?? undefined,
     Responsibility: s.responsibility,
     RefNumber: s.refNumber,
     BasedOnETDZ: s.basedOnEtdZ,
@@ -1383,7 +1411,7 @@ function mapCountryFromApi(c: any): Country {
 }
 
 export async function preloadReferenceData(): Promise<void> {
-  const [aircraft, providers, airports, countries, operators, messageTemplates, countryFees, countryRules, clients] = await Promise.all([
+  const [aircraft, providers, airports, countries, operators, messageTemplates, countryFees, countryRules, clients, permitAuthorizations] = await Promise.all([
     apiJson<any[]>('/reference/aircraft'),
     apiJson<any[]>('/reference/providers'),
     apiJson<any[]>('/reference/airports'),
@@ -1393,6 +1421,7 @@ export async function preloadReferenceData(): Promise<void> {
     apiJson<any[]>('/reference/country-fees'),
     apiJson<any[]>('/reference/country-rules'),
     apiJson<any[]>('/clients'),
+    apiJson<any[]>('/permit-authorizations'),
   ]);
   _aircraftCache = aircraft.map(mapAircraftFromApi);
   _providerCache = providers.map(mapProviderFromApi);
@@ -1403,6 +1432,7 @@ export async function preloadReferenceData(): Promise<void> {
   _countryFeeCache = countryFees.map(mapCountryFeeFromApi);
   _countryRuleCache = countryRules.map(mapCountryRuleFromApi);
   _clientCache = clients.map(mapClientFromApi);
+  _permitAuthorizationCache = permitAuthorizations.map(mapPermitAuthorizationFromApi);
 }
 
 // ─── Reference Data CRUD (editable via Admin > Assets) ───────────────────────
@@ -1620,6 +1650,69 @@ export async function deleteOperator(operatorId: string, user = currentUser()): 
   _operatorCache = getOperatorList().filter((o) => o.OperatorID !== operatorId);
 }
 
+export function getPermitAuthorizationList(): PermitAuthorization[] {
+  return _permitAuthorizationCache ?? [];
+}
+
+export async function savePermitAuthorization(
+  a: Omit<PermitAuthorization, 'ID' | 'Status' | 'CreatedAt' | 'CreatedBy' | 'VerifiedBy' | 'VerifiedAt'> & { ID?: string },
+  user = currentUser(),
+): Promise<PermitAuthorization> {
+  const body = JSON.stringify({
+    operatorId: a.OperatorID,
+    countryIso2: a.CountryISO2,
+    serviceType: a.ServiceType,
+    authorizationType: a.AuthorizationType,
+    referenceNumber: a.ReferenceNumber,
+    validFrom: a.ValidFrom,
+    validUntil: a.ValidUntil,
+    docId: a.DocID,
+    notes: a.Notes,
+    user,
+  });
+  const row = a.ID
+    ? await apiJson<any>(`/permit-authorizations/${a.ID}`, { method: 'PATCH', body })
+    : await apiJson<any>('/permit-authorizations', { method: 'POST', body });
+  const mapped = mapPermitAuthorizationFromApi(row);
+  const list = getPermitAuthorizationList();
+  const idx = list.findIndex((x) => x.ID === mapped.ID);
+  _permitAuthorizationCache = idx >= 0 ? list.map((x, i) => (i === idx ? mapped : x)) : [...list, mapped];
+  return mapped;
+}
+
+export async function verifyPermitAuthorization(id: string, user = currentUser()): Promise<PermitAuthorization> {
+  const row = await apiJson<any>(`/permit-authorizations/${id}/verify?user=${encodeURIComponent(user)}`, { method: 'POST' });
+  const mapped = mapPermitAuthorizationFromApi(row);
+  const list = getPermitAuthorizationList();
+  _permitAuthorizationCache = list.map((x) => (x.ID === mapped.ID ? mapped : x));
+  return mapped;
+}
+
+export async function revokePermitAuthorization(id: string, user = currentUser()): Promise<PermitAuthorization> {
+  const row = await apiJson<any>(`/permit-authorizations/${id}/revoke?user=${encodeURIComponent(user)}`, { method: 'POST' });
+  const mapped = mapPermitAuthorizationFromApi(row);
+  const list = getPermitAuthorizationList();
+  _permitAuthorizationCache = list.map((x) => (x.ID === mapped.ID ? mapped : x));
+  return mapped;
+}
+
+export async function getServiceAuthorizationCandidates(svcId: string): Promise<AuthorizationCandidate[]> {
+  const rows = await apiJson<any[]>(`/services/${svcId}/authorization-candidates`);
+  return rows.map((r) => ({
+    Authorization: mapPermitAuthorizationFromApi(r.authorization),
+    Eligible: r.eligible,
+    Reason: r.reason ?? undefined,
+  }));
+}
+
+export async function linkServiceAuthorization(svcId: string, authorizationId: string, version: number, user = currentUser()): Promise<Service> {
+  const row = await apiJson<any>(`/services/${svcId}/link-authorization`, {
+    method: 'PATCH',
+    body: JSON.stringify({ authorizationId, version, user }),
+  });
+  return mapServiceFromApi(row);
+}
+
 function mapClientFromApi(c: any): Client {
   return {
     ClientID: c.clientId,
@@ -1636,6 +1729,28 @@ function mapClientFromApi(c: any): Client {
     Channels: mapChannelsFromApi(c.channels),
   };
 }
+
+function mapPermitAuthorizationFromApi(a: any): PermitAuthorization {
+  return {
+    ID: a.id,
+    OperatorID: a.operatorId,
+    CountryISO2: a.countryIso2,
+    ServiceType: a.serviceType,
+    AuthorizationType: a.authorizationType,
+    ReferenceNumber: a.referenceNumber,
+    ValidFrom: a.validFrom,
+    ValidUntil: a.validUntil,
+    Status: a.status,
+    DocID: a.docId ?? undefined,
+    Notes: a.notes ?? undefined,
+    CreatedAt: a.createdAt,
+    CreatedBy: a.createdBy,
+    VerifiedBy: a.verifiedBy ?? undefined,
+    VerifiedAt: a.verifiedAt ?? undefined,
+  };
+}
+
+let _permitAuthorizationCache: PermitAuthorization[] | null = null;
 
 export function getClientList(): Client[] {
   return _clientCache ?? [];

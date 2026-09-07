@@ -223,6 +223,7 @@ export interface Service {
   StatusChangedAt?: string;
   StatusChangedBy?: string;
   AllowedTransitions?: string[];
+  AuthorizationID?: string;
   Responsibility: ServiceResponsibility;
   RefNumber: string;
   BasedOnETDZ: string;
