@@ -116,8 +116,33 @@ export class ServicesService {
   }
 
   async remove(svcId: string, user = 'SYSTEM') {
-    await this.findOne(svcId);
+    const svc = await this.findOne(svcId);
     await this.prisma.service.delete({ where: { svcId } });
+    // Record the dismissal so generateOverflightServices/generateArrivalServices
+    // don't silently recreate this exact slot next time they run (Phase 0
+    // Conflict #2). Country-less services were never auto-generation
+    // candidates in the first place, so there's nothing to suppress.
+    if (svc.countryIso2) {
+      await this.prisma.dismissedServiceCandidate.upsert({
+        where: {
+          scopeType_scopeId_serviceType_countryIso2: {
+            scopeType: svc.scopeType,
+            scopeId: svc.scopeId,
+            serviceType: svc.serviceType,
+            countryIso2: svc.countryIso2,
+          },
+        },
+        create: {
+          tripId: svc.tripId,
+          scopeType: svc.scopeType,
+          scopeId: svc.scopeId,
+          serviceType: svc.serviceType,
+          countryIso2: svc.countryIso2,
+          dismissedBy: user,
+        },
+        update: { dismissedAt: new Date(), dismissedBy: user },
+      });
+    }
     await this.audit.log(user, 'Service', svcId, 'Deleted', svcId, '');
     return { svcId, deleted: true };
   }
@@ -207,15 +232,26 @@ export class ServicesService {
       where: { tripId: leg.tripId, serviceType: 'Overflight', scopeType: 'SEGMENT', scopeId: legId },
     });
     const existingCountries = new Set(existing.map((s) => s.countryIso2));
+    const dismissedCountries = await this.dismissedCountries('SEGMENT', legId, 'Overflight');
 
     const created: Service[] = [];
     for (const iso2 of leg.countriesOverflown) {
-      if (existingCountries.has(iso2)) continue;
+      if (existingCountries.has(iso2) || dismissedCountries.has(iso2)) continue;
       const country = await this.prisma.country.findUnique({ where: { iso2 } });
       if (!country?.overflightPermitRequired) continue;
       created.push(await this.createOverflightService(leg, iso2, user, `Auto-derived from great-circle route ${leg.depIcao}–${leg.arrIcao}.`));
     }
     return created;
+  }
+
+  // Shared by generateOverflightServices/reconcileOverflightServices/
+  // generateArrivalServices -- countries a coordinator explicitly dismissed
+  // (deleted) for this exact scope+type, which regeneration must not recreate.
+  private async dismissedCountries(scopeType: string, scopeId: string, serviceType: string): Promise<Set<string>> {
+    const rows = await this.prisma.dismissedServiceCandidate.findMany({
+      where: { scopeType, scopeId, serviceType },
+    });
+    return new Set(rows.map((r) => r.countryIso2));
   }
 
   // Item 16: keeps a leg's Overflight services in sync with its current
@@ -239,10 +275,11 @@ export class ServicesService {
     });
     const wantedCountries = new Set(leg.countriesOverflown);
     const existingCountries = new Set(existing.map((s) => s.countryIso2));
+    const dismissedCountries = await this.dismissedCountries('SEGMENT', legId, 'Overflight');
 
     const created: Service[] = [];
     for (const iso2 of leg.countriesOverflown) {
-      if (existingCountries.has(iso2)) continue;
+      if (existingCountries.has(iso2) || dismissedCountries.has(iso2)) continue;
       const country = await this.prisma.country.findUnique({ where: { iso2 } });
       if (!country?.overflightPermitRequired) continue;
       created.push(await this.createOverflightService(leg, iso2, user, `Auto-derived from great-circle route ${leg.depIcao}–${leg.arrIcao} (Avoid/Include FIRs applied).`));
@@ -278,10 +315,15 @@ export class ServicesService {
     });
     const has = (serviceType: string, iso2: string) =>
       existing.some((s) => s.serviceType === serviceType && s.countryIso2 === iso2);
+    const dismissed = await this.prisma.dismissedServiceCandidate.findMany({
+      where: { scopeType: 'LEG', scopeId: legId },
+    });
+    const isDismissed = (serviceType: string, iso2: string) =>
+      dismissed.some((d) => d.serviceType === serviceType && d.countryIso2 === iso2);
 
     const created: Service[] = [];
     const make = async (serviceType: ServiceType, iso2: string, icao: string, direction: 'ARR' | 'DEP', notes: string) => {
-      if (has(serviceType, iso2)) return;
+      if (has(serviceType, iso2) || isDismissed(serviceType, iso2)) return;
       const leadHours = await this.leadTimeHours(iso2, serviceType, 48);
       const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
       const providerId = await this.resolveProvider(serviceType, icao, iso2);

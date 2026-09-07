@@ -489,6 +489,30 @@ model Service {
   @@map("services")
 }
 
+// Records a coordinator's explicit deletion of a service that
+// generateOverflightServices/reconcileOverflightServices/generateArrivalServices
+// could otherwise recreate -- without this, a manually-deleted auto-generated
+// service silently reappears the next time regeneration runs (Phase 0
+// architectural assessment, Conflict #2). Only user-initiated deletes
+// (ServicesService.remove()) write here; reconcileOverflightServices' own
+// auto-removal (a route/FIR change dropping a country) does not, since that's
+// the system staying in sync with the current route, not a coordinator
+// decision to suppress a slot permanently.
+model DismissedServiceCandidate {
+  id          Int      @id @default(autoincrement())
+  tripId      String   @map("trip_id")
+  scopeType   String   @map("scope_type")
+  scopeId     String   @map("scope_id")
+  serviceType String   @map("service_type")
+  countryIso2 String   @map("country_iso2")
+  dismissedAt DateTime @default(now()) @map("dismissed_at")
+  dismissedBy String   @map("dismissed_by")
+
+  @@unique([scopeType, scopeId, serviceType, countryIso2])
+  @@index([tripId])
+  @@map("dismissed_service_candidates")
+}
+
 model Person {
   personId               String    @id @map("person_id")
   name                   String
