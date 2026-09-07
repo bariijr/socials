@@ -29,7 +29,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasterDetailList, EntityListCard, DetailPanel } from '@/components/ui/master-detail-list';
 import { MasterDetailShell } from '@/components/ui/master-detail-shell';
-import { Plane, Building2, MapPin, Globe, Users, AlertTriangle, Receipt, Briefcase, ArrowRight } from 'lucide-react';
+import { Plane, Building2, MapPin, Globe, Users, AlertTriangle, Receipt, Briefcase, ArrowRight, FileCheck } from 'lucide-react';
+import { AuthorizationsTab } from './AdminAuthorizations';
 
 const SERVICE_TYPES: ServiceType[] = [
   'Permit', 'Overflight', 'GroundHandling', 'Fuel', 'Catering',
@@ -928,6 +929,7 @@ export default function AdminAssets() {
           <TabsTrigger value="operators" className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> Operators</TabsTrigger>
           <TabsTrigger value="clients" className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> Clients</TabsTrigger>
           <TabsTrigger value="fees" className="flex items-center gap-1"><Receipt className="h-3.5 w-3.5" /> Fees</TabsTrigger>
+          <TabsTrigger value="authorizations" className="flex items-center gap-1"><FileCheck className="h-3.5 w-3.5" /> Authorizations</TabsTrigger>
         </TabsList>
 
         {/* ─── Aircraft ───────────────────────────────────────────────── */}
@@ -1320,6 +1322,11 @@ export default function AdminAssets() {
               </DetailPanel>
             }
           />
+        </TabsContent>
+
+        {/* ─── Authorizations ─────────────────────────────────────────── */}
+        <TabsContent value="authorizations">
+          <AuthorizationsTab />
         </TabsContent>
       </Tabs>
     </div>
