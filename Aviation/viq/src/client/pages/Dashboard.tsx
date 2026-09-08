@@ -5,32 +5,47 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge, EscalationBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { TaskEditorDialog } from '@/components/TaskEditorDialog';
 import { Link } from 'react-router';
-import { Plane, AlertTriangle, ListChecks, Clock } from 'lucide-react';
+import { Plane, AlertTriangle, ListChecks, Clock, Plus } from 'lucide-react';
 
 const WIDGET_LIMIT = 8;
 
 type UpcomingLeg = Leg & { Trip: { TripID: string; Registration: string; Status: string } };
 type FailedComm = Comm & { Trip: { TripID: string; Registration: string } };
 
-function TaskRow({ task, onComplete }: { task: Task; onComplete: (task: Task) => void }) {
+function TaskRow({ task, onComplete, onEdit }: { task: Task; onComplete: (task: Task) => void; onEdit: (task: Task) => void }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border p-2 text-xs hover:bg-accent/50 transition-colors">
-      <Link to={task.TripID ? `/trips/${task.TripID}` : '#'} className="flex-1 min-w-0">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onEdit(task)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(task); } }}
+        className="flex-1 min-w-0 cursor-pointer"
+      >
         <span className="font-medium">{task.Title}</span>
-        {task.TripID && <span className="text-muted-foreground ml-2">{task.TripID}</span>}
+        {task.TripID && (
+          <Link
+            to={`/trips/${task.TripID}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-muted-foreground ml-2 hover:underline"
+          >
+            {task.TripID}
+          </Link>
+        )}
         <div className="flex items-center gap-2 mt-0.5">
           {task.NoLaterThanZ && <span className="text-muted-foreground">NLT {formatZ(task.NoLaterThanZ)}</span>}
           {task.EscalationTier && <EscalationBadge tier={task.EscalationTier} className="text-[9px]" />}
           <StatusBadge status={task.Status} entityType="task" className="text-[9px]" />
         </div>
-      </Link>
+      </div>
       {task.Status !== 'Complete' && task.Status !== 'Cancelled' && (
         <Button
           variant="ghost"
           size="sm"
           className="h-6 px-2 text-[10px] shrink-0"
-          onClick={(e) => { e.preventDefault(); onComplete(task); }}
+          onClick={(e) => { e.stopPropagation(); onComplete(task); }}
         >
           Complete
         </Button>
@@ -39,10 +54,10 @@ function TaskRow({ task, onComplete }: { task: Task; onComplete: (task: Task) =>
   );
 }
 
-function TaskList({ tasks, loading, emptyLabel, onComplete }: { tasks: Task[]; loading: boolean; emptyLabel: string; onComplete: (task: Task) => void }) {
+function TaskList({ tasks, loading, emptyLabel, onComplete, onEdit }: { tasks: Task[]; loading: boolean; emptyLabel: string; onComplete: (task: Task) => void; onEdit: (task: Task) => void }) {
   if (loading) return <p className="text-xs text-muted-foreground">Loading…</p>;
   if (tasks.length === 0) return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
-  return <div className="space-y-2">{tasks.map((t) => <TaskRow key={t.TaskID} task={t} onComplete={onComplete} />)}</div>;
+  return <div className="space-y-2">{tasks.map((t) => <TaskRow key={t.TaskID} task={t} onComplete={onComplete} onEdit={onEdit} />)}</div>;
 }
 
 export default function Dashboard() {
@@ -60,6 +75,8 @@ export default function Dashboard() {
 
   const [reloadToken, setReloadToken] = useState(0);
   const [taskError, setTaskError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTask, setDialogTask] = useState<Task | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +135,16 @@ export default function Dashboard() {
     }
   }
 
+  function handleNewTask() {
+    setDialogTask(null);
+    setDialogOpen(true);
+  }
+
+  function handleEditTask(task: Task) {
+    setDialogTask(task);
+    setDialogOpen(true);
+  }
+
   const activeTripsCount = new Set(
     [...myTasks, ...teamTasks, ...unassignedTasks].filter((t) => t.TripID).map((t) => t.TripID),
   ).size;
@@ -142,23 +169,28 @@ export default function Dashboard() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">MY TASKS</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={myTasks} loading={tasksLoading} emptyLabel="No open tasks — all clear." onComplete={handleCompleteTask} /></CardContent>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">MY TASKS</CardTitle>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleNewTask}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> New Task
+            </Button>
+          </CardHeader>
+          <CardContent><TaskList tasks={myTasks} loading={tasksLoading} emptyLabel="No open tasks — all clear." onComplete={handleCompleteTask} onEdit={handleEditTask} /></CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-base">TEAM TASKS</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={teamTasks} loading={tasksLoading} emptyLabel="No team tasks." onComplete={handleCompleteTask} /></CardContent>
+          <CardContent><TaskList tasks={teamTasks} loading={tasksLoading} emptyLabel="No team tasks." onComplete={handleCompleteTask} onEdit={handleEditTask} /></CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-base">UNASSIGNED</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={unassignedTasks} loading={tasksLoading} emptyLabel="Nothing unassigned." onComplete={handleCompleteTask} /></CardContent>
+          <CardContent><TaskList tasks={unassignedTasks} loading={tasksLoading} emptyLabel="Nothing unassigned." onComplete={handleCompleteTask} onEdit={handleEditTask} /></CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-base">ESCALATED</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={escalatedTasks} loading={tasksLoading} emptyLabel="Nothing escalated." onComplete={handleCompleteTask} /></CardContent>
+          <CardContent><TaskList tasks={escalatedTasks} loading={tasksLoading} emptyLabel="Nothing escalated." onComplete={handleCompleteTask} onEdit={handleEditTask} /></CardContent>
         </Card>
 
         <Card>
@@ -206,6 +238,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <TaskEditorDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        task={dialogTask}
+        onSaved={() => setReloadToken((n) => n + 1)}
+      />
     </div>
   );
 }
