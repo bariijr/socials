@@ -89,6 +89,7 @@ model Airport {
   fboCount       Int?    @map("fbo_count")
 
   country Country @relation(fields: [countryIso2], references: [iso2])
+  vendorAssignments VendorAssignment[]
 
   @@map("airports")
 }
@@ -235,7 +236,8 @@ model VendorAssignment {
 
   provider Provider @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
   client   Client?  @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
-  country  Country? @relation(fields: [countryIso2], references: [iso2])
+  country  Country? @relation(fields: [countryIso2], references: [iso2], onDelete: Cascade)
+  airport  Airport? @relation(fields: [icao], references: [icao], onDelete: Cascade)
 
   @@index([countryIso2, icao, serviceType, permitType, clientId])
   @@index([providerId])
