@@ -20,6 +20,9 @@ describe('VendorResolverService', () => {
     await prisma.country.create({
       data: { iso2: 'TZ', name: 'Tanzania', overflightPermitRequired: true, landingPermitRequired: true, centroidLat: -6.37, centroidLng: 34.89 },
     });
+    await prisma.airport.create({
+      data: { icao: 'HTDA', name: 'Julius Nyerere International Airport', countryIso2: 'TZ', latitude: -6.88, longitude: 39.2 },
+    });
     for (const id of ['PROV-A', 'PROV-B', 'PROV-C']) {
       await prisma.provider.create({
         data: { providerId: id, name: id, serviceTypes: ['Overflight', 'Ground Handling'], scopeType: 'Global', scope: 'GLOBAL' },

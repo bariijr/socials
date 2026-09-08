@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { VendorAssignmentsService } from './vendor-assignments.service';
 import { CreateVendorAssignmentDto } from './dto/create-vendor-assignment.dto';
 import { UpdateVendorAssignmentDto } from './dto/update-vendor-assignment.dto';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('vendor-assignments')
 export class VendorAssignmentsController {
@@ -22,11 +23,13 @@ export class VendorAssignmentsController {
     return this.assignments.findOne(id);
   }
 
+  @Roles('Admin')
   @Post()
   create(@Body() dto: CreateVendorAssignmentDto) {
     return this.assignments.create(dto);
   }
 
+  @Roles('Admin')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateVendorAssignmentDto) {
     return this.assignments.update(id, dto);
