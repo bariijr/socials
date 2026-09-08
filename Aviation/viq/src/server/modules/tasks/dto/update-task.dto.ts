@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsIn, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsInt, IsOptional } from 'class-validator';
 import { CreateTaskDto } from './create-task.dto';
 
 const STATUSES = ['Open', 'In Progress', 'Waiting', 'Complete', 'Cancelled'] as const;
@@ -13,6 +13,6 @@ export class UpdateTaskDto extends PartialType(CreateTaskDto) {
   status?: (typeof STATUSES)[number];
 
   @IsOptional()
-  @IsString()
+  @IsIn(['Amber', 'Red'])
   escalationTier?: string;
 }
