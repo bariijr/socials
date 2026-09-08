@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { truncateAll } from '../../test/db-test-utils';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ServicesService } from '../services/services.service';
 import { TripsService } from './trips.service';
 
 describe('Trip version/status-tracking columns', () => {
@@ -45,7 +46,8 @@ describe('Trip status transitions', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    trips = new TripsService(prisma, audit);
+    const services = new ServicesService(prisma, audit);
+    trips = new TripsService(prisma, audit, services);
   });
 
   it('allows Planning -> Active and reports it in allowedTransitions before and after', async () => {
@@ -97,7 +99,8 @@ describe('Reopening a Complete trip (Admin-gated)', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    trips = new TripsService(prisma, audit);
+    const services = new ServicesService(prisma, audit);
+    trips = new TripsService(prisma, audit, services);
   });
 
   async function makeCompleteTrip(tripId: string) {
@@ -157,7 +160,8 @@ describe('Trip optimistic locking', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    trips = new TripsService(prisma, audit);
+    const services = new ServicesService(prisma, audit);
+    trips = new TripsService(prisma, audit, services);
   });
 
   it('rejects an update with a stale version, returning the current record and who/when it changed', async () => {

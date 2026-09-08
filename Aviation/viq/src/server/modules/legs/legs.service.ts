@@ -277,6 +277,27 @@ export class LegsService {
       await this.services.generateArrivalServices(legId, { departureGroundHandling }, user);
     }
 
+    // Change Impact triggers -- only ever touch services already Confirmed
+    // (see ServicesService.flagConfirmedServicesForScheduleChange /
+    // flagConfirmedServices for why). Schedule changes use a per-service
+    // country tolerance; a route change uses none.
+    if (dto.etdZ !== undefined && before.etdZ.getTime() !== leg.etdZ.getTime()) {
+      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etdZ, leg.etdZ, user);
+    }
+    if (dto.etaZ !== undefined && before.etaZ.getTime() !== leg.etaZ.getTime()) {
+      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etaZ, leg.etaZ, user);
+    }
+    const icaoChanged = (dto.depIcao !== undefined && before.depIcao !== leg.depIcao)
+      || (dto.arrIcao !== undefined && before.arrIcao !== leg.arrIcao);
+    const routeChanged = icaoChanged
+      || (reconcileOverflight && JSON.stringify(before.countriesOverflown) !== JSON.stringify(leg.countriesOverflown));
+    if (routeChanged) {
+      const reason = icaoChanged
+        ? `route changed ${before.depIcao} → ${leg.depIcao}, ${before.arrIcao} → ${leg.arrIcao}`
+        : 'overflown countries changed';
+      await this.services.flagConfirmedServices({ scopeId: legId }, reason, user);
+    }
+
     return leg;
   }
 

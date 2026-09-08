@@ -3,6 +3,7 @@ import { isValidTripTransition, tripReopenAllowed, withTripTransitions, withServ
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ServicesService } from '../services/services.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
 
@@ -11,6 +12,7 @@ export class TripsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly services: ServicesService,
   ) {}
 
   // YYMM + sequence within that month, e.g. 2608005 for the 5th trip created in Aug 2026.
@@ -157,6 +159,16 @@ export class TripsService {
 
     const trip = await this.prisma.trip.findUnique({ where: { tripId } });
     await this.audit.logDiff(user, 'Trip', tripId, before as unknown as Record<string, unknown>, trip as unknown as Record<string, unknown>);
+
+    const operatorChanged = data.operator !== undefined && data.operator !== before.operator;
+    const registrationChanged = data.registration !== undefined && data.registration !== before.registration;
+    if (operatorChanged || registrationChanged) {
+      const changes: string[] = [];
+      if (operatorChanged) changes.push(`operator changed from ${before.operator ?? 'unset'} to ${data.operator}`);
+      if (registrationChanged) changes.push(`registration changed from ${before.registration ?? 'unset'} to ${data.registration}`);
+      await this.services.flagConfirmedServices({ tripId }, changes.join('; '), user);
+    }
+
     return withTripTransitions(trip!, role);
   }
 

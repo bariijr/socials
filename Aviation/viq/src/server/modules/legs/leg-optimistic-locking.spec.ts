@@ -25,7 +25,7 @@ describe('Leg optimistic locking', () => {
     const services = new ServicesService(prisma, audit);
     const stops = new StopsService(prisma, audit);
     legs = new LegsService(prisma, audit, services, stops);
-    trips = new TripsService(prisma, audit);
+    trips = new TripsService(prisma, audit, services);
   });
 
   it('defaults a new Leg to version 1 and increments on update', async () => {
