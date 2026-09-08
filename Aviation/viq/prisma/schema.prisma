@@ -32,6 +32,7 @@ model Country {
   messageTemplates MessageTemplate[]
   fees             CountryFee[]
   permitAuthorizations PermitAuthorization[]
+  vendorAssignments VendorAssignment[]
 
   @@map("countries")
 }
@@ -197,8 +198,48 @@ model Provider {
   services   Service[]
   priceItems PriceItem[]
   channels   ContactChannel[]
+  vendorAssignments VendorAssignment[]
 
   @@map("providers")
+}
+
+// Vendor Assignment & Resolution Engine, sub-project 1. One row = "this
+// Vendor may fill this operational context, at this preference."
+// Deliberately NOT a single global vendor.priority -- priority is always
+// contextual (country/airport x serviceType/permitType x client).
+// preferred and rank are independent fields, never inferred from each
+// other; equal ranks across different providers are valid and mean tied
+// preference (the resolver, not the schema, detects and surfaces ties).
+// rank is nullable because a prohibition row (prohibited: true) has no
+// meaningful rank.
+model VendorAssignment {
+  id             String    @id @default(cuid())
+  providerId     String    @map("provider_id")
+  countryIso2    String?   @map("country_iso2")
+  icao           String?
+  serviceType    String    @map("service_type")
+  permitType     String?   @map("permit_type")
+  clientId       String?   @map("client_id")
+
+  preferred      Boolean   @default(false)
+  rank           Int?
+  prohibited     Boolean   @default(false)
+
+  active         Boolean   @default(true)
+  effectiveFrom  DateTime? @map("effective_from")
+  effectiveUntil DateTime? @map("effective_until")
+
+  notes          String?
+  createdBy      String?   @map("created_by")
+  createdAtZ     DateTime  @default(now()) @map("created_at_z")
+
+  provider Provider @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
+  client   Client?  @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  country  Country? @relation(fields: [countryIso2], references: [iso2])
+
+  @@index([countryIso2, icao, serviceType, permitType, clientId])
+  @@index([providerId])
+  @@map("vendor_assignments")
 }
 
 model CountryRule {
@@ -372,6 +413,7 @@ model Client {
   trips          Trip[]
   channels       ContactChannel[]
   tasks          Task[]
+  vendorAssignments VendorAssignment[]
 
   @@map("clients")
 }
