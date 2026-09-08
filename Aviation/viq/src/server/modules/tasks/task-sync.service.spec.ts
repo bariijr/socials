@@ -78,12 +78,16 @@ describe('TaskSyncService', () => {
   it('auto-closes a reconfirm task once the service becomes Confirmed again', async () => {
     await makeService('SVC-6', 'Re-confirm Required');
     await sync.runSync();
+    const created = await prisma.task.findUnique({ where: { sourceKey: 'reconfirm:SVC-6' } });
     await prisma.service.update({ where: { svcId: 'SVC-6' }, data: { status: 'Confirmed' } });
     const result = await sync.runSync();
     expect(result.closed).toBe(1);
-    const task = await prisma.task.findUnique({ where: { sourceKey: 'reconfirm:SVC-6' } });
+    const task = await prisma.task.findUnique({ where: { id: created!.id } });
     expect(task!.status).toBe('Complete');
     expect(task!.completedAtZ).not.toBeNull();
+    // sourceKey is cleared on close so the key can be reused if the
+    // condition recurs later (see the dedicated recurrence test below).
+    expect(task!.sourceKey).toBeNull();
   });
 
   it('auto-closes a resubmit task once the service is successfully requested', async () => {
@@ -109,6 +113,34 @@ describe('TaskSyncService', () => {
     task = await prisma.task.findUnique({ where: { sourceKey: 'deadline:SVC-8' } });
     expect(task!.escalationTier).toBe('Red');
     expect(task!.escalatedAtZ!.getTime()).toBeGreaterThanOrEqual(firstEscalatedAt!.getTime());
+  });
+
+  it('clears sourceKey on auto-close and lets a recurring condition create a new task', async () => {
+    await makeService('SVC-10', 'Re-confirm Required');
+    const first = await sync.runSync();
+    expect(first.created).toBe(1);
+    const firstTask = await prisma.task.findUnique({ where: { sourceKey: 'reconfirm:SVC-10' } });
+    expect(firstTask).not.toBeNull();
+
+    // Service gets reconfirmed -- the task auto-closes and its sourceKey is freed.
+    await prisma.service.update({ where: { svcId: 'SVC-10' }, data: { status: 'Confirmed' } });
+    const closeResult = await sync.runSync();
+    expect(closeResult.closed).toBe(1);
+    const closedTask = await prisma.task.findUnique({ where: { id: firstTask!.id } });
+    expect(closedTask!.status).toBe('Complete');
+    expect(closedTask!.sourceKey).toBeNull();
+
+    // Months later, an unrelated change flags the same service Re-confirm
+    // Required again -- a brand new task must be created for it, not
+    // silently blocked by the old (now-freed) sourceKey.
+    await prisma.service.update({ where: { svcId: 'SVC-10' }, data: { status: 'Re-confirm Required' } });
+    const second = await sync.runSync();
+    expect(second.created).toBe(1);
+
+    const openTasks = await prisma.task.findMany({ where: { serviceId: 'SVC-10', status: { not: 'Complete' } } });
+    expect(openTasks.length).toBe(1);
+    expect(openTasks[0].sourceKey).toBe('reconfirm:SVC-10');
+    expect(openTasks[0].id).not.toBe(firstTask!.id);
   });
 
   it('does not escalate a task with no noLaterThanZ', async () => {

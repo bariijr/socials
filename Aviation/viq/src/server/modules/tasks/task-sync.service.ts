@@ -143,6 +143,12 @@ export class TaskSyncService {
           statusChangedAt: new Date(),
           statusChangedBy: 'SYSTEM',
           completedAtZ: new Date(),
+          // Free the sourceKey (unique) so a future occurrence of the same
+          // trigger condition on this service can create a new task. Postgres
+          // treats NULL as distinct across rows in a unique constraint, so
+          // this row's history (title, tripId, serviceId, audit trail) stays
+          // intact -- only the now-unnecessary dedup key is cleared.
+          sourceKey: null,
         },
       });
       count++;
