@@ -5,11 +5,18 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { isValidTaskTransition, withTaskTransitions } from '../../common/taskStatusTransitions';
 
+const OPEN_STATUSES = ['Open', 'In Progress', 'Waiting'];
+
 export interface TaskListFilter {
   scope?: 'mine' | 'team' | 'unassigned' | 'escalated';
   tripId?: string;
   currentUserId?: string;
   currentUserTeam?: string;
+  // When false (default), only Open/In Progress/Waiting tasks are returned --
+  // every Action Board bucket is meant to show live work, not a permanent
+  // record of everything ever completed. Set true for a future history view;
+  // nothing currently sets this.
+  includeClosed?: boolean;
 }
 
 @Injectable()
@@ -35,6 +42,8 @@ export class TasksService {
     } else if (filter.scope === 'escalated') {
       where.escalationTier = { not: null };
     }
+
+    if (!filter.includeClosed) where.status = { in: OPEN_STATUSES };
 
     const tasks = await this.prisma.task.findMany({
       where,

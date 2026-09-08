@@ -86,6 +86,30 @@ describe('TasksService', () => {
     expect(await tasks.resolveUserTeam(user1.id)).toBe('Ops');
   });
 
+  it('scope=mine excludes a task the owner already completed', async () => {
+    const user1 = await prisma.user.create({ data: { username: 'u1', passwordHash: 'x', role: 'Coordinator', firstName: 'A', lastName: 'B', email: 'u1@test.com' } });
+    const created = await tasks.create({ title: 'Done already', ownerUserId: user1.id });
+    await tasks.update(created.id, { status: 'Complete', version: created.version } as any, 'coordinator-1');
+    const mine = await tasks.findAll({ scope: 'mine', currentUserId: user1.id });
+    expect(mine).toHaveLength(0);
+  });
+
+  it('scope=escalated excludes a task that was completed after being escalated', async () => {
+    const created = await tasks.create({ title: 'Escalated then done' });
+    await prisma.task.update({ where: { id: created.id }, data: { escalationTier: 'Red' } });
+    const completed = await tasks.update(created.id, { status: 'Complete', version: created.version } as any, 'coordinator-1');
+    expect(completed.escalationTier).toBe('Red');
+    const escalated = await tasks.findAll({ scope: 'escalated' });
+    expect(escalated).toHaveLength(0);
+  });
+
+  it('includeClosed:true still returns a completed task', async () => {
+    const created = await tasks.create({ title: 'Kept for history' });
+    await tasks.update(created.id, { status: 'Complete', version: created.version } as any, 'coordinator-1');
+    const all = await tasks.findAll({ includeClosed: true });
+    expect(all.map((t) => t.title)).toContain('Kept for history');
+  });
+
   it('clears sourceKey when a System task is manually completed via update()', async () => {
     const task = await prisma.task.create({
       data: {
