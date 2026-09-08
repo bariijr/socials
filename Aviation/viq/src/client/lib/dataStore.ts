@@ -5,7 +5,7 @@
 
 import type {
   Airport, Country, CountryRule, Aircraft, Provider, ServiceTypeDef, LegPurposeDef,
-  Trip, Leg, Stop, Service, Comm, AuditEntry, Person, PersonRating, PersonRole, TripStatus,
+  Trip, Leg, Stop, Service, Comm, Task, AuditEntry, Person, PersonRating, PersonRole, TripStatus,
   TripPersonView, TripLegPersonView, LegWithPersons, DocAttachment, AppUser, ContactChannel
 } from '@/data/types';
 
@@ -467,6 +467,50 @@ function mapServiceToApi(service: Service): Record<string, unknown> {
   };
 }
 
+export function mapTaskFromApi(t: any): Task {
+  return {
+    TaskID: t.id,
+    Title: t.title,
+    Description: t.description ?? undefined,
+    TripID: t.tripId ?? undefined,
+    LegID: t.legId ?? undefined,
+    ServiceID: t.serviceId ?? undefined,
+    ClientID: t.clientId ?? undefined,
+    OwnerUserID: t.ownerUserId ?? undefined,
+    Priority: t.priority,
+    NoLaterThanZ: t.noLaterThanZ ?? undefined,
+    Status: t.status,
+    StatusChangedAt: t.statusChangedAt ?? undefined,
+    StatusChangedBy: t.statusChangedBy ?? undefined,
+    AllowedTransitions: t.allowedTransitions ?? undefined,
+    Version: t.version,
+    Source: t.source,
+    SourceKey: t.sourceKey ?? undefined,
+    EscalationTier: t.escalationTier ?? undefined,
+    EscalatedAtZ: t.escalatedAtZ ?? undefined,
+    CreatedBy: t.createdBy ?? undefined,
+    CreatedAtZ: t.createdAtZ,
+    CompletedAtZ: t.completedAtZ ?? undefined,
+  };
+}
+
+function mapTaskToApi(task: Partial<Task>): Record<string, unknown> {
+  return {
+    title: task.Title,
+    description: task.Description,
+    tripId: task.TripID,
+    legId: task.LegID,
+    serviceId: task.ServiceID,
+    clientId: task.ClientID,
+    ownerUserId: task.OwnerUserID,
+    priority: task.Priority,
+    noLaterThanZ: task.NoLaterThanZ,
+    status: task.Status,
+    version: task.Version,
+    escalationTier: task.EscalationTier,
+  };
+}
+
 function mapCommFromApi(c: any): Comm {
   return {
     CommID: c.commId,
@@ -716,6 +760,43 @@ export async function saveService(service: Service, user = currentUser()): Promi
 
 export async function deleteService(svcId: string, user = currentUser()): Promise<void> {
   await apiJson(`/services/${svcId}?user=${encodeURIComponent(user)}`, { method: 'DELETE' });
+}
+
+// ─── Task CRUD ──────────────────────────────────────────────────────────────
+
+export async function getTasks(params: { scope?: 'mine' | 'team' | 'unassigned' | 'escalated'; tripId?: string } = {}): Promise<Task[]> {
+  const search = new URLSearchParams();
+  if (params.scope) search.set('scope', params.scope);
+  if (params.tripId) search.set('tripId', params.tripId);
+  const qs = search.toString();
+  const rows = await apiJson<any[]>(`/tasks${qs ? `?${qs}` : ''}`);
+  return rows.map(mapTaskFromApi);
+}
+
+export async function createTask(task: Partial<Task>, user = currentUser()): Promise<Task> {
+  const row = await apiJson<any>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(mapTaskToApi(task)),
+  });
+  return mapTaskFromApi(row);
+}
+
+export async function updateTask(id: string, patch: Partial<Task> & { Version: number }, user = currentUser()): Promise<Task> {
+  const row = await apiJson<any>(`/tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(mapTaskToApi(patch)),
+  });
+  return mapTaskFromApi(row);
+}
+
+export async function getFailedMessagesWidget(limit: number, search?: string): Promise<(Comm & { Trip: { TripID: string; Registration: string } })[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (search) params.set('search', search);
+  const rows = await apiJson<any[]>(`/comms/failed?${params.toString()}`);
+  return rows.map((r) => ({
+    ...mapCommFromApi(r),
+    Trip: { TripID: r.trip.tripId, Registration: r.trip.registration ?? '' },
+  }));
 }
 
 // ─── Service Type Catalog CRUD ─────────────────────────────────────────────────

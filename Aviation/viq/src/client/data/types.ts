@@ -256,6 +256,35 @@ export interface ServiceSubItem {
   status: 'Pending' | 'Confirmed' | 'Cancelled' | 'NA';
 }
 
+export type TaskStatus = 'Open' | 'In Progress' | 'Waiting' | 'Complete' | 'Cancelled';
+export type TaskPriority = 'Low' | 'Normal' | 'High' | 'Urgent';
+export type TaskEscalationTier = 'Amber' | 'Red';
+
+export interface Task {
+  TaskID: string;
+  Title: string;
+  Description?: string;
+  TripID?: string;
+  LegID?: string;
+  ServiceID?: string;
+  ClientID?: string;
+  OwnerUserID?: string;
+  Priority: TaskPriority;
+  NoLaterThanZ?: string;
+  Status: TaskStatus;
+  StatusChangedAt?: string;
+  StatusChangedBy?: string;
+  AllowedTransitions?: string[];
+  Version: number;
+  Source: 'Manual' | 'System';
+  SourceKey?: string;
+  EscalationTier?: TaskEscalationTier;
+  EscalatedAtZ?: string;
+  CreatedBy?: string;
+  CreatedAtZ: string;
+  CompletedAtZ?: string;
+}
+
 // Trip-independent roster identity — a person is no longer owned by one
 // trip; see TripPersonAssignment for the per-trip specifics, and
 // TripPersonView for the merged shape TripDetail.tsx actually renders.
