@@ -23,6 +23,7 @@ import { CommsModule } from './modules/comms/comms.module';
 import { DocsModule } from './modules/docs/docs.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { UsersModule } from './modules/users/users.module';
 import { ClientsModule } from './modules/clients/clients.module';
@@ -64,6 +65,7 @@ import { HealthModule } from './modules/health/health.module';
     DocsModule,
     DocumentsModule,
     InvoicesModule,
+    TasksModule,
     QuotesModule,
     HealthModule,
   ],
