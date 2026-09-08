@@ -268,6 +268,18 @@ export class LegsService {
     const leg = await this.findOne(legId);
     await this.audit.logDiff(user, 'Leg', legId, before as unknown as Record<string, unknown>, leg as unknown as Record<string, unknown>);
 
+    // Snapshot which services were ALREADY Confirmed before the
+    // reconcile/generate calls below run. Those calls can create brand-new
+    // services already Confirmed (auto-matched against a Verified
+    // PermitAuthorization for the NEW post-update ETD) -- without this
+    // snapshot, the Change Impact triggers further down would immediately
+    // re-flag those same-call creations as needing reconfirmation against a
+    // change they were never actually granted before.
+    const preExistingConfirmedIds = (await this.prisma.service.findMany({
+      where: { scopeId: legId, status: 'Confirmed' },
+      select: { svcId: true },
+    })).map((s) => s.svcId);
+
     if (reconcileOverflight) {
       await this.services.reconcileOverflightServices(legId, user);
     }
@@ -278,15 +290,14 @@ export class LegsService {
     }
 
     // Change Impact triggers -- only ever touch services already Confirmed
-    // (see ServicesService.flagConfirmedServicesForScheduleChange /
-    // flagConfirmedServices for why). Schedule changes use a per-service
-    // country tolerance; a route change uses none.
-    if (dto.etdZ !== undefined && before.etdZ.getTime() !== leg.etdZ.getTime()) {
-      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etdZ, leg.etdZ, user);
-    }
-    if (dto.etaZ !== undefined && before.etaZ.getTime() !== leg.etaZ.getTime()) {
-      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etaZ, leg.etaZ, user);
-    }
+    // before this call started (see preExistingConfirmedIds above and
+    // ServicesService.flagConfirmedServicesForScheduleChange /
+    // flagConfirmedServices for why). Route change is checked BEFORE the
+    // schedule checks: a route change is categorically a different permit
+    // application (the more consequential fact), while a schedule check
+    // running first would flip a matching service away from Confirmed,
+    // leaving nothing for the route check to find and silently dropping
+    // the route reason whenever both changes land in the same update.
     const icaoChanged = (dto.depIcao !== undefined && before.depIcao !== leg.depIcao)
       || (dto.arrIcao !== undefined && before.arrIcao !== leg.arrIcao);
     const routeChanged = icaoChanged
@@ -298,7 +309,13 @@ export class LegsService {
       const reason = changedSegments.length > 0
         ? `route changed: ${changedSegments.join(', ')}`
         : 'overflown countries changed';
-      await this.services.flagConfirmedServices({ scopeId: legId }, reason, user);
+      await this.services.flagConfirmedServices({ scopeId: legId }, reason, user, preExistingConfirmedIds);
+    }
+    if (dto.etdZ !== undefined && before.etdZ.getTime() !== leg.etdZ.getTime()) {
+      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etdZ, leg.etdZ, 'ETD', user, preExistingConfirmedIds);
+    }
+    if (dto.etaZ !== undefined && before.etaZ.getTime() !== leg.etaZ.getTime()) {
+      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etaZ, leg.etaZ, 'ETA', user, preExistingConfirmedIds);
     }
 
     return leg;

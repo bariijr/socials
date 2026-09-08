@@ -286,6 +286,26 @@ export class ServicesService {
     return rule?.toleranceHours ?? 0;
   }
 
+  // Shared by both Change Impact flagging methods below: flips a Confirmed
+  // service to Re-confirm Required, appends the human-readable reason to
+  // its notes, bumps `version` (so a stale-draft client save conflicts
+  // instead of silently reverting this flag -- see Finding 1), and logs the
+  // audit entry.
+  private async applyReconfirmFlag(svc: Service, reason: string, user: string): Promise<Service> {
+    const updated = await this.prisma.service.update({
+      where: { svcId: svc.svcId },
+      data: {
+        status: 'Re-confirm Required',
+        statusChangedAt: new Date(),
+        statusChangedBy: user,
+        version: { increment: 1 },
+        notes: `${svc.notes} Auto-flagged: ${reason}.`.trim(),
+      },
+    });
+    await this.audit.log(user, 'Service', svc.svcId, 'AutoReconfirm', 'Confirmed', 'Re-confirm Required');
+    return updated;
+  }
+
   // Change Impact trigger: an ETD/ETA shift beyond a country's configured
   // tolerance invalidates an already-Confirmed service -- the permit was
   // granted against the old time. A service not yet Confirmed is left
@@ -293,31 +313,34 @@ export class ServicesService {
   // a service with no countryIso2 at all is skipped -- there's no country
   // to look a tolerance up against (different from "no CountryRule row for
   // an existing country", which still defaults to 0 and flags).
+  //
+  // `onlyIds`, when provided, restricts flagging to that set of svcIds --
+  // used by LegsService.update() to exclude services created earlier in the
+  // very same call (by reconcileOverflightServices/generateOverflightServices/
+  // generateArrivalServices) from being re-flagged against a change they
+  // were never actually granted before. Omitted by the trip-identity call
+  // site in trips.service.ts, which has no equivalent same-call risk.
   async flagConfirmedServicesForScheduleChange(
     legId: string,
     oldTime: Date,
     newTime: Date,
+    label: 'ETD' | 'ETA',
     user = 'SYSTEM',
+    onlyIds?: string[],
   ): Promise<Service[]> {
     const deltaHours = Math.abs(newTime.getTime() - oldTime.getTime()) / (1000 * 60 * 60);
     if (deltaHours === 0) return [];
-    const confirmed = await this.prisma.service.findMany({ where: { scopeId: legId, status: 'Confirmed' } });
+    const where: Prisma.ServiceWhereInput = { scopeId: legId, status: 'Confirmed' };
+    if (onlyIds) where.svcId = { in: onlyIds };
+    const confirmed = await this.prisma.service.findMany({ where });
     const flagged: Service[] = [];
     for (const svc of confirmed) {
       if (!svc.countryIso2) continue;
       const tolerance = await this.toleranceHours(svc.countryIso2, svc.serviceType);
       if (deltaHours <= tolerance) continue;
-      const updated = await this.prisma.service.update({
-        where: { svcId: svc.svcId },
-        data: {
-          status: 'Re-confirm Required',
-          statusChangedAt: new Date(),
-          statusChangedBy: user,
-          notes: `${svc.notes} Auto-flagged: ETD moved ${deltaHours.toFixed(1)}h (exceeds ${tolerance}h tolerance for ${svc.countryIso2} ${svc.serviceType}).`.trim(),
-        },
-      });
-      await this.audit.log(user, 'Service', svc.svcId, 'AutoReconfirm', 'Confirmed', 'Re-confirm Required');
-      flagged.push(updated);
+      const deltaText = deltaHours < 1 ? `${Math.round(deltaHours * 60)}min` : `${deltaHours.toFixed(1)}h`;
+      const reason = `${label} moved ${deltaText} (exceeds ${tolerance}h tolerance for ${svc.countryIso2} ${svc.serviceType})`;
+      flagged.push(await this.applyReconfirmFlag(svc, reason, user));
     }
     return flagged;
   }
@@ -327,21 +350,20 @@ export class ServicesService {
   // `where` is flagged with the same human-readable reason. The caller
   // builds the reason string since it's the one that knows what actually
   // changed (a leg's route vs a trip's operator/registration).
-  async flagConfirmedServices(where: Prisma.ServiceWhereInput, reason: string, user = 'SYSTEM'): Promise<Service[]> {
-    const confirmed = await this.prisma.service.findMany({ where: { ...where, status: 'Confirmed' } });
+  //
+  // `onlyIds` -- see flagConfirmedServicesForScheduleChange's doc comment.
+  async flagConfirmedServices(
+    where: Prisma.ServiceWhereInput,
+    reason: string,
+    user = 'SYSTEM',
+    onlyIds?: string[],
+  ): Promise<Service[]> {
+    const fullWhere: Prisma.ServiceWhereInput = { ...where, status: 'Confirmed' };
+    if (onlyIds) fullWhere.svcId = { in: onlyIds };
+    const confirmed = await this.prisma.service.findMany({ where: fullWhere });
     const flagged: Service[] = [];
     for (const svc of confirmed) {
-      const updated = await this.prisma.service.update({
-        where: { svcId: svc.svcId },
-        data: {
-          status: 'Re-confirm Required',
-          statusChangedAt: new Date(),
-          statusChangedBy: user,
-          notes: `${svc.notes} Auto-flagged: ${reason}.`.trim(),
-        },
-      });
-      await this.audit.log(user, 'Service', svc.svcId, 'AutoReconfirm', 'Confirmed', 'Re-confirm Required');
-      flagged.push(updated);
+      flagged.push(await this.applyReconfirmFlag(svc, reason, user));
     }
     return flagged;
   }
