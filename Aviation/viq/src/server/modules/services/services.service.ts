@@ -279,6 +279,73 @@ export class ServicesService {
     return rule?.leadTimeHours ?? fallback;
   }
 
+  private async toleranceHours(iso2: string, serviceType: string): Promise<number> {
+    const rule = await this.prisma.countryRule.findUnique({
+      where: { countryIso2_serviceType: { countryIso2: iso2, serviceType } },
+    });
+    return rule?.toleranceHours ?? 0;
+  }
+
+  // Change Impact trigger: an ETD/ETA shift beyond a country's configured
+  // tolerance invalidates an already-Confirmed service -- the permit was
+  // granted against the old time. A service not yet Confirmed is left
+  // alone (it hasn't locked anything in yet that needs invalidating), and
+  // a service with no countryIso2 at all is skipped -- there's no country
+  // to look a tolerance up against (different from "no CountryRule row for
+  // an existing country", which still defaults to 0 and flags).
+  async flagConfirmedServicesForScheduleChange(
+    legId: string,
+    oldTime: Date,
+    newTime: Date,
+    user = 'SYSTEM',
+  ): Promise<Service[]> {
+    const deltaHours = Math.abs(newTime.getTime() - oldTime.getTime()) / (1000 * 60 * 60);
+    if (deltaHours === 0) return [];
+    const confirmed = await this.prisma.service.findMany({ where: { scopeId: legId, status: 'Confirmed' } });
+    const flagged: Service[] = [];
+    for (const svc of confirmed) {
+      if (!svc.countryIso2) continue;
+      const tolerance = await this.toleranceHours(svc.countryIso2, svc.serviceType);
+      if (deltaHours <= tolerance) continue;
+      const updated = await this.prisma.service.update({
+        where: { svcId: svc.svcId },
+        data: {
+          status: 'Re-confirm Required',
+          statusChangedAt: new Date(),
+          statusChangedBy: user,
+          notes: `${svc.notes} Auto-flagged: ETD moved ${deltaHours.toFixed(1)}h (exceeds ${tolerance}h tolerance for ${svc.countryIso2} ${svc.serviceType}).`.trim(),
+        },
+      });
+      await this.audit.log(user, 'Service', svc.svcId, 'AutoReconfirm', 'Confirmed', 'Re-confirm Required');
+      flagged.push(updated);
+    }
+    return flagged;
+  }
+
+  // Generic bulk flag for the no-tolerance Change Impact triggers (route
+  // change, trip-identity change) -- every Confirmed service matching
+  // `where` is flagged with the same human-readable reason. The caller
+  // builds the reason string since it's the one that knows what actually
+  // changed (a leg's route vs a trip's operator/registration).
+  async flagConfirmedServices(where: Prisma.ServiceWhereInput, reason: string, user = 'SYSTEM'): Promise<Service[]> {
+    const confirmed = await this.prisma.service.findMany({ where: { ...where, status: 'Confirmed' } });
+    const flagged: Service[] = [];
+    for (const svc of confirmed) {
+      const updated = await this.prisma.service.update({
+        where: { svcId: svc.svcId },
+        data: {
+          status: 'Re-confirm Required',
+          statusChangedAt: new Date(),
+          statusChangedBy: user,
+          notes: `${svc.notes} Auto-flagged: ${reason}.`.trim(),
+        },
+      });
+      await this.audit.log(user, 'Service', svc.svcId, 'AutoReconfirm', 'Confirmed', 'Re-confirm Required');
+      flagged.push(updated);
+    }
+    return flagged;
+  }
+
   private async createOverflightService(
     leg: { legId: string; tripId: string; depIcao: string; arrIcao: string; etdZ: Date },
     iso2: string,
