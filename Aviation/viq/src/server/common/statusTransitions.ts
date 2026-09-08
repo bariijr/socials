@@ -36,9 +36,11 @@ export function tripReopenAllowed(from: string, role: string | undefined): boole
 }
 
 export const SERVICE_TRANSITIONS: Record<string, string[]> = {
-  'Not Started': ['Requested', 'Not Required', 'Cancelled'],
+  'Not Started': ['Requested', 'Submission Pending', 'Not Required', 'Cancelled'],
+  'Submission Pending': ['Requested', 'Submission Failed'],
+  'Submission Failed': ['Submission Pending', 'Not Started', 'Not Required', 'Cancelled'],
   'Requested': ['Chasing', 'Confirmed', 'Not Required', 'Cancelled'],
-  'Chasing': ['Requested', 'Confirmed', 'Not Required', 'Cancelled'],
+  'Chasing': ['Requested', 'Submission Pending', 'Confirmed', 'Not Required', 'Cancelled'],
   'Confirmed': ['Re-confirm Required', 'Cancelled'],
   'Re-confirm Required': ['Confirmed', 'Not Required', 'Cancelled'],
   'Not Required': ['Not Started'],

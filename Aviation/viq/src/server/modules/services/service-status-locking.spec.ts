@@ -62,7 +62,7 @@ describe('Service status transitions', () => {
 
   it('allows Not Started -> Requested and reports it in allowedTransitions before and after', async () => {
     const created = await makeService('TEST-SVC-TRANS-1-SVC-1');
-    expect(created.allowedTransitions).toEqual(['Requested', 'Not Required', 'Cancelled']);
+    expect(created.allowedTransitions).toEqual(['Requested', 'Submission Pending', 'Not Required', 'Cancelled']);
 
     const updated = await services.update(created.svcId, { status: 'Requested', version: created.version });
     expect(updated.status).toBe('Requested');

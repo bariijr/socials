@@ -3,6 +3,7 @@ import { IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, MaxLength
 const SCOPE_TYPES = ['TRIP', 'LEG', 'STOP', 'SEGMENT'] as const;
 const SERVICE_STATUSES = [
   'Not Required', 'Not Started', 'Requested', 'Chasing', 'Confirmed', 'Re-confirm Required', 'Cancelled',
+  'Submission Pending', 'Submission Failed',
 ] as const;
 export const SERVICE_RESPONSIBILITIES = ['VIQ Arrangement', 'Client Own', 'Operator Own', 'Other'] as const;
 
