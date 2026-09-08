@@ -54,6 +54,8 @@ function statusIcon(status: string) {
     case 'Confirmed': return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
     case 'Requested': return <Clock className="h-4 w-4 text-blue-600" />;
     case 'Chasing': return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+    case 'Submission Pending': return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+    case 'Submission Failed': return <XCircle className="h-4 w-4 text-red-600" />;
     case 'Not Started': return <HelpCircle className="h-4 w-4 text-slate-400" />;
     case 'Cancelled': return <XCircle className="h-4 w-4 text-gray-400" />;
     default: return <HelpCircle className="h-4 w-4 text-slate-400" />;

@@ -137,3 +137,58 @@ describe('Service optimistic locking', () => {
     expect(caught.response.changedBy).toBe('first-user');
   });
 });
+
+// Real Postgres-backed persistence of the two new statuses through the
+// existing services.update() PATCH path -- covering the gap a pure
+// transition-graph unit test (statusTransitions.spec.ts) can't: if
+// SERVICE_STATUSES in create-service.dto.ts didn't actually include
+// 'Submission Pending' / 'Submission Failed', these calls would 400 on the
+// DTO's @IsIn validator even though the graph-function tests stay green.
+describe('Submission Pending / Submission Failed persistence', () => {
+  let prisma: PrismaService;
+  let services: ServicesService;
+
+  beforeAll(() => {
+    prisma = new PrismaService();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(prisma);
+    const audit = new AuditService(prisma);
+    services = new ServicesService(prisma, audit);
+    await prisma.trip.create({ data: { tripId: 'TEST-SVC-SUBMIT-1', client: 'Test Client' } });
+  });
+
+  async function makeService(svcId: string) {
+    return services.create({
+      svcId, tripId: 'TEST-SVC-SUBMIT-1', scopeType: 'TRIP', scopeId: 'TEST-SVC-SUBMIT-1',
+      serviceType: 'Overflight', basedOnEtdZ: '2026-10-01T06:00:00.000Z', requiredByZ: '2026-10-01T04:00:00.000Z',
+    });
+  }
+
+  it('persists Not Started -> Submission Pending -> Requested', async () => {
+    const created = await makeService('TEST-SVC-SUBMIT-1-SVC-1');
+
+    const pending = await services.update(created.svcId, { status: 'Submission Pending', version: created.version });
+    expect(pending.status).toBe('Submission Pending');
+    expect(pending.allowedTransitions).toEqual(['Requested', 'Submission Failed']);
+
+    const requested = await services.update(created.svcId, { status: 'Requested', version: pending.version });
+    expect(requested.status).toBe('Requested');
+  });
+
+  it('persists Not Started -> Submission Pending -> Submission Failed', async () => {
+    const created = await makeService('TEST-SVC-SUBMIT-2-SVC-1');
+
+    const pending = await services.update(created.svcId, { status: 'Submission Pending', version: created.version });
+    expect(pending.status).toBe('Submission Pending');
+
+    const failed = await services.update(created.svcId, { status: 'Submission Failed', version: pending.version });
+    expect(failed.status).toBe('Submission Failed');
+    expect(failed.allowedTransitions).toEqual(['Submission Pending', 'Not Started', 'Not Required', 'Cancelled']);
+  });
+});

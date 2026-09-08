@@ -1181,10 +1181,25 @@ function submissionGroupKey(countryIso2: string, serviceType: string): string {
   return `${countryIso2}-${serviceType}`;
 }
 
+// Appends a sentence to a Notes field, keeping the result comfortably under
+// the server DTO's @MaxLength(2000) cap even across many retries -- once the
+// combined length would exceed ~1900 chars, the existing text is trimmed
+// down to its most recent ~500 chars before the new sentence is appended,
+// rather than growing without bound and eventually 400-ing the save.
+function appendBoundedNote(existing: string | undefined, sentence: string): string {
+  const trimmedExisting = (existing || '').trim();
+  const combined = `${trimmedExisting} ${sentence}`.trim();
+  if (combined.length <= 1900) return combined;
+  return `${trimmedExisting.slice(-500)} ${sentence}`.trim();
+}
+
 function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { legs: Leg[]; services: Service[]; trip: Trip; persons: TripPersonView[]; onSaved: () => Promise<void> | void }) {
   const [selectedLegs, setSelectedLegs] = useState<Record<string, string[]>>({});
   const [requestRefs, setRequestRefs] = useState<Record<string, string>>({});
-  const [sendingKey, setSendingKey] = useState<string | null>(null);
+  // A Set (not a single string) so submitting group B while group A is still
+  // in flight doesn't clobber group A's in-progress indicator -- each
+  // group's button state is independent of every other group's.
+  const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const permitServices = services.filter((service) =>
     (service.ServiceType === 'Permit' || service.ServiceType === 'Overflight') && service.CountryISO2
     // Client/operator-owned services stay visible elsewhere (the read-only
@@ -1215,8 +1230,14 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
     if (!legIds.length) return;
     const ref = requestRefs[key] || `REQ-${key}-${Date.now()}`;
     const selectedServices = groupServices.filter((service) => legIds.includes(service.ScopeID));
-    setSendingKey(key);
+    setSendingKeys((current) => new Set(current).add(key));
 
+    // Four distinct, non-overlapping buckets so the end-of-run report can
+    // tell a coordinator exactly what happened and what (if anything) needs
+    // action: `blocked` needs no action (someone else's concurrent edit
+    // already moved the service on); `noProvider` needs provider/contact
+    // setup fixed before retrying; `failed` needs an actual retry.
+    const blocked: Service[] = [];
     const noProvider: Service[] = [];
     const failed: Service[] = [];
     const submitted: Service[] = [];
@@ -1229,27 +1250,38 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
         // AllowedTransitions-includes-Requested, but that filter runs once
         // at render time; re-check here since a concurrent edit could have
         // moved the service since the checkbox was rendered.
-        failed.push(service);
-        continue;
-      }
-      if (!service.ProviderID) {
-        noProvider.push(service);
+        blocked.push(service);
         continue;
       }
       const leg = legs.find((item) => item.LegID === service.ScopeID);
-      if (!leg) continue;
+      if (!leg) {
+        failed.push(service);
+        continue;
+      }
+
+      // Resolve the provider and its email recipients BEFORE touching
+      // status: the engine must never guess who to send an official permit
+      // request to, and must never move a service to Submission Pending
+      // (burning a status write and a junk Comm row) for a send that could
+      // never have succeeded because there's no provider, or the provider
+      // has no email channel on file.
+      const providers = getProviderList();
+      const provider = providers.find((p) => p.ProviderID === service.ProviderID) ?? null;
+      const recipients = provider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
+      if (!service.ProviderID || recipients.length === 0) {
+        noProvider.push(service);
+        continue;
+      }
 
       try {
         const pending = await saveService({ ...service, Status: 'Submission Pending' });
 
-        const providers = getProviderList();
-        const provider = providers.find((p) => p.ProviderID === service.ProviderID) ?? null;
-        const recipients = provider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
         const template = defaultTemplateFor(service.ServiceType, 'Request');
         const generated = generateEmail(
           template, pending.TripID, leg.LegID, pending.SVCID, legs, persons, '',
           trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
           trip.Client, trip.Operator, trip.SupportRef || '', pending.CountryISO2 ?? null, recipients,
+          null, ref,
         );
         const comm: Comm = {
           CommID: `COMM-${pending.SVCID}-${Date.now()}`,
@@ -1268,10 +1300,10 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
         const sent = await sendComm(comm.CommID);
 
         if (sent.Status === 'Sent') {
-          await saveService({ ...pending, Status: 'Requested', RefNumber: ref, Notes: `${pending.Notes} Included in combined ${country} permit request.`.trim() });
+          await saveService({ ...pending, Status: 'Requested', RefNumber: ref, Notes: appendBoundedNote(pending.Notes, `Included in combined ${country} permit request.`) });
           submitted.push(service);
         } else {
-          await saveService({ ...pending, Status: 'Submission Failed', Notes: `${pending.Notes} Send failed: ${sent.ErrorMessage || 'unknown error'}.`.trim() });
+          await saveService({ ...pending, Status: 'Submission Failed', Notes: appendBoundedNote(pending.Notes, `Send failed: ${sent.ErrorMessage || 'unknown error'}.`) });
           failed.push(service);
         }
       } catch (err) {
@@ -1283,22 +1315,30 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
         // successful saveService call left it, which is always one of
         // Submission Pending or the original pre-loop status, never a false
         // Requested.
+        console.error('Bulk permit submission failed for', service.SVCID, err);
         failed.push(service);
       }
     }
 
-    setSendingKey(null);
+    setSendingKeys((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
     await onSaved();
 
     const messages: string[] = [];
     if (submitted.length > 0) messages.push(`${submitted.length} sent successfully.`);
+    if (blocked.length > 0) {
+      messages.push(`${blocked.length} service(s) were skipped because their current status cannot move to Requested:\n` + blocked.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.Status})`).join('\n'));
+    }
     if (noProvider.length > 0) {
-      messages.push(`${noProvider.length} skipped (no provider assigned):\n` + noProvider.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.SVCID})`).join('\n'));
+      messages.push(`${noProvider.length} skipped (no provider assigned or no email address on file):\n` + noProvider.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.SVCID})`).join('\n'));
     }
     if (failed.length > 0) {
       messages.push(`${failed.length} failed to submit:\n` + failed.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.SVCID})`).join('\n'));
     }
-    if (noProvider.length > 0 || failed.length > 0) {
+    if (blocked.length > 0 || noProvider.length > 0 || failed.length > 0) {
       window.alert(messages.join('\n\n'));
     }
   };
@@ -1336,7 +1376,7 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
               </div>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <input className="h-9 rounded-md border bg-background px-2 text-sm" placeholder="Request reference (optional)" value={requestRefs[key] || ''} onChange={(event) => setRequestRefs({ ...requestRefs, [key]: event.target.value })} />
-                <Button size="sm" disabled={!selected.length || sendingKey === key} onClick={() => submitGroupRequest(key, country, groupServices)}><FileText className="h-4 w-4" /> {sendingKey === key ? 'SUBMITTING…' : `SUBMIT ${country} REQUEST`}</Button>
+                <Button size="sm" disabled={!selected.length || sendingKeys.has(key)} onClick={() => submitGroupRequest(key, country, groupServices)}><FileText className="h-4 w-4" /> {sendingKeys.has(key) ? 'SUBMITTING…' : `SUBMIT ${country} REQUEST`}</Button>
               </div>
             </CardContent>
           </Card>
@@ -1535,6 +1575,8 @@ function svcStatusIcon(status: string) {
     case 'Confirmed': return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
     case 'Requested': return <Clock className="h-4 w-4 text-blue-600" />;
     case 'Chasing': return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+    case 'Submission Pending': return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+    case 'Submission Failed': return <XCircle className="h-4 w-4 text-red-600" />;
     case 'Not Started': return <HelpCircle className="h-4 w-4 text-slate-400" />;
     case 'Cancelled': return <XCircle className="h-4 w-4 text-gray-400" />;
     default: return <HelpCircle className="h-4 w-4 text-slate-400" />;
