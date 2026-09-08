@@ -1184,6 +1184,7 @@ function submissionGroupKey(countryIso2: string, serviceType: string): string {
 function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { legs: Leg[]; services: Service[]; trip: Trip; persons: TripPersonView[]; onSaved: () => Promise<void> | void }) {
   const [selectedLegs, setSelectedLegs] = useState<Record<string, string[]>>({});
   const [requestRefs, setRequestRefs] = useState<Record<string, string>>({});
+  const [sendingKey, setSendingKey] = useState<string | null>(null);
   const permitServices = services.filter((service) =>
     (service.ServiceType === 'Permit' || service.ServiceType === 'Overflight') && service.CountryISO2
     // Client/operator-owned services stay visible elsewhere (the read-only
@@ -1214,6 +1215,7 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
     if (!legIds.length) return;
     const ref = requestRefs[key] || `REQ-${key}-${Date.now()}`;
     const selectedServices = groupServices.filter((service) => legIds.includes(service.ScopeID));
+    setSendingKey(key);
 
     const noProvider: Service[] = [];
     const failed: Service[] = [];
@@ -1285,6 +1287,7 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
       }
     }
 
+    setSendingKey(null);
     await onSaved();
 
     const messages: string[] = [];
@@ -1333,7 +1336,7 @@ function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { le
               </div>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <input className="h-9 rounded-md border bg-background px-2 text-sm" placeholder="Request reference (optional)" value={requestRefs[key] || ''} onChange={(event) => setRequestRefs({ ...requestRefs, [key]: event.target.value })} />
-                <Button size="sm" disabled={!selected.length} onClick={() => submitGroupRequest(key, country, groupServices)}><FileText className="h-4 w-4" /> SUBMIT {country} REQUEST</Button>
+                <Button size="sm" disabled={!selected.length || sendingKey === key} onClick={() => submitGroupRequest(key, country, groupServices)}><FileText className="h-4 w-4" /> {sendingKey === key ? 'SUBMITTING…' : `SUBMIT ${country} REQUEST`}</Button>
               </div>
             </CardContent>
           </Card>
