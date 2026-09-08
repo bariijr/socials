@@ -340,6 +340,7 @@ model Trip {
   docs         DocAttachment[]
   comms        Comm[]
   invoices     Invoice[]
+  tasks        Task[]
 
   @@index([status])
   @@index([createdZ])
@@ -370,6 +371,7 @@ model Client {
   linkedOperator Operator?        @relation(fields: [linkedOperatorId], references: [operatorId])
   trips          Trip[]
   channels       ContactChannel[]
+  tasks          Task[]
 
   @@map("clients")
 }
@@ -457,6 +459,7 @@ model Leg {
   trip           Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   assignments    LegPersonAssignment[]
   connectingStop Stop?
+  tasks          Task[]
 
   @@index([tripId])
   @@index([etdZ])
@@ -512,6 +515,7 @@ model Service {
   trip          Trip                 @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   provider      Provider?            @relation(fields: [providerId], references: [providerId])
   authorization PermitAuthorization? @relation(fields: [authorizationId], references: [id])
+  tasks         Task[]
 
   @@index([tripId])
   @@index([scopeType, scopeId])
@@ -541,6 +545,51 @@ model DismissedServiceCandidate {
   @@unique([scopeType, scopeId, serviceType, countryIso2])
   @@index([tripId])
   @@map("dismissed_service_candidates")
+}
+
+// Phase 8: Task / Attention / Escalation Engine. Follows the same
+// state-machine convention as Trip/Service (status, statusChangedAt,
+// statusChangedBy, version for optimistic locking). System-generated
+// tasks (source: 'System') carry a sourceKey the task-sync job uses
+// both to avoid double-creating a task for the same trigger and to
+// find-and-close it once the trigger resolves -- manual tasks never
+// set it. escalationTier is persisted (not derived) so escalatedAtZ
+// survives as a historical record even after the task closes; all
+// relations use onDelete: SetNull so deleting a Trip/Leg/Service/
+// Client/User never blocks on an orphaned Task reference.
+model Task {
+  id               String    @id @default(cuid())
+  title            String
+  description      String?
+  tripId           String?   @map("trip_id")
+  legId            String?   @map("leg_id")
+  serviceId        String?   @map("service_id")
+  clientId         String?   @map("client_id")
+  ownerUserId      String?   @map("owner_user_id")
+  priority         String    @default("Normal")
+  noLaterThanZ     DateTime? @map("no_later_than_z")
+  status           String    @default("Open")
+  statusChangedAt  DateTime? @map("status_changed_at")
+  statusChangedBy  String?   @map("status_changed_by")
+  version          Int       @default(1)
+  source           String    @default("Manual")
+  sourceKey        String?   @unique @map("source_key")
+  escalationTier   String?   @map("escalation_tier")
+  escalatedAtZ     DateTime? @map("escalated_at_z")
+  createdBy        String?   @map("created_by")
+  createdAtZ       DateTime  @default(now()) @map("created_at_z")
+  completedAtZ     DateTime? @map("completed_at_z")
+
+  trip    Trip?    @relation(fields: [tripId], references: [tripId], onDelete: SetNull)
+  leg     Leg?     @relation(fields: [legId], references: [legId], onDelete: SetNull)
+  service Service? @relation(fields: [serviceId], references: [svcId], onDelete: SetNull)
+  client  Client?  @relation(fields: [clientId], references: [clientId], onDelete: SetNull)
+  owner   User?    @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([ownerUserId])
+  @@index([noLaterThanZ])
+  @@map("tasks")
 }
 
 model Person {
@@ -836,6 +885,7 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
 
   ownedTrips Trip[]
+  ownedTasks Task[]
 
   @@map("users")
 }
