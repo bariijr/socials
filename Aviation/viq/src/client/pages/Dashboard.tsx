@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUpcomingLegs, getTasks, getFailedMessagesWidget, updateTask, formatZ } from '@/lib/dataStore';
+import { getUpcomingLegs, getTasks, getFailedMessagesWidget, updateTask, formatZ, ApiError } from '@/lib/dataStore';
 import type { Task, Leg, Comm } from '@/data/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +59,7 @@ export default function Dashboard() {
   const [departuresLoading, setDeparturesLoading] = useState(true);
 
   const [reloadToken, setReloadToken] = useState(0);
+  const [taskError, setTaskError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,8 +101,21 @@ export default function Dashboard() {
   }, []);
 
   async function handleCompleteTask(task: Task) {
-    await updateTask(task.TaskID, { Status: 'Complete', Version: task.Version });
-    setReloadToken((n) => n + 1);
+    setTaskError(null);
+    try {
+      await updateTask(task.TaskID, { Status: 'Complete', Version: task.Version });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setTaskError(`"${task.Title}" was already updated elsewhere — showing its current state.`);
+      } else {
+        setTaskError(`Could not complete "${task.Title}". Please try again.`);
+      }
+    } finally {
+      // Refresh regardless of outcome so the buckets reflect the task's
+      // real current status/version -- on a conflict this surfaces the
+      // change that raced ours, letting the user retry cleanly.
+      setReloadToken((n) => n + 1);
+    }
   }
 
   const activeTripsCount = new Set(
@@ -114,6 +128,10 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold tracking-tight">ACTION BOARD</h1>
         <p className="text-muted-foreground">OPERATIONS OVERVIEW</p>
       </div>
+
+      {taskError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{taskError}</div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">TRIPS WITH OPEN TASKS</p><p className="text-2xl font-bold">{activeTripsCount}</p></div><Plane className="h-6 w-6 text-blue-600" /></div></CardContent></Card>
