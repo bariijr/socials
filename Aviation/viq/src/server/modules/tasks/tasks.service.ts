@@ -77,6 +77,11 @@ export class TasksService {
 
     const statusChanging = data.status !== undefined && data.status !== before.status;
     const becomingComplete = statusChanging && data.status === 'Complete';
+    // Same fix as autoCloseResolvedTasks (commit 73fc5b28), but for the
+    // manual path: a coordinator completing/cancelling a System-sourced task
+    // by hand must also free its (unique) sourceKey, or a still-true trigger
+    // condition can never generate a replacement task for it again.
+    const becomingTerminal = statusChanging && (data.status === 'Complete' || data.status === 'Cancelled');
 
     const result = await this.prisma.task.updateMany({
       where: { id, version },
@@ -86,6 +91,7 @@ export class TasksService {
         version: { increment: 1 },
         ...(statusChanging ? { statusChangedAt: new Date(), statusChangedBy: user } : {}),
         ...(becomingComplete ? { completedAtZ: new Date() } : {}),
+        ...(becomingTerminal && before.sourceKey ? { sourceKey: null } : {}),
       },
     });
 

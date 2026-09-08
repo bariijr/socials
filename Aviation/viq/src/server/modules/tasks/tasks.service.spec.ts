@@ -85,4 +85,38 @@ describe('TasksService', () => {
     const user1 = await prisma.user.create({ data: { username: 'u1', passwordHash: 'x', role: 'Coordinator', team: 'Ops', firstName: 'A', lastName: 'B', email: 'u1@test.com' } });
     expect(await tasks.resolveUserTeam(user1.id)).toBe('Ops');
   });
+
+  it('clears sourceKey when a System task is manually completed via update()', async () => {
+    const task = await prisma.task.create({
+      data: {
+        title: 'Resubmit: Overflight for TRIP-123',
+        source: 'System',
+        sourceKey: 'resubmit:SVC-9',
+        status: 'Open',
+        createdBy: 'SYSTEM',
+        statusChangedAt: new Date(),
+        statusChangedBy: 'SYSTEM',
+      },
+    });
+    const completed = await tasks.update(task.id, { status: 'Complete', version: task.version } as any, 'coordinator-1');
+    expect(completed.status).toBe('Complete');
+    expect(completed.sourceKey).toBeNull();
+  });
+
+  it('clears sourceKey when a System task is manually cancelled via update()', async () => {
+    const task = await prisma.task.create({
+      data: {
+        title: 'Reconfirm required: Overflight for TRIP-124',
+        source: 'System',
+        sourceKey: 'reconfirm:SVC-11',
+        status: 'Open',
+        createdBy: 'SYSTEM',
+        statusChangedAt: new Date(),
+        statusChangedBy: 'SYSTEM',
+      },
+    });
+    const cancelled = await tasks.update(task.id, { status: 'Cancelled', version: task.version } as any, 'coordinator-1');
+    expect(cancelled.status).toBe('Cancelled');
+    expect(cancelled.sourceKey).toBeNull();
+  });
 });
