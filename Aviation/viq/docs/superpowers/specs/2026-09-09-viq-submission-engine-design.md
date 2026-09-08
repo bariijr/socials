@@ -84,7 +84,7 @@ export const SERVICE_TRANSITIONS: Record<string, string[]> = {
   'Submission Pending': ['Requested', 'Submission Failed'],
   'Submission Failed': ['Submission Pending', 'Not Started', 'Not Required', 'Cancelled'],
   'Requested': ['Chasing', 'Confirmed', 'Not Required', 'Cancelled'],
-  'Chasing': ['Requested', 'Confirmed', 'Not Required', 'Cancelled'],
+  'Chasing': ['Requested', 'Submission Pending', 'Confirmed', 'Not Required', 'Cancelled'],
   'Confirmed': ['Re-confirm Required', 'Cancelled'],
   'Re-confirm Required': ['Confirmed', 'Not Required', 'Cancelled'],
   'Not Required': ['Not Started'],
@@ -92,8 +92,13 @@ export const SERVICE_TRANSITIONS: Record<string, string[]> = {
 };
 ```
 
-(Every existing edge is unchanged; only `'Not Started'` gains one new edge
-and two new status rows are added.)
+(Every existing edge is unchanged except `'Chasing'`, which also gains
+`'Submission Pending'` — resubmitting from `'Chasing'` is a real re-send,
+not a first-time request, and needs the same fail-safety as the first
+`'Not Started'` send: without this edge, a `'Chasing'` service would pass
+the bulk-submit candidate filter — which checks for a valid path to
+`'Requested'`, and `'Chasing' → 'Requested'` already exists — but then
+have no valid first step to actually attempt the send through.)
 
 `'Not Started' → 'Submission Pending'` is a normal, generally-available
 edge in the graph — no role gate, no dedicated bypass method. This is
