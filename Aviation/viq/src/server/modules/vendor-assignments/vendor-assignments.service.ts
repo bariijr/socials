@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateVendorAssignmentDto } from './dto/create-vendor-assignment.dto';
@@ -45,9 +46,16 @@ export class VendorAssignmentsService {
     }
   }
 
+  private validateWindow(effectiveFrom: Date | null, effectiveUntil: Date | null) {
+    if (effectiveFrom && effectiveUntil && effectiveFrom > effectiveUntil) {
+      throw new BadRequestException('effectiveFrom must not be after effectiveUntil');
+    }
+  }
+
   async create(dto: CreateVendorAssignmentDto) {
     const prohibited = dto.prohibited ?? false;
     this.validate(dto.preferred, prohibited ? null : dto.rank ?? null, prohibited);
+    this.validateWindow(dto.effectiveFrom ? new Date(dto.effectiveFrom) : null, dto.effectiveUntil ? new Date(dto.effectiveUntil) : null);
 
     const existing = await this.prisma.vendorAssignment.findFirst({
       where: {
@@ -67,26 +75,33 @@ export class VendorAssignmentsService {
     }
 
     const user = dto.user || 'SYSTEM';
-    const row = await this.prisma.vendorAssignment.create({
-      data: {
-        providerId: dto.providerId,
-        countryIso2: dto.countryIso2,
-        icao: dto.icao,
-        serviceType: dto.serviceType,
-        permitType: dto.permitType,
-        clientId: dto.clientId,
-        preferred: dto.preferred ?? false,
-        rank: prohibited ? null : dto.rank,
-        prohibited,
-        active: dto.active ?? true,
-        effectiveFrom: dto.effectiveFrom,
-        effectiveUntil: dto.effectiveUntil,
-        notes: dto.notes,
-        createdBy: user,
-      },
-    });
-    await this.audit.log(user, 'VendorAssignment', row.id, 'Created', '', row.id);
-    return row;
+    try {
+      const row = await this.prisma.vendorAssignment.create({
+        data: {
+          providerId: dto.providerId,
+          countryIso2: dto.countryIso2,
+          icao: dto.icao,
+          serviceType: dto.serviceType,
+          permitType: dto.permitType,
+          clientId: dto.clientId,
+          preferred: dto.preferred ?? false,
+          rank: prohibited ? null : dto.rank,
+          prohibited,
+          active: dto.active ?? true,
+          effectiveFrom: dto.effectiveFrom,
+          effectiveUntil: dto.effectiveUntil,
+          notes: dto.notes,
+          createdBy: user,
+        },
+      });
+      await this.audit.log(user, 'VendorAssignment', row.id, 'Created', '', row.id);
+      return row;
+    } catch (e) {
+      if (e && typeof e === 'object' && 'code' in e && (e as Prisma.PrismaClientKnownRequestError).code === 'P2003') {
+        throw new BadRequestException('Referenced providerId, countryIso2, icao, or clientId does not exist.');
+      }
+      throw e;
+    }
   }
 
   async update(id: string, dto: UpdateVendorAssignmentDto) {
@@ -96,6 +111,10 @@ export class VendorAssignmentsService {
     const prohibited = dto.prohibited ?? before.prohibited;
     const rank = dto.rank !== undefined ? dto.rank : before.rank;
     this.validate(preferred, prohibited ? null : rank, prohibited);
+
+    const effectiveFrom = dto.effectiveFrom !== undefined ? new Date(dto.effectiveFrom) : before.effectiveFrom;
+    const effectiveUntil = dto.effectiveUntil !== undefined ? new Date(dto.effectiveUntil) : before.effectiveUntil;
+    this.validateWindow(effectiveFrom, effectiveUntil);
 
     const { user: _user, ...data } = dto;
     const row = await this.prisma.vendorAssignment.update({

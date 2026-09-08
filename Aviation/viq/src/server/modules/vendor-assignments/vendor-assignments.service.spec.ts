@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { VendorAssignmentsService } from './vendor-assignments.service';
@@ -72,5 +73,30 @@ describe('VendorAssignmentsService', () => {
     await expect(assignments.update(created.id, { prohibited: true, preferred: true } as any)).rejects.toThrow();
     const updated = await assignments.update(created.id, { prohibited: true } as any);
     expect(updated.rank).toBeNull();
+  });
+
+  it('rejects create() with effectiveFrom after effectiveUntil', async () => {
+    await expect(
+      assignments.create({
+        providerId: 'PROV-A', serviceType: 'Overflight', countryIso2: 'TZ', rank: 1,
+        effectiveFrom: '2026-06-01T00:00:00.000Z', effectiveUntil: '2026-01-01T00:00:00.000Z',
+      } as any),
+    ).rejects.toThrow();
+  });
+
+  it('rejects update() when the merged before+patch window has effectiveFrom after effectiveUntil', async () => {
+    const created = await assignments.create({
+      providerId: 'PROV-A', serviceType: 'Overflight', countryIso2: 'TZ', rank: 1,
+      effectiveFrom: '2026-01-01T00:00:00.000Z', effectiveUntil: '2026-12-31T00:00:00.000Z',
+    } as any);
+    await expect(
+      assignments.update(created.id, { effectiveFrom: '2027-06-01T00:00:00.000Z' } as any),
+    ).rejects.toThrow();
+  });
+
+  it('rejects create() with a providerId that does not exist (FK violation -> 400, not 500)', async () => {
+    await expect(
+      assignments.create({ providerId: 'PROV-DOES-NOT-EXIST', serviceType: 'Overflight', countryIso2: 'TZ', rank: 1 } as any),
+    ).rejects.toThrow(BadRequestException);
   });
 });
