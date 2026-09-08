@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList } from '@/lib/dataStore';
+import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList, getAuditForRecord } from '@/lib/dataStore';
 import type { TripSheet } from '@/lib/dataStore';
-import type { Trip, Leg, Service, ServiceResponsibility } from '@/data/types';
+import type { Trip, Leg, Service, ServiceResponsibility, AuditEntry } from '@/data/types';
 
 // Not a state machine (unlike Status) -- freely reclassifiable at any time.
 const SERVICE_RESPONSIBILITIES: ServiceResponsibility[] = ['VIQ Arrangement', 'Client Own', 'Operator Own', 'Other'];
@@ -84,6 +84,16 @@ function ServiceEditorDialog({
   const [sendToCaptain, setSendToCaptain] = useState(service.SentToCaptain || false);
   const [attachments, setAttachments] = useState<string[]>(service.Attachments || []);
   const [newAttachment, setNewAttachment] = useState('');
+  // §19: reconfirmation history, derived from the audit trail every status
+  // change already writes -- a "Confirmed" transition's own AuditEntry.User/
+  // TimestampZ IS the confirmer/moment, so no separate history table or
+  // server endpoint is needed, just a filter over what already exists.
+  const [confirmationHistory, setConfirmationHistory] = useState<AuditEntry[]>([]);
+  useEffect(() => {
+    getAuditForRecord('Service', service.SVCID).then((entries) => {
+      setConfirmationHistory(entries.filter((e) => e.Field === 'status' && e.NewValue === 'Confirmed'));
+    });
+  }, [service.SVCID]);
 
   const handleSave = () => {
     if (!canEdit) return;
@@ -220,6 +230,20 @@ function ServiceEditorDialog({
                   />
                 </div>
               </div>
+
+              {confirmationHistory.length > 0 && (
+                <div>
+                  <Label className="text-xs">Confirmation History</Label>
+                  <div className="mt-1 space-y-1 rounded-md border bg-background p-2 text-xs">
+                    {confirmationHistory.map((entry, idx) => (
+                      <div key={`${entry.TimestampZ}-${idx}`} className="flex items-center justify-between text-muted-foreground">
+                        <span>{idx === confirmationHistory.length - 1 ? 'Confirmed' : 'Reconfirmed'} by {entry.User}</span>
+                        <span>{formatZ(entry.TimestampZ)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs">Validity Until (UTC)</Label>

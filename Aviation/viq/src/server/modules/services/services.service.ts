@@ -75,7 +75,7 @@ export class ServicesService {
     return withServiceTransitions(svc);
   }
 
-  async update(svcId: string, dto: UpdateServiceDto) {
+  async update(svcId: string, dto: UpdateServiceDto, currentUsername?: string) {
     const before = await this.prisma.service.findUnique({ where: { svcId } });
     if (!before) throw new NotFoundException(`Service ${svcId} not found`);
     const user = dto.user || 'SYSTEM';
@@ -87,6 +87,15 @@ export class ServicesService {
 
     const requiredByZ = data.requiredByZ ?? before.requiredByZ.toISOString();
     const statusChanging = data.status !== undefined && data.status !== before.status;
+    // The moment a service actually transitions to Confirmed is the moment
+    // of truth for who confirmed it -- stamp from the server-verified JWT
+    // identity (never the client-supplied dto.user field, same reasoning
+    // as Trip reopening and permit-authorization verify/revoke), and let
+    // it win over anything the client happened to also send in this same
+    // request. A later, separate edit (status already Confirmed, not
+    // transitioning again) is unaffected and can still freely correct
+    // confirmedBy/confirmedAtZ by hand.
+    const becomingConfirmed = statusChanging && data.status === 'Confirmed';
     const result = await this.prisma.service.updateMany({
       where: { svcId, version },
       data: {
@@ -95,6 +104,7 @@ export class ServicesService {
         urgency: computeUrgency(requiredByZ),
         version: { increment: 1 },
         ...(statusChanging ? { statusChangedAt: new Date(), statusChangedBy: user } : {}),
+        ...(becomingConfirmed ? { confirmedBy: currentUsername ?? user, confirmedAtZ: new Date() } : {}),
       } as Prisma.ServiceUncheckedUpdateInput,
     });
 
@@ -189,6 +199,8 @@ export class ServicesService {
         version: { increment: 1 },
         statusChangedAt: new Date(),
         statusChangedBy: user,
+        confirmedBy: user,
+        confirmedAtZ: new Date(),
       },
     });
 
@@ -397,6 +409,8 @@ export class ServicesService {
         refNumber: auth?.referenceNumber ?? '',
         validityZ: auth?.validUntil,
         authorizationId: auth?.id,
+        confirmedBy: auth ? user : undefined,
+        confirmedAtZ: auth ? new Date() : undefined,
       },
     });
     await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);
@@ -573,6 +587,8 @@ export class ServicesService {
           refNumber: auth?.referenceNumber ?? '',
           validityZ: auth?.validUntil,
           authorizationId: auth?.id,
+          confirmedBy: auth ? user : undefined,
+          confirmedAtZ: auth ? new Date() : undefined,
         },
       });
       await this.audit.log(user, 'Service', svc.svcId, 'Created', '', svc.svcId);

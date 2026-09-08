@@ -3,6 +3,7 @@ import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { LinkAuthorizationDto } from './dto/link-authorization.dto';
+import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
 
 @Controller('services')
 export class ServicesController {
@@ -63,8 +64,8 @@ export class ServicesController {
   }
 
   @Patch(':svcId')
-  update(@Param('svcId') svcId: string, @Body() dto: UpdateServiceDto) {
-    return this.services.update(svcId, dto);
+  update(@Param('svcId') svcId: string, @Body() dto: UpdateServiceDto, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.services.update(svcId, dto, currentUser?.username);
   }
 
   @Delete(':svcId')
