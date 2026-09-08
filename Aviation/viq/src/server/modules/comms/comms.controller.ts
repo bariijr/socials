@@ -12,6 +12,12 @@ export class CommsController {
     return this.comms.findAll(tripId);
   }
 
+  @Get('failed')
+  failed(@Query('limit') limit?: string, @Query('search') search?: string) {
+    const limitNum = Math.min(200, Math.max(1, Number(limit) || 20));
+    return this.comms.failed(limitNum, search);
+  }
+
   @Get(':commId')
   findOne(@Param('commId') commId: string) {
     return this.comms.findOne(commId);

@@ -20,6 +20,24 @@ export class CommsService {
     });
   }
 
+  async failed(limit: number, search?: string) {
+    const where: Record<string, unknown> = { status: 'Failed' };
+    if (search) {
+      const q = search.trim();
+      (where as any).OR = [
+        { tripId: { contains: q, mode: 'insensitive' } },
+        { subject: { contains: q, mode: 'insensitive' } },
+        { to: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return this.prisma.comm.findMany({
+      where,
+      orderBy: { timestampZ: 'desc' },
+      take: limit,
+      include: { trip: { select: { tripId: true, registration: true } } },
+    });
+  }
+
   async findOne(commId: string) {
     const comm = await this.prisma.comm.findUnique({ where: { commId } });
     if (!comm) throw new NotFoundException(`Comm ${commId} not found`);
