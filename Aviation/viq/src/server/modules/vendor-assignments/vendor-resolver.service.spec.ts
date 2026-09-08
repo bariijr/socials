@@ -163,6 +163,26 @@ describe('VendorResolverService', () => {
     expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
   });
 
+  it('resolves against an explicitly pinned asOfZ (historical re-derivation), not the current time', async () => {
+    const pinned = new Date('2025-06-15T00:00:00Z');
+    await makeAssignment({
+      providerId: 'PROV-A', countryIso2: 'TZ', rank: 1,
+      effectiveFrom: new Date('2025-01-01'), effectiveUntil: new Date('2025-12-31'),
+    });
+    const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight', asOfZ: pinned });
+    expect(result.status).toBe('RESOLVED');
+    expect(result.selectedVendorId).toBe('PROV-A');
+  });
+
+  it('excludes an assignment whose window covers "now" but not the pinned asOfZ date', async () => {
+    const pinned = new Date('2025-06-15T00:00:00Z');
+    // Open-ended from 2026-01-01 -- covers the real "now" this test runs
+    // under, but does not cover the pinned historical date.
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', rank: 1, effectiveFrom: new Date('2026-01-01') });
+    const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight', asOfZ: pinned });
+    expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
+  });
+
   it('selectionSource for a plain global-only row is GLOBAL_DEFAULT', async () => {
     await makeAssignment({ providerId: 'PROV-A', rank: 1 });
     const result = await resolver.resolve({ serviceType: 'Overflight' });

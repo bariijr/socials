@@ -51,6 +51,13 @@ export class VendorResolverService {
       }),
     ]);
 
+    // Prohibition is an absolute, provider-wide ban applied here, before
+    // specificity tiering (selectTopTier) even runs -- a prohibition row
+    // at any tier removes that provider from consideration at every tier,
+    // it does not merely lose to a more-specific non-prohibited row. This
+    // is a deliberate design choice (reviewed), not tier-aware; do not
+    // "fix" it to only apply within the matching tier without revisiting
+    // that decision first.
     const bannedProviderIds = new Set(prohibitions.map((p) => p.providerId));
     const eligible = candidates.filter(
       (c) =>
@@ -60,13 +67,23 @@ export class VendorResolverService {
     );
 
     if (eligible.length === 0) {
-      return {
-        status: 'NO_ELIGIBLE_VENDOR',
-        alternatives: [],
-        reason: bannedProviderIds.size > 0
-          ? 'All otherwise-eligible vendors are prohibited for this client/context'
-          : 'No active vendor assignment matches this context',
-      };
+      // Three distinguishable cases, not two: (1) no assignment row ever
+      // matched this context at all; (2) every matching row's provider is
+      // specifically prohibited (a genuinely unrelated prohibition row for
+      // a provider that was never a candidate here must NOT trigger this --
+      // that's case 1); (3) rows matched but were filtered out on
+      // eligibility grounds unrelated to prohibition (inactive contract or
+      // a serviceTypes mismatch).
+      const allCandidatesProhibited = candidates.length > 0 && candidates.every((c) => bannedProviderIds.has(c.providerId));
+      let reason: string;
+      if (candidates.length === 0) {
+        reason = 'No active vendor assignment matches this context';
+      } else if (allCandidatesProhibited) {
+        reason = 'All otherwise-eligible vendors are prohibited for this client/context';
+      } else {
+        reason = 'Vendor assignments matched this context, but no eligible provider survived filtering (inactive contract or service type mismatch)';
+      }
+      return { status: 'NO_ELIGIBLE_VENDOR', alternatives: [], reason };
     }
 
     const topTier = this.selectTopTier(eligible);
@@ -78,13 +95,14 @@ export class VendorResolverService {
 
     if (winners.length === 1) {
       const w = winners[0];
+      const selectionSource = this.describeSelectionSource(w);
       return {
         status: 'RESOLVED',
         selectedVendorId: w.providerId,
-        selectionSource: this.describeSelectionSource(w),
+        selectionSource,
         matchedRule: { id: w.id, rank: w.rank, preferred: w.preferred },
         alternatives: pool.filter((r) => r.id !== w.id).map((r) => ({ vendorId: r.providerId, rank: r.rank })),
-        reason: `${this.describeSelectionSource(w)}: rank ${w.rank}${w.preferred ? ', preferred' : ''}`,
+        reason: `${selectionSource}: rank ${w.rank}${w.preferred ? ', preferred' : ''}`,
       };
     }
 
