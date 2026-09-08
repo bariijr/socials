@@ -6,6 +6,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { isValidTaskTransition, withTaskTransitions } from '../../common/taskStatusTransitions';
 
 const OPEN_STATUSES = ['Open', 'In Progress', 'Waiting'];
+const DEFAULT_TASK_LIMIT = 50;
 
 export interface TaskListFilter {
   scope?: 'mine' | 'team' | 'unassigned' | 'escalated';
@@ -17,6 +18,7 @@ export interface TaskListFilter {
   // record of everything ever completed. Set true for a future history view;
   // nothing currently sets this.
   includeClosed?: boolean;
+  limit?: number;
 }
 
 @Injectable()
@@ -48,6 +50,7 @@ export class TasksService {
     const tasks = await this.prisma.task.findMany({
       where,
       orderBy: [{ noLaterThanZ: 'asc' }, { createdAtZ: 'desc' }],
+      take: filter.limit ?? DEFAULT_TASK_LIMIT,
     });
     return tasks.map(withTaskTransitions);
   }

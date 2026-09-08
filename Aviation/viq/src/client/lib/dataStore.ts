@@ -764,10 +764,11 @@ export async function deleteService(svcId: string, user = currentUser()): Promis
 
 // ─── Task CRUD ──────────────────────────────────────────────────────────────
 
-export async function getTasks(params: { scope?: 'mine' | 'team' | 'unassigned' | 'escalated'; tripId?: string } = {}): Promise<Task[]> {
+export async function getTasks(params: { scope?: 'mine' | 'team' | 'unassigned' | 'escalated'; tripId?: string; limit?: number } = {}): Promise<Task[]> {
   const search = new URLSearchParams();
   if (params.scope) search.set('scope', params.scope);
   if (params.tripId) search.set('tripId', params.tripId);
+  if (params.limit) search.set('limit', String(params.limit));
   const qs = search.toString();
   const rows = await apiJson<any[]>(`/tasks${qs ? `?${qs}` : ''}`);
   return rows.map(mapTaskFromApi);

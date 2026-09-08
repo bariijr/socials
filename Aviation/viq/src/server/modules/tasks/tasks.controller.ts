@@ -12,17 +12,20 @@ export class TasksController {
   async findAll(
     @Query('scope') scope: 'mine' | 'team' | 'unassigned' | 'escalated' | undefined,
     @Query('tripId') tripId: string | undefined,
+    @Query('limit') limit: string | undefined,
     @CurrentUser() currentUser?: CurrentUserPayload,
   ) {
     let currentUserTeam: string | undefined;
     if (scope === 'team' && currentUser?.sub) {
       currentUserTeam = await this.tasks.resolveUserTeam(currentUser.sub);
     }
+    const limitNum = limit ? Math.min(200, Math.max(1, Number(limit) || 50)) : undefined;
     return this.tasks.findAll({
       scope,
       tripId,
       currentUserId: currentUser?.sub,
       currentUserTeam,
+      limit: limitNum,
     });
   }
 

@@ -64,10 +64,10 @@ export default function Dashboard() {
     let cancelled = false;
     setTasksLoading(true);
     Promise.all([
-      getTasks({ scope: 'mine' }),
-      getTasks({ scope: 'team' }),
-      getTasks({ scope: 'unassigned' }),
-      getTasks({ scope: 'escalated' }),
+      getTasks({ scope: 'mine', limit: WIDGET_LIMIT }),
+      getTasks({ scope: 'team', limit: WIDGET_LIMIT }),
+      getTasks({ scope: 'unassigned', limit: WIDGET_LIMIT }),
+      getTasks({ scope: 'escalated', limit: WIDGET_LIMIT }),
     ])
       .then(([mine, team, unassigned, escalated]) => {
         if (cancelled) return;
