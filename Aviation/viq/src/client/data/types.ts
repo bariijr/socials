@@ -16,7 +16,9 @@ export type ServiceStatus =
   | 'Chasing'
   | 'Confirmed'
   | 'Re-confirm Required'
-  | 'Cancelled';
+  | 'Cancelled'
+  | 'Submission Pending'
+  | 'Submission Failed';
 
 export type ServiceResponsibility = 'VIQ Arrangement' | 'Client Own' | 'Operator Own' | 'Other';
 

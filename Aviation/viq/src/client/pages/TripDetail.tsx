@@ -1181,7 +1181,7 @@ function submissionGroupKey(countryIso2: string, serviceType: string): string {
   return `${countryIso2}-${serviceType}`;
 }
 
-function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; services: Service[]; onSaved: () => Promise<void> | void }) {
+function PermitSubmissionGroups({ legs, services, trip, persons, onSaved }: { legs: Leg[]; services: Service[]; trip: Trip; persons: TripPersonView[]; onSaved: () => Promise<void> | void }) {
   const [selectedLegs, setSelectedLegs] = useState<Record<string, string[]>>({});
   const [requestRefs, setRequestRefs] = useState<Record<string, string>>({});
   const permitServices = services.filter((service) =>
@@ -1213,26 +1213,90 @@ function PermitSubmissionGroups({ legs, services, onSaved }: { legs: Leg[]; serv
     const legIds = selectedLegs[key] || [];
     if (!legIds.length) return;
     const ref = requestRefs[key] || `REQ-${key}-${Date.now()}`;
-    // The server enforces the status graph, so a service that can't legally
-    // reach 'Requested' (already Confirmed, Not Required, Cancelled, …) would
-    // 400 and abort the rest of the batch. Each service already carries its
-    // own AllowedTransitions from the API — use that rather than duplicating
-    // the transition graph client-side, and skip anything it rules out.
-    const skipped: Service[] = [];
-    for (const service of groupServices.filter((service) => legIds.includes(service.ScopeID))) {
+    const selectedServices = groupServices.filter((service) => legIds.includes(service.ScopeID));
+
+    const noProvider: Service[] = [];
+    const failed: Service[] = [];
+    const submitted: Service[] = [];
+
+    for (const service of selectedServices) {
       if (service.Status === 'Requested') continue;
-      if (!(service.AllowedTransitions ?? []).includes('Requested')) {
-        skipped.push(service);
+      if (!(service.AllowedTransitions ?? []).includes('Submission Pending')) {
+        // Already Confirmed / Cancelled / Not Required / etc -- nothing to
+        // (re-)submit. This candidate list is already filtered upstream to
+        // AllowedTransitions-includes-Requested, but that filter runs once
+        // at render time; re-check here since a concurrent edit could have
+        // moved the service since the checkbox was rendered.
+        failed.push(service);
         continue;
       }
-      await saveService({ ...service, Status: 'Requested', RefNumber: ref, Notes: `${service.Notes} Included in combined ${country} permit request.`.trim() });
+      if (!service.ProviderID) {
+        noProvider.push(service);
+        continue;
+      }
+      const leg = legs.find((item) => item.LegID === service.ScopeID);
+      if (!leg) continue;
+
+      try {
+        const pending = await saveService({ ...service, Status: 'Submission Pending' });
+
+        const providers = getProviderList();
+        const provider = providers.find((p) => p.ProviderID === service.ProviderID) ?? null;
+        const recipients = provider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
+        const template = defaultTemplateFor(service.ServiceType, 'Request');
+        const generated = generateEmail(
+          template, pending.TripID, leg.LegID, pending.SVCID, legs, persons, '',
+          trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
+          trip.Client, trip.Operator, trip.SupportRef || '', pending.CountryISO2 ?? null, recipients,
+        );
+        const comm: Comm = {
+          CommID: `COMM-${pending.SVCID}-${Date.now()}`,
+          Direction: 'OUTBOUND',
+          TripID: pending.TripID,
+          SVCID: pending.SVCID,
+          Token: pending.SVCID,
+          From: 'operations@viq.local',
+          To: recipients.join(', '),
+          Subject: generated.subject,
+          Body: generated.body,
+          TimestampZ: new Date().toISOString(),
+          Status: 'Draft',
+        };
+        await saveComm(comm);
+        const sent = await sendComm(comm.CommID);
+
+        if (sent.Status === 'Sent') {
+          await saveService({ ...pending, Status: 'Requested', RefNumber: ref, Notes: `${pending.Notes} Included in combined ${country} permit request.`.trim() });
+          submitted.push(service);
+        } else {
+          await saveService({ ...pending, Status: 'Submission Failed', Notes: `${pending.Notes} Send failed: ${sent.ErrorMessage || 'unknown error'}.`.trim() });
+          failed.push(service);
+        }
+      } catch (err) {
+        // The service may or may not have reached Submission Pending before
+        // the exception -- re-fetch is unnecessary here since saveService's
+        // own conflict handling already surfaces stale-version errors
+        // distinctly; any other exception (network failure generating or
+        // sending the comm) leaves the service at whatever state the last
+        // successful saveService call left it, which is always one of
+        // Submission Pending or the original pre-loop status, never a false
+        // Requested.
+        failed.push(service);
+      }
     }
+
     await onSaved();
-    if (skipped.length > 0) {
-      window.alert(
-        `${skipped.length} service(s) were skipped because their current status cannot move to Requested:\n` +
-        skipped.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.Status})`).join('\n'),
-      );
+
+    const messages: string[] = [];
+    if (submitted.length > 0) messages.push(`${submitted.length} sent successfully.`);
+    if (noProvider.length > 0) {
+      messages.push(`${noProvider.length} skipped (no provider assigned):\n` + noProvider.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.SVCID})`).join('\n'));
+    }
+    if (failed.length > 0) {
+      messages.push(`${failed.length} failed to submit:\n` + failed.map((s) => `• ${serviceLabel(s.ServiceType)} (${s.SVCID})`).join('\n'));
+    }
+    if (noProvider.length > 0 || failed.length > 0) {
+      window.alert(messages.join('\n\n'));
     }
   };
 
@@ -1416,6 +1480,7 @@ function bucketForService(s: Service): AttentionBucket | null {
   if (s.Status === 'Not Required' || s.Status === 'Cancelled') return null;
   if (s.Status === 'Confirmed') return 'confirmed';
   if (s.Status === 'Re-confirm Required') return 'reconfirm';
+  if (s.Status === 'Submission Failed') return 'action';
   if (s.Urgency === 'URGENT' || s.Urgency === 'BREACH' || s.Status === 'Not Started') return 'action';
   return 'waiting';
 }
@@ -2053,6 +2118,8 @@ export default function TripDetail() {
           <PermitSubmissionGroups
             legs={legs}
             services={services}
+            trip={trip}
+            persons={persons}
             onSaved={reload}
           />
           <PermitRevisionGroups

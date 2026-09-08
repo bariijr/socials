@@ -24,6 +24,8 @@ const SERVICE_STATUS_COLORS: Record<string, string> = {
   'Cancelled': 'bg-gray-100 text-gray-500',
   'Re-confirm Required': 'bg-rose-100 text-rose-700',
   'Not Required': 'bg-slate-100 text-slate-600',
+  'Submission Pending': 'bg-amber-100 text-amber-700',
+  'Submission Failed': 'bg-red-100 text-red-700',
 };
 
 export function StatusBadge({ status, entityType, className }: { status: string; entityType: 'trip' | 'service'; className?: string }) {
