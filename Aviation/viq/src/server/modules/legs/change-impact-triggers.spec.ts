@@ -102,6 +102,34 @@ describe('Change impact: leg-scoped triggers (schedule + route)', () => {
     expect(svc!.notes).toContain('route changed');
   });
 
+  it('flags a Confirmed service when the effective overflown countries change via Avoid/Include FIRs, even with no ICAO change', async () => {
+    const leg = await legs.create({
+      legId: 'TEST-CI-1-LEG-5', tripId: 'TEST-CI-1', seq: 1,
+      depIcao: 'HTDA', arrIcao: 'FALA',
+      etdZ: '2026-10-01T06:00:00.000Z', etaZ: '2026-10-01T09:00:00.000Z',
+      countriesOverflown: ['KE'], generateServices: false,
+    });
+    await prisma.service.create({
+      data: {
+        svcId: 'TEST-CI-1-LEG-5-OVF-KE', tripId: 'TEST-CI-1', scopeType: 'SEGMENT', scopeId: leg.legId,
+        serviceType: 'Overflight', status: 'Confirmed', countryIso2: 'KE',
+        basedOnEtdZ: new Date('2026-10-01T06:00:00.000Z'), requiredByZ: new Date('2026-10-01T04:00:00.000Z'),
+      },
+    });
+
+    // Mirrors the real client (TripDetail.tsx via dataStore.ts's mapLegToApi),
+    // which always sends the already-recomputed countriesOverflown alongside
+    // avoidFirs/includeFirs rather than leaving it for the server to
+    // recompute -- so `reconcileOverflight` never becomes true on an edit
+    // shaped like this, and the route-change check must compare the
+    // persisted countriesOverflown unconditionally, not gated on it.
+    await legs.update(leg.legId, { avoidFirs: ['KE'], countriesOverflown: [], version: leg.version });
+
+    const svc = await prisma.service.findUnique({ where: { svcId: 'TEST-CI-1-LEG-5-OVF-KE' } });
+    expect(svc!.status).toBe('Re-confirm Required');
+    expect(svc!.notes).toContain('overflown countries changed');
+  });
+
   it('does not flag a service that is not Confirmed when the leg changes', async () => {
     const leg = await legs.create({
       legId: 'TEST-CI-1-LEG-4', tripId: 'TEST-CI-1', seq: 1,

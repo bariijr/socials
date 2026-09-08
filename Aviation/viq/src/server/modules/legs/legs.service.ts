@@ -290,10 +290,13 @@ export class LegsService {
     const icaoChanged = (dto.depIcao !== undefined && before.depIcao !== leg.depIcao)
       || (dto.arrIcao !== undefined && before.arrIcao !== leg.arrIcao);
     const routeChanged = icaoChanged
-      || (reconcileOverflight && JSON.stringify(before.countriesOverflown) !== JSON.stringify(leg.countriesOverflown));
+      || JSON.stringify(before.countriesOverflown) !== JSON.stringify(leg.countriesOverflown);
     if (routeChanged) {
-      const reason = icaoChanged
-        ? `route changed ${before.depIcao} → ${leg.depIcao}, ${before.arrIcao} → ${leg.arrIcao}`
+      const changedSegments: string[] = [];
+      if (dto.depIcao !== undefined && before.depIcao !== leg.depIcao) changedSegments.push(`dep ${before.depIcao} → ${leg.depIcao}`);
+      if (dto.arrIcao !== undefined && before.arrIcao !== leg.arrIcao) changedSegments.push(`arr ${before.arrIcao} → ${leg.arrIcao}`);
+      const reason = changedSegments.length > 0
+        ? `route changed: ${changedSegments.join(', ')}`
         : 'overflown countries changed';
       await this.services.flagConfirmedServices({ scopeId: legId }, reason, user);
     }
