@@ -53,7 +53,10 @@ export class VendorResolverService {
 
     const bannedProviderIds = new Set(prohibitions.map((p) => p.providerId));
     const eligible = candidates.filter(
-      (c) => !bannedProviderIds.has(c.providerId) && c.provider.contractActive,
+      (c) =>
+        !bannedProviderIds.has(c.providerId) &&
+        c.provider.contractActive &&
+        c.provider.serviceTypes.includes(ctx.serviceType),
     );
 
     if (eligible.length === 0) {

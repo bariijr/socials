@@ -137,6 +137,21 @@ describe('VendorResolverService', () => {
     expect(result.selectedVendorId).toBe('PROV-B');
   });
 
+  it('a provider not offering the requested service type is excluded even with an otherwise-winning assignment row', async () => {
+    await prisma.provider.update({ where: { providerId: 'PROV-A' }, data: { serviceTypes: ['Ground Handling'] } });
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', serviceType: 'Overflight', rank: 1 });
+    await makeAssignment({ providerId: 'PROV-B', countryIso2: 'TZ', serviceType: 'Overflight', rank: 2 });
+    const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight' });
+    expect(result.selectedVendorId).toBe('PROV-B');
+  });
+
+  it('returns NO_ELIGIBLE_VENDOR when the only assignment row belongs to a provider that does not offer the service type', async () => {
+    await prisma.provider.update({ where: { providerId: 'PROV-A' }, data: { serviceTypes: ['Ground Handling'] } });
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', serviceType: 'Overflight', rank: 1 });
+    const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight' });
+    expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
+  });
+
   it('returns NO_ELIGIBLE_VENDOR when no assignment matches', async () => {
     const result = await resolver.resolve({ countryIso2: 'KE', serviceType: 'Overflight' });
     expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
