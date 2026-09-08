@@ -3,6 +3,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 const AMBER_HOURS_BEFORE_NLT = 2;
 const DEADLINE_APPROACHING_WINDOW_HOURS = 24;
+// Lower bound for generateDeadlineTasks: without this, any non-terminal
+// service with a requiredByZ in the past -- including ones from trips that
+// finished months ago -- generates a `deadline:` task that's instantly Red
+// and never auto-closes (its status never changes). Bounding the query to
+// "requiredByZ within the last 24h" keeps this generator limited to genuine
+// near-term/just-breached deadlines.
+const DEADLINE_LOOKBACK_GRACE_HOURS = 24;
 
 interface SyncResult {
   created: number;
@@ -95,10 +102,12 @@ export class TaskSyncService {
 
   private async generateDeadlineTasks(): Promise<number> {
     const windowEnd = new Date(Date.now() + DEADLINE_APPROACHING_WINDOW_HOURS * 3600_000);
+    const windowStart = new Date(Date.now() - DEADLINE_LOOKBACK_GRACE_HOURS * 3600_000);
     const services = await this.prisma.service.findMany({
       where: {
-        requiredByZ: { lte: windowEnd },
+        requiredByZ: { lte: windowEnd, gte: windowStart },
         status: { notIn: ['Confirmed', 'Requested', 'Not Required', 'Cancelled'] },
+        trip: { status: { notIn: ['Complete', 'Cancelled'] } },
       },
       include: { trip: { select: { ownerUserId: true } } },
     });

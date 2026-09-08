@@ -143,6 +143,32 @@ describe('TaskSyncService', () => {
     expect(openTasks[0].id).not.toBe(firstTask!.id);
   });
 
+  it('does not create a deadline task for a service whose requiredByZ is far in the past (stale historical backlog)', async () => {
+    await makeService('SVC-11', 'Not Started', new Date(Date.now() - 30 * 24 * 3600_000));
+    const result = await sync.runSync();
+    expect(result.created).toBe(0);
+    const task = await prisma.task.findUnique({ where: { sourceKey: 'deadline:SVC-11' } });
+    expect(task).toBeNull();
+  });
+
+  it('does not create a deadline task for a service on a Complete trip', async () => {
+    await prisma.trip.update({ where: { tripId: 'TEST-SYNC-1' }, data: { status: 'Complete' } });
+    await makeService('SVC-12', 'Not Started', new Date(Date.now() + 12 * 3600_000));
+    const result = await sync.runSync();
+    expect(result.created).toBe(0);
+    const task = await prisma.task.findUnique({ where: { sourceKey: 'deadline:SVC-12' } });
+    expect(task).toBeNull();
+  });
+
+  it('does not create a deadline task for a service on a Cancelled trip', async () => {
+    await prisma.trip.update({ where: { tripId: 'TEST-SYNC-1' }, data: { status: 'Cancelled' } });
+    await makeService('SVC-13', 'Not Started', new Date(Date.now() + 12 * 3600_000));
+    const result = await sync.runSync();
+    expect(result.created).toBe(0);
+    const task = await prisma.task.findUnique({ where: { sourceKey: 'deadline:SVC-13' } });
+    expect(task).toBeNull();
+  });
+
   it('does not escalate a task with no noLaterThanZ', async () => {
     await makeService('SVC-9', 'Not Started', new Date(Date.now() + 72 * 3600_000));
     // SVC-9 falls outside the 24h deadline window, so no task exists at all
