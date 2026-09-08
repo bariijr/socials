@@ -138,9 +138,15 @@ export class VendorResolverService {
     return 0;
   }
 
+  // _DEFAULT means "a plain geography-only fallback rule, nothing more
+  // specific layered on it"; _OVERRIDE means "this row deliberately narrows
+  // beyond plain geography" (client-specific or permit-type-specific). The
+  // geography component (COUNTRY/AIRPORT/GLOBAL) alone never triggers
+  // _OVERRIDE -- only clientId or permitType does.
   private describeSelectionSource(row: { clientId: string | null; icao: string | null; countryIso2: string | null; permitType: string | null }): string {
     const geo = row.icao ? 'AIRPORT' : row.countryIso2 ? 'COUNTRY' : 'GLOBAL';
     const parts = [row.clientId ? 'CLIENT' : null, geo, row.permitType ? 'PERMIT_TYPE' : null].filter(Boolean);
-    return parts.join('_') + (row.clientId || row.icao || row.countryIso2 || row.permitType ? '_OVERRIDE' : '_DEFAULT');
+    const isOverride = Boolean(row.clientId || row.permitType);
+    return parts.join('_') + (isOverride ? '_OVERRIDE' : '_DEFAULT');
   }
 }

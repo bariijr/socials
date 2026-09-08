@@ -162,4 +162,30 @@ describe('VendorResolverService', () => {
     const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight' });
     expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
   });
+
+  it('selectionSource for a plain global-only row is GLOBAL_DEFAULT', async () => {
+    await makeAssignment({ providerId: 'PROV-A', rank: 1 });
+    const result = await resolver.resolve({ serviceType: 'Overflight' });
+    expect(result.selectionSource).toBe('GLOBAL_DEFAULT');
+  });
+
+  it('selectionSource for a plain country-only row is COUNTRY_DEFAULT', async () => {
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', rank: 1 });
+    const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight' });
+    expect(result.selectionSource).toBe('COUNTRY_DEFAULT');
+  });
+
+  it('selectionSource for a plain airport-only row is AIRPORT_DEFAULT', async () => {
+    await makeAssignment({ providerId: 'PROV-A', icao: 'HTDA', rank: 1 });
+    const result = await resolver.resolve({ icao: 'HTDA', serviceType: 'Overflight' });
+    expect(result.selectionSource).toBe('AIRPORT_DEFAULT');
+  });
+
+  it('selectionSource for a client+country row contains CLIENT and ends in _OVERRIDE', async () => {
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', clientId: 'CLI-1', rank: 1 });
+    const result = await resolver.resolve({ countryIso2: 'TZ', serviceType: 'Overflight', clientId: 'CLI-1' });
+    expect(result.selectionSource).toContain('CLIENT');
+    expect(result.selectionSource).toMatch(/_OVERRIDE$/);
+    expect(result.selectionSource).toBe('CLIENT_COUNTRY_OVERRIDE');
+  });
 });
