@@ -765,6 +765,10 @@ export async function deleteService(svcId: string, user = currentUser()): Promis
   await apiJson(`/services/${svcId}?user=${encodeURIComponent(user)}`, { method: 'DELETE' });
 }
 
+export function filterVendorTies(services: Service[]): Service[] {
+  return services.filter((s) => s.VendorSelectionSource === 'CHOICE_REQUIRED');
+}
+
 // ─── Task CRUD ──────────────────────────────────────────────────────────────
 
 export async function getTasks(params: { scope?: 'mine' | 'team' | 'unassigned' | 'escalated'; tripId?: string; limit?: number } = {}): Promise<Task[]> {

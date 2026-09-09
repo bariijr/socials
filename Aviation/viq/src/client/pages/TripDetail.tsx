@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   getTripSheet, getAirport, getAirportList, getProvider, getProviderList, getAircraft, getCountry,
   getCountryList, refICaoRules, getCallSign, getAircraftList, getAircraftType, getOperator, formatZ, urgencyColor, saveLeg, saveService, deleteService,
-  saveTrip, getAudit, getInvoices, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getServiceTypes, getLegPurposes,
+  saveTrip, getAudit, getInvoices, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getServiceTypes, getLegPurposes, filterVendorTies,
   uploadDoc, downloadDocFile, deleteDoc, runDocOcr,
   getPersonRoster, assignPersonToLeg, assignPersonToAllLegs, unassignPersonFromLeg,
   getClientList, saveClient, getUserDirectory, getPreferredContact,
@@ -37,6 +37,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { ComposeDrawer } from '@/components/ComposeDrawer';
 import { DocVerifyDialog } from '@/components/DocVerifyDialog';
 import { ConflictDialog } from '@/components/ConflictDialog';
+import { VendorTieResolutionDialog } from '@/components/VendorTieResolutionDialog';
 import { TransitionMenu } from '@/components/TransitionMenu';
 import { StatusTimeline } from '@/components/StatusTimeline';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -283,6 +284,8 @@ function LegEditor({
   // rather than letting them silently appear with no acknowledgment.
   const [suggested, setSuggested] = useState<Service[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [vendorTies, setVendorTies] = useState<Service[]>([]);
+  const [vendorTiesOpen, setVendorTiesOpen] = useState(false);
   const [keptSuggestionIds, setKeptSuggestionIds] = useState<Set<string>>(new Set());
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
@@ -434,6 +437,11 @@ function LegEditor({
         generateArrivalServices(updated.LegID),
       ]);
       const newlySuggested = [...overflightCreated, ...arrivalCreated];
+      const ties = filterVendorTies(newlySuggested);
+      if (ties.length > 0) {
+        setVendorTies(ties);
+        setVendorTiesOpen(true);
+      }
       setDraft(saved);
       setEditing(false);
       await onSaved();
@@ -858,6 +866,7 @@ function LegEditor({
           onReload={reloadAfterConflict}
         />
       )}
+      <VendorTieResolutionDialog open={vendorTiesOpen} onClose={() => setVendorTiesOpen(false)} services={vendorTies} />
     </div>
   );
 }

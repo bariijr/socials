@@ -8,9 +8,9 @@ import {
   getAircraftType, getAircraftList, saveAircraft, normalizeRegistration,
   computeCountriesOverflown, generateOverflightServices, generateArrivalServices,
   getAirport, getCountry, getClientList, saveClient, getUserDirectory,
-  getPreferredContact, setPreferredChannelValue,
+  getPreferredContact, setPreferredChannelValue, filterVendorTies,
 } from '@/lib/dataStore';
-import type { Trip, Leg, Stop, Person, TripStatus, ServiceScope, ServiceType, PersonRole } from '@/data/types';
+import type { Trip, Leg, Stop, Person, TripStatus, ServiceScope, ServiceType, PersonRole, Service } from '@/data/types';
 import type { Client, UserDirectoryEntry } from '@/lib/dataStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import {
 import {
   Plane, Plus, Trash2, Users, ChevronRight, CheckCircle2, ArrowLeft, Save
 } from 'lucide-react';
+import { VendorTieResolutionDialog } from '@/components/VendorTieResolutionDialog';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -406,6 +407,8 @@ export default function NewTripWizard() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [vendorTies, setVendorTies] = useState<Service[]>([]);
+  const [vendorTiesOpen, setVendorTiesOpen] = useState(false);
 
   const canProceed = useMemo(() => {
     if (step === 0) return client && operator && icaoType && registration && owner;
@@ -578,11 +581,14 @@ export default function NewTripWizard() {
     await saveTrip(trip);
 
     // Save legs, then auto-derive overflight + landing/ground-handling services
+    const allTies: Service[] = [];
     for (const [idx, l] of legs.entries()) {
       await saveLeg(l as Leg);
-      await generateOverflightServices((l as Leg).LegID);
-      await generateArrivalServices((l as Leg).LegID, { departureGroundHandling: depGHRequested[idx] });
+      const overflight = await generateOverflightServices((l as Leg).LegID);
+      const arrival = await generateArrivalServices((l as Leg).LegID, { departureGroundHandling: depGHRequested[idx] });
+      allTies.push(...filterVendorTies([...overflight, ...arrival]));
     }
+    if (allTies.length > 0) { setVendorTies(allTies); setVendorTiesOpen(true); }
 
     // Save stops
     for (const s of stops) {
@@ -934,6 +940,8 @@ export default function NewTripWizard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VendorTieResolutionDialog open={vendorTiesOpen} onClose={() => setVendorTiesOpen(false)} services={vendorTies} />
     </div>
   );
 }

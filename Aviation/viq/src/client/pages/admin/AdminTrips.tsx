@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList, getAuditForRecord } from '@/lib/dataStore';
+import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList, getAuditForRecord, filterVendorTies } from '@/lib/dataStore';
 import type { TripSheet } from '@/lib/dataStore';
 import type { Trip, Leg, Service, ServiceResponsibility, AuditEntry } from '@/data/types';
 
@@ -31,6 +31,7 @@ import {
   FileText, ChevronRight, Send, XCircle, HelpCircle, Inbox
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
+import { VendorTieResolutionDialog } from '@/components/VendorTieResolutionDialog';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -705,6 +706,8 @@ export default function AdminTrips() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [addServiceOpen, setAddServiceOpen] = useState(false);
   const [addLegOpen, setAddLegOpen] = useState(false);
+  const [vendorTies, setVendorTies] = useState<Service[]>([]);
+  const [vendorTiesOpen, setVendorTiesOpen] = useState(false);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -837,21 +840,27 @@ export default function AdminTrips() {
     const countries = await computeCountriesOverflown(leg.DepICAO, leg.ArrICAO);
     const updated = { ...leg, CountriesOverflown: countries };
     await saveLeg(updated);
-    await generateOverflightServices(updated.LegID);
-    await generateArrivalServices(updated.LegID);
+    const overflight = await generateOverflightServices(updated.LegID);
+    const arrival = await generateArrivalServices(updated.LegID);
+    const ties = filterVendorTies([...overflight, ...arrival]);
+    if (ties.length > 0) { setVendorTies(ties); setVendorTiesOpen(true); }
     await reload();
   };
 
   const handleAddDepartureGroundHandling = async (leg: Leg) => {
     if (!canEdit) return;
-    await generateArrivalServices(leg.LegID, { departureGroundHandling: true });
+    const arrival = await generateArrivalServices(leg.LegID, { departureGroundHandling: true });
+    const ties = filterVendorTies(arrival);
+    if (ties.length > 0) { setVendorTies(ties); setVendorTiesOpen(true); }
     await reload();
   };
 
   const handleAddLeg = async (leg: Leg) => {
     await saveLeg(leg);
-    await generateOverflightServices(leg.LegID);
-    await generateArrivalServices(leg.LegID);
+    const overflight = await generateOverflightServices(leg.LegID);
+    const arrival = await generateArrivalServices(leg.LegID);
+    const ties = filterVendorTies([...overflight, ...arrival]);
+    if (ties.length > 0) { setVendorTies(ties); setVendorTiesOpen(true); }
     await reload();
     setAddLegOpen(false);
     // Auto-select the new leg
@@ -1225,6 +1234,8 @@ export default function AdminTrips() {
         nextSeq={tripLegs.length + 1}
         onAdd={handleAddLeg}
       />
+
+      <VendorTieResolutionDialog open={vendorTiesOpen} onClose={() => setVendorTiesOpen(false)} services={vendorTies} />
     </>
   );
 }
