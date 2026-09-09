@@ -103,6 +103,7 @@ export class ServicesService {
     // transitioning again) is unaffected and can still freely correct
     // confirmedBy/confirmedAtZ by hand.
     const becomingConfirmed = statusChanging && data.status === 'Confirmed';
+    const providerChanging = data.providerId !== undefined && data.providerId !== before.providerId;
     const result = await this.prisma.service.updateMany({
       where: { svcId, version },
       data: {
@@ -112,6 +113,7 @@ export class ServicesService {
         version: { increment: 1 },
         ...(statusChanging ? { statusChangedAt: new Date(), statusChangedBy: user } : {}),
         ...(becomingConfirmed ? { confirmedBy: currentUsername ?? user, confirmedAtZ: new Date() } : {}),
+        ...(providerChanging ? { vendorSelectionSource: 'USER_SELECTED', vendorSelectedAtZ: new Date(), vendorAssignmentId: null } : {}),
       } as Prisma.ServiceUncheckedUpdateInput,
     });
 
