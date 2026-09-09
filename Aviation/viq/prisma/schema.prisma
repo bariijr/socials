@@ -238,6 +238,7 @@ model VendorAssignment {
   client   Client?  @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   country  Country? @relation(fields: [countryIso2], references: [iso2], onDelete: Cascade)
   airport  Airport? @relation(fields: [icao], references: [icao], onDelete: Cascade)
+  services Service[]
 
   @@index([countryIso2, icao, serviceType, permitType, clientId])
   @@index([providerId])
@@ -555,10 +556,14 @@ model Service {
   statusChangedBy String?  @map("status_changed_by")
   responsibility  String  @default("VIQ Arrangement")
   authorizationId String? @map("authorization_id")
+  vendorSelectionSource String?   @map("vendor_selection_source")
+  vendorAssignmentId    String?   @map("vendor_assignment_id")
+  vendorSelectedAtZ     DateTime? @map("vendor_selected_at_z")
 
   trip          Trip                 @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   provider      Provider?            @relation(fields: [providerId], references: [providerId])
   authorization PermitAuthorization? @relation(fields: [authorizationId], references: [id])
+  vendorAssignment VendorAssignment? @relation(fields: [vendorAssignmentId], references: [id], onDelete: SetNull)
   tasks         Task[]
 
   @@index([tripId])
