@@ -16,7 +16,12 @@ export class ServicesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly vendorResolver: VendorResolverService,
-  ) {}
+  ) {
+    // Superseded by resolveVendor/VendorResolverService at both call sites, but kept
+    // temporarily as dead code (removal is a later cleanup task, not this one). This
+    // reference marks it "read" for noUnusedLocals without touching its own declaration.
+    void this.resolveProvider;
+  }
 
   findAll(tripId?: string) {
     return this.prisma.service.findMany({
@@ -279,10 +284,6 @@ export class ServicesService {
     });
   }
 
-  // Superseded by resolveVendor/VendorResolverService at both call sites (ICAO/Country/Global
-  // fallback only, no rank/preferred/client-override support) — kept temporarily as dead code;
-  // removal is a later cleanup task, not this one.
-  // @ts-ignore TS6133 (noUnusedLocals) — intentionally-retained dead code, see comment above.
   private async resolveProvider(serviceType: string, icao: string, iso2: string): Promise<string | null> {
     const byIcao = await this.prisma.provider.findFirst({
       where: { serviceTypes: { has: serviceType }, scopeType: 'ICAO', scope: icao },
