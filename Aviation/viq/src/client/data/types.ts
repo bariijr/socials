@@ -248,6 +248,9 @@ export interface Service {
   ICAO?: string;
   // Selected variant code from the service type's ServiceTypeDef.variants.
   Variant?: string;
+  VendorSelectionSource?: string;
+  VendorAssignmentID?: string;
+  VendorSelectedAtZ?: string;
 }
 
 export interface ServiceSubItem {

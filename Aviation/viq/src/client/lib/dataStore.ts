@@ -435,6 +435,9 @@ export function mapServiceFromApi(s: any): Service {
     CountryISO2: s.countryIso2 ?? undefined,
     ICAO: s.icao ?? undefined,
     Variant: s.variant ?? undefined,
+    VendorSelectionSource: s.vendorSelectionSource ?? undefined,
+    VendorAssignmentID: s.vendorAssignmentId ?? undefined,
+    VendorSelectedAtZ: s.vendorSelectedAtZ ?? undefined,
   };
 }
 
@@ -1803,6 +1806,10 @@ export async function getServiceAuthorizationCandidates(svcId: string): Promise<
     Eligible: r.eligible,
     Reason: r.reason ?? undefined,
   }));
+}
+
+export async function getVendorCandidates(svcId: string): Promise<{ status: string; alternatives: { vendorId: string; providerName: string }[] }> {
+  return apiJson(`/services/${svcId}/vendor-candidates`);
 }
 
 export async function linkServiceAuthorization(svcId: string, authorizationId: string, version: number, user = currentUser()): Promise<Service> {
