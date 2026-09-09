@@ -31,6 +31,7 @@ import { MasterDetailList, EntityListCard, DetailPanel } from '@/components/ui/m
 import { MasterDetailShell } from '@/components/ui/master-detail-shell';
 import { Plane, Building2, MapPin, Globe, Users, AlertTriangle, Receipt, Briefcase, ArrowRight, FileCheck } from 'lucide-react';
 import { AuthorizationsTab } from './AdminAuthorizations';
+import { VendorAssignmentsTab } from './AdminVendorAssignments';
 
 const SERVICE_TYPES: ServiceType[] = [
   'Permit', 'Overflight', 'GroundHandling', 'Fuel', 'Catering',
@@ -930,6 +931,7 @@ export default function AdminAssets() {
           <TabsTrigger value="clients" className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> Clients</TabsTrigger>
           <TabsTrigger value="fees" className="flex items-center gap-1"><Receipt className="h-3.5 w-3.5" /> Fees</TabsTrigger>
           <TabsTrigger value="authorizations" className="flex items-center gap-1"><FileCheck className="h-3.5 w-3.5" /> Authorizations</TabsTrigger>
+          <TabsTrigger value="vendor-assignments" className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> Vendor Assignments</TabsTrigger>
         </TabsList>
 
         {/* ─── Aircraft ───────────────────────────────────────────────── */}
@@ -1327,6 +1329,11 @@ export default function AdminAssets() {
         {/* ─── Authorizations ─────────────────────────────────────────── */}
         <TabsContent value="authorizations">
           <AuthorizationsTab />
+        </TabsContent>
+
+        {/* ─── Vendor Assignments ─────────────────────────────────────── */}
+        <TabsContent value="vendor-assignments">
+          <VendorAssignmentsTab />
         </TabsContent>
       </Tabs>
     </div>
