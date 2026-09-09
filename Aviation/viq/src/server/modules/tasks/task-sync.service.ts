@@ -33,7 +33,8 @@ export class TaskSyncService {
     const created =
       (await this.generateReconfirmTasks()) +
       (await this.generateResubmitTasks()) +
-      (await this.generateDeadlineTasks());
+      (await this.generateDeadlineTasks()) +
+      (await this.generateNoVendorTasks());
     const closed = await this.autoCloseResolvedTasks();
     const escalated = await this.stampEscalations();
     this.logger.log(`task-sync: created=${created} closed=${closed} escalated=${escalated}`);
@@ -136,6 +137,36 @@ export class TaskSyncService {
     return count;
   }
 
+  private async generateNoVendorTasks(): Promise<number> {
+    const services = await this.prisma.service.findMany({
+      where: { vendorSelectionSource: 'NO_ELIGIBLE_VENDOR', providerId: null },
+      include: { trip: { select: { ownerUserId: true } } },
+    });
+    let count = 0;
+    for (const svc of services) {
+      const sourceKey = `novendor:${svc.svcId}`;
+      const existing = await this.prisma.task.findUnique({ where: { sourceKey } });
+      if (existing) continue;
+      await this.prisma.task.create({
+        data: {
+          title: `No eligible vendor: ${svc.serviceType} for ${svc.tripId}`,
+          tripId: svc.tripId,
+          serviceId: svc.svcId,
+          ownerUserId: svc.trip.ownerUserId,
+          source: 'System',
+          sourceKey,
+          priority: 'Normal',
+          noLaterThanZ: svc.requiredByZ,
+          createdBy: 'SYSTEM',
+          statusChangedAt: new Date(),
+          statusChangedBy: 'SYSTEM',
+        },
+      });
+      count++;
+    }
+    return count;
+  }
+
   private async autoCloseResolvedTasks(): Promise<number> {
     const openSystemTasks = await this.prisma.task.findMany({
       where: { source: 'System', status: { in: ['Open', 'In Progress', 'Waiting'] }, sourceKey: { not: null } },
@@ -174,6 +205,7 @@ export class TaskSyncService {
     if (sourceKey.startsWith('deadline:')) {
       return ['Confirmed', 'Requested', 'Not Required', 'Cancelled'].includes(svc.status);
     }
+    if (sourceKey.startsWith('novendor:')) return svc.providerId !== null;
     return false;
   }
 

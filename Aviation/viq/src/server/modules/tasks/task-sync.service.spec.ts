@@ -177,4 +177,36 @@ describe('TaskSyncService', () => {
     const result = await sync.runSync();
     expect(result.escalated).toBe(0);
   });
+
+  it('creates a no-vendor task for a service with NO_ELIGIBLE_VENDOR and no provider', async () => {
+    await prisma.service.update({
+      where: { svcId: (await makeService('SVC-NOVENDOR-1', 'Not Started')).svcId },
+      data: { vendorSelectionSource: 'NO_ELIGIBLE_VENDOR' },
+    });
+    const result = await sync.runSync();
+    expect(result.created).toBeGreaterThanOrEqual(1);
+    const task = await prisma.task.findUnique({ where: { sourceKey: 'novendor:SVC-NOVENDOR-1' } });
+    expect(task).not.toBeNull();
+    expect(task!.title).toContain('No eligible vendor');
+  });
+
+  it('auto-closes a no-vendor task once the service gets a providerId', async () => {
+    await prisma.service.update({
+      where: { svcId: (await makeService('SVC-NOVENDOR-2', 'Not Started')).svcId },
+      data: { vendorSelectionSource: 'NO_ELIGIBLE_VENDOR' },
+    });
+    await sync.runSync();
+    // Capture the task by sourceKey before closing -- autoCloseResolvedTasks
+    // clears sourceKey to null on close (see task-sync.service.ts), so it
+    // must be looked up again by id afterward, matching the pattern used by
+    // the other auto-close tests in this file.
+    const created = await prisma.task.findUnique({ where: { sourceKey: 'novendor:SVC-NOVENDOR-2' } });
+    expect(created).not.toBeNull();
+    await prisma.provider.create({ data: { providerId: 'PROV-FALLBACK', name: 'Fallback Vendor', serviceTypes: ['Overflight'], scopeType: 'Global', scope: 'GLOBAL' } });
+    await prisma.service.update({ where: { svcId: 'SVC-NOVENDOR-2' }, data: { providerId: 'PROV-FALLBACK', vendorSelectionSource: 'USER_SELECTED' } });
+    const result = await sync.runSync();
+    expect(result.closed).toBeGreaterThanOrEqual(1);
+    const task = await prisma.task.findUnique({ where: { id: created!.id } });
+    expect(task!.status).toBe('Complete');
+  });
 });
