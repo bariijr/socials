@@ -1824,6 +1824,75 @@ export async function getVendorAssignment(id: string): Promise<{ id: string; ran
   }
 }
 
+export interface VendorAssignment {
+  ID: string;
+  ProviderID: string;
+  CountryISO2?: string;
+  ICAO?: string;
+  ServiceType: string;
+  PermitType?: string;
+  ClientID?: string;
+  Preferred: boolean;
+  Rank: number | null;
+  Prohibited: boolean;
+  Active: boolean;
+  EffectiveFrom?: string;
+  EffectiveUntil?: string;
+  Notes?: string;
+}
+
+function mapVendorAssignmentFromApi(v: any): VendorAssignment {
+  return {
+    ID: v.id,
+    ProviderID: v.providerId,
+    CountryISO2: v.countryIso2 ?? undefined,
+    ICAO: v.icao ?? undefined,
+    ServiceType: v.serviceType,
+    PermitType: v.permitType ?? undefined,
+    ClientID: v.clientId ?? undefined,
+    Preferred: v.preferred,
+    Rank: v.rank ?? null,
+    Prohibited: v.prohibited,
+    Active: v.active,
+    EffectiveFrom: v.effectiveFrom ?? undefined,
+    EffectiveUntil: v.effectiveUntil ?? undefined,
+    Notes: v.notes ?? undefined,
+  };
+}
+
+export async function getVendorAssignmentList(filters: { clientId?: string; countryIso2?: string; serviceType?: string } = {}): Promise<VendorAssignment[]> {
+  const params = new URLSearchParams();
+  if (filters.clientId) params.set('clientId', filters.clientId);
+  if (filters.countryIso2) params.set('countryIso2', filters.countryIso2);
+  if (filters.serviceType) params.set('serviceType', filters.serviceType);
+  const qs = params.toString();
+  const rows = await apiJson<any[]>(`/vendor-assignments${qs ? `?${qs}` : ''}`);
+  return rows.map(mapVendorAssignmentFromApi);
+}
+
+export async function saveVendorAssignment(a: Omit<VendorAssignment, 'ID'> & { ID?: string }, user = currentUser()): Promise<VendorAssignment> {
+  const body = JSON.stringify({
+    providerId: a.ProviderID,
+    countryIso2: a.CountryISO2 || undefined,
+    icao: a.ICAO || undefined,
+    serviceType: a.ServiceType,
+    permitType: a.PermitType || undefined,
+    clientId: a.ClientID || undefined,
+    preferred: a.Preferred,
+    rank: a.Prohibited ? undefined : a.Rank,
+    prohibited: a.Prohibited,
+    active: a.Active,
+    effectiveFrom: a.EffectiveFrom || undefined,
+    effectiveUntil: a.EffectiveUntil || undefined,
+    notes: a.Notes || undefined,
+    user,
+  });
+  const row = a.ID
+    ? await apiJson<any>(`/vendor-assignments/${a.ID}`, { method: 'PATCH', body })
+    : await apiJson<any>('/vendor-assignments', { method: 'POST', body });
+  return mapVendorAssignmentFromApi(row);
+}
+
 export async function linkServiceAuthorization(svcId: string, authorizationId: string, version: number, user = currentUser()): Promise<Service> {
   const row = await apiJson<any>(`/services/${svcId}/link-authorization`, {
     method: 'PATCH',
