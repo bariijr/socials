@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList, getAuditForRecord, filterVendorTies } from '@/lib/dataStore';
+import { getTripsPaginated, getTripSheet, refProviders as providers, getAircraft, getProvider, getCountry, getCallSign, formatZ, formatDate, urgencyColor, saveService, saveLeg, computeCountriesOverflown, generateOverflightServices, generateArrivalServices, getPermitAuthorizationList, getAuditForRecord, filterVendorTies, getVendorAssignment } from '@/lib/dataStore';
 import type { TripSheet } from '@/lib/dataStore';
 import type { Trip, Leg, Service, ServiceResponsibility, AuditEntry } from '@/data/types';
 
@@ -96,6 +96,15 @@ function ServiceEditorDialog({
     });
   }, [service.SVCID]);
 
+  const [vendorAssignmentDetail, setVendorAssignmentDetail] = useState<Awaited<ReturnType<typeof getVendorAssignment>>>(null);
+  useEffect(() => {
+    if (service.VendorAssignmentID) {
+      getVendorAssignment(service.VendorAssignmentID).then(setVendorAssignmentDetail);
+    } else {
+      setVendorAssignmentDetail(null);
+    }
+  }, [service.VendorAssignmentID]);
+
   const handleSave = () => {
     if (!canEdit) return;
     const updated: Service = {
@@ -181,6 +190,20 @@ function ServiceEditorDialog({
                   ? `Covered by ${auth.AuthorizationType} permit ${auth.ReferenceNumber} (valid until ${new Date(auth.ValidUntil).toLocaleDateString()}).`
                   : 'Covered by a permit authorization.';
               })()}
+            </div>
+          )}
+
+          {service.ProviderID && (
+            <div className="rounded-md border p-3 text-xs space-y-1">
+              <div className="font-semibold">Why this vendor?</div>
+              <div>Source: {service.VendorSelectionSource || 'Unknown'}</div>
+              {service.VendorSelectedAtZ && <div>Selected: {formatZ(service.VendorSelectedAtZ)}</div>}
+              {vendorAssignmentDetail && (
+                <div>
+                  Rule: Rank {vendorAssignmentDetail.rank ?? '—'}{vendorAssignmentDetail.preferred ? ', Preferred' : ''}
+                  {vendorAssignmentDetail.effectiveUntil && ` — valid until ${formatZ(vendorAssignmentDetail.effectiveUntil)}`}
+                </div>
+              )}
             </div>
           )}
 

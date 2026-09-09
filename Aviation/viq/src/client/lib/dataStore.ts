@@ -1816,6 +1816,14 @@ export async function getVendorCandidates(svcId: string): Promise<{ status: stri
   return apiJson(`/services/${svcId}/vendor-candidates`);
 }
 
+export async function getVendorAssignment(id: string): Promise<{ id: string; rank: number | null; preferred: boolean; effectiveFrom: string | null; effectiveUntil: string | null } | null> {
+  try {
+    return await apiJson(`/vendor-assignments/${id}`);
+  } catch {
+    return null;
+  }
+}
+
 export async function linkServiceAuthorization(svcId: string, authorizationId: string, version: number, user = currentUser()): Promise<Service> {
   const row = await apiJson<any>(`/services/${svcId}/link-authorization`, {
     method: 'PATCH',
