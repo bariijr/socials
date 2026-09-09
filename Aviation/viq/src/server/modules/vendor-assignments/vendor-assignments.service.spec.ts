@@ -99,4 +99,24 @@ describe('VendorAssignmentsService', () => {
       assignments.create({ providerId: 'PROV-DOES-NOT-EXIST', serviceType: 'Overflight', countryIso2: 'TZ', rank: 1 } as any),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('allows update() to clear effectiveUntil to null while effectiveFrom remains a real, later date', async () => {
+    const created = await assignments.create({
+      providerId: 'PROV-A', serviceType: 'Overflight', countryIso2: 'TZ', rank: 1,
+      effectiveFrom: '2026-01-01T00:00:00.000Z', effectiveUntil: '2026-12-31T00:00:00.000Z',
+    } as any);
+    const updated = await assignments.update(created.id, { effectiveUntil: null } as any);
+    expect(updated.effectiveUntil).toBeNull();
+    expect(updated.effectiveFrom).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+  });
+
+  it('allows update() to clear effectiveFrom to null while effectiveUntil remains set, and persists null (not epoch)', async () => {
+    const created = await assignments.create({
+      providerId: 'PROV-A', serviceType: 'Overflight', countryIso2: 'TZ', rank: 1,
+      effectiveFrom: '2026-01-01T00:00:00.000Z', effectiveUntil: '2026-12-31T00:00:00.000Z',
+    } as any);
+    const updated = await assignments.update(created.id, { effectiveFrom: null } as any);
+    expect(updated.effectiveFrom).toBeNull();
+    expect(updated.effectiveUntil).toEqual(new Date('2026-12-31T00:00:00.000Z'));
+  });
 });

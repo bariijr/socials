@@ -112,8 +112,17 @@ export class VendorAssignmentsService {
     const rank = dto.rank !== undefined ? dto.rank : before.rank;
     this.validate(preferred, prohibited ? null : rank, prohibited);
 
-    const effectiveFrom = dto.effectiveFrom !== undefined ? new Date(dto.effectiveFrom) : before.effectiveFrom;
-    const effectiveUntil = dto.effectiveUntil !== undefined ? new Date(dto.effectiveUntil) : before.effectiveUntil;
+    // dto.effectiveFrom/effectiveUntil can be undefined (field omitted -> keep
+    // existing value), null (field explicitly cleared -> no bound), or an ISO
+    // date string (field set). `new Date(null)` evaluates to the Unix epoch,
+    // not "no bound", so null must be handled explicitly rather than falling
+    // through to `new Date(...)`.
+    const effectiveFrom = dto.effectiveFrom === undefined ? before.effectiveFrom
+      : dto.effectiveFrom === null ? null
+      : new Date(dto.effectiveFrom);
+    const effectiveUntil = dto.effectiveUntil === undefined ? before.effectiveUntil
+      : dto.effectiveUntil === null ? null
+      : new Date(dto.effectiveUntil);
     this.validateWindow(effectiveFrom, effectiveUntil);
 
     const { user: _user, ...data } = dto;
