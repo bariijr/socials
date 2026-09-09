@@ -659,6 +659,7 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
   const [country, setCountry] = useState(client?.BillingCountry || '');
   const [notes, setNotes] = useState(client?.Notes || '');
   const [clientVendorAssignments, setClientVendorAssignments] = useState<VendorAssignment[]>([]);
+  const providers = getProviderList();
   useEffect(() => {
     if (client?.ClientID) {
       getVendorAssignmentList({ clientId: client.ClientID }).then(setClientVendorAssignments);
@@ -754,7 +755,7 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
               <div className="space-y-1">
                 {clientVendorAssignments.map((v) => (
                   <div key={v.ID} className="flex items-center justify-between text-xs">
-                    <span>{v.ProviderID} — {v.CountryISO2 || v.ICAO || 'Global'} — {v.ServiceType}</span>
+                    <span>{providers.find(p => p.ProviderID === v.ProviderID)?.Name || v.ProviderID} — {v.CountryISO2 || v.ICAO || 'Global'} — {v.ServiceType}</span>
                     {v.Prohibited ? (
                       <Badge variant="outline" className="text-[9px] text-red-600 border-red-300">DO NOT USE</Badge>
                     ) : (
