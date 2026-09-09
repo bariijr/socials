@@ -56,4 +56,19 @@ describe('Manual provider change stamps USER_SELECTED (§4)', () => {
     expect(second.providerId).toBe('PROV-B');
     expect(second.vendorSelectionSource).toBe('USER_SELECTED');
   });
+
+  // Fix 6: explicitly clearing a provider (providerId: null) is a deliberate
+  // un-assignment, not a resolved user choice -- it must re-enter the
+  // NO_ELIGIBLE_VENDOR pool the task-sync trigger watches, rather than
+  // silently disappearing under USER_SELECTED.
+  it('explicitly clearing providerId to null stamps NO_ELIGIBLE_VENDOR, not USER_SELECTED', async () => {
+    const svc = await makeUnresolvedService('TEST-VENDOR-MANUAL-1-SVC-4');
+    const assigned = await services.update('TEST-VENDOR-MANUAL-1-SVC-4', { providerId: 'PROV-A', version: svc.version } as any);
+    expect(assigned.vendorSelectionSource).toBe('USER_SELECTED');
+    const cleared = await services.update('TEST-VENDOR-MANUAL-1-SVC-4', { providerId: null, version: assigned.version } as any);
+    expect(cleared.providerId).toBeNull();
+    expect(cleared.vendorSelectionSource).toBe('NO_ELIGIBLE_VENDOR');
+    expect(cleared.vendorAssignmentId).toBeNull();
+    expect(cleared.vendorSelectedAtZ).not.toBeNull();
+  });
 });

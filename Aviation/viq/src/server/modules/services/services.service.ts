@@ -104,6 +104,13 @@ export class ServicesService {
     // confirmedBy/confirmedAtZ by hand.
     const becomingConfirmed = statusChanging && data.status === 'Confirmed';
     const providerChanging = data.providerId !== undefined && data.providerId !== before.providerId;
+    // A provider explicitly cleared to null is a deliberate un-assignment,
+    // not a resolved selection -- stamping USER_SELECTED here would make the
+    // service invisible to the task-sync NO_ELIGIBLE_VENDOR safety net (it
+    // filters on that literal string), silently dropping a service that
+    // genuinely needs attention out of the "needs attention" pool. Re-surface
+    // it the same way an unresolved generation-time service would read.
+    const clearingProvider = providerChanging && data.providerId === null;
     const result = await this.prisma.service.updateMany({
       where: { svcId, version },
       data: {
@@ -113,7 +120,9 @@ export class ServicesService {
         version: { increment: 1 },
         ...(statusChanging ? { statusChangedAt: new Date(), statusChangedBy: user } : {}),
         ...(becomingConfirmed ? { confirmedBy: currentUsername ?? user, confirmedAtZ: new Date() } : {}),
-        ...(providerChanging ? { vendorSelectionSource: 'USER_SELECTED', vendorSelectedAtZ: new Date(), vendorAssignmentId: null } : {}),
+        ...(providerChanging
+          ? { vendorSelectionSource: clearingProvider ? 'NO_ELIGIBLE_VENDOR' : 'USER_SELECTED', vendorSelectedAtZ: new Date(), vendorAssignmentId: null }
+          : {}),
       } as Prisma.ServiceUncheckedUpdateInput,
     });
 
@@ -424,9 +433,27 @@ export class ServicesService {
   ): Promise<Service> {
     const leadHours = await this.leadTimeHours(iso2, 'Overflight', 48);
     const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
-    const resolution = await this.resolveVendor('Overflight', leg.depIcao, iso2, leg.tripId);
+    // Single trip lookup covering both the resolver's clientId need and the
+    // authorization lookup's registration need (previously two separate
+    // findUnique calls -- one hidden inside resolveVendor, one here). The
+    // resolver is called directly (not via resolveVendor) so the already-
+    // fetched clientId can be passed straight through without a second query.
+    const trip = await this.prisma.trip.findUnique({ where: { tripId: leg.tripId }, select: { clientId: true, registration: true } });
+    // Overflight generation deliberately passes icao: '' rather than
+    // leg.depIcao -- an overflight of a country shouldn't be decided by a
+    // rule scoped to a specific (and possibly unrelated) airport, and the
+    // created Service row never persists an icao for Overflight services
+    // anyway. vendorCandidates() reads svc.icao ?? '' for this same service
+    // later, so this keeps generation-time resolution and the tie-resolution
+    // dialog's candidate lookup symmetric (see Fix 3 in the vendor-assignment
+    // live-wiring fix wave).
+    const resolution = await this.vendorResolver.resolve({
+      countryIso2: iso2,
+      icao: '',
+      serviceType: 'Overflight',
+      clientId: trip?.clientId ?? undefined,
+    });
     const providerId = resolution.status === 'RESOLVED' ? resolution.selectedVendorId : null;
-    const trip = await this.prisma.trip.findUnique({ where: { tripId: leg.tripId }, select: { registration: true } });
     const auth = await this.resolveAuthorization(trip?.registration ?? null, iso2, 'Overflight', leg.etdZ);
     const svc = await this.prisma.service.create({
       data: {
@@ -437,7 +464,7 @@ export class ServicesService {
         serviceType: 'Overflight',
         providerId,
         vendorSelectionSource: resolution.status === 'RESOLVED' ? resolution.selectionSource : resolution.status,
-        vendorAssignmentId: resolution.status === 'RESOLVED' ? resolution.matchedRule!.id : null,
+        vendorAssignmentId: resolution.status === 'RESOLVED' ? (resolution.matchedRule?.id ?? null) : null,
         vendorSelectedAtZ: resolution.status === 'RESOLVED' ? new Date() : null,
         status: auth ? 'Confirmed' : 'Not Started',
         basedOnEtdZ: leg.etdZ,
@@ -618,7 +645,7 @@ export class ServicesService {
           serviceType,
           providerId,
           vendorSelectionSource: resolution.status === 'RESOLVED' ? resolution.selectionSource : resolution.status,
-          vendorAssignmentId: resolution.status === 'RESOLVED' ? resolution.matchedRule!.id : null,
+          vendorAssignmentId: resolution.status === 'RESOLVED' ? (resolution.matchedRule?.id ?? null) : null,
           vendorSelectedAtZ: resolution.status === 'RESOLVED' ? new Date() : null,
           status: auth ? 'Confirmed' : 'Not Started',
           basedOnEtdZ: leg.etdZ,

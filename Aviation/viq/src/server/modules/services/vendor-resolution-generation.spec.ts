@@ -71,4 +71,35 @@ describe('Vendor resolution wired into live generation', () => {
     expect(created[0].providerId).toBeNull();
     expect(created[0].vendorSelectionSource).toBe('NO_ELIGIBLE_VENDOR');
   });
+
+  // Fix 3: Overflight generation now resolves with icao: '' (not the leg's
+  // departure ICAO), matching what vendorCandidates() does for a service
+  // with no persisted icao. An airport-scoped VendorAssignment must NOT be
+  // matched here, while a country-scoped (or global) one still is.
+  it('an airport-scoped VendorAssignment is not matched during Overflight generation (icao-less by design)', async () => {
+    await prisma.airport.create({
+      data: { icao: 'HTDA', name: 'Dodoma Airport', countryIso2: 'TZ', latitude: -6.17, longitude: 35.75 },
+    });
+    await prisma.provider.create({ data: { providerId: 'PROV-AIRPORT', name: 'Airport Vendor', serviceTypes: ['Overflight'], scopeType: 'ICAO', scope: 'HTDA' } });
+    await prisma.vendorAssignment.create({
+      data: { providerId: 'PROV-AIRPORT', icao: 'HTDA', serviceType: 'Overflight', rank: 1 },
+    });
+    await makeLeg('TEST-VENDOR-GEN-1-LEG-4', 'HTDA', 'FALA');
+    const created = await services.generateOverflightServices('TEST-VENDOR-GEN-1-LEG-4');
+    expect(created).toHaveLength(1);
+    expect(created[0].providerId).toBeNull();
+    expect(created[0].vendorSelectionSource).toBe('NO_ELIGIBLE_VENDOR');
+  });
+
+  it('a country-scoped VendorAssignment is still matched during Overflight generation', async () => {
+    await prisma.provider.create({ data: { providerId: 'PROV-COUNTRY', name: 'Country Vendor', serviceTypes: ['Overflight'], scopeType: 'Country', scope: 'TZ' } });
+    await prisma.vendorAssignment.create({
+      data: { providerId: 'PROV-COUNTRY', countryIso2: 'TZ', serviceType: 'Overflight', rank: 1 },
+    });
+    await makeLeg('TEST-VENDOR-GEN-1-LEG-5', 'HTDA', 'FALA');
+    const created = await services.generateOverflightServices('TEST-VENDOR-GEN-1-LEG-5');
+    expect(created).toHaveLength(1);
+    expect(created[0].providerId).toBe('PROV-COUNTRY');
+    expect(created[0].vendorSelectionSource).toBe('COUNTRY_DEFAULT');
+  });
 });
