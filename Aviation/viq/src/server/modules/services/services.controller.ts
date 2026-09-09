@@ -82,4 +82,9 @@ export class ServicesController {
   authorizationCandidates(@Param('svcId') svcId: string) {
     return this.services.authorizationCandidates(svcId);
   }
+
+  @Get(':svcId/vendor-candidates')
+  vendorCandidates(@Param('svcId') svcId: string) {
+    return this.services.vendorCandidates(svcId);
+  }
 }
