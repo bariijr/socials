@@ -10,9 +10,9 @@ import {
   getRosterExpiryStatuses,
   getCountryFeeList, saveCountryFee, deleteCountryFee,
   getClientList, saveClient, deleteClient,
-  getPreferredContact,
+  getPreferredContact, getVendorAssignmentList,
 } from '@/lib/dataStore';
-import type { RosterExpiryEntry, Operator, CountryFee, Client } from '@/lib/dataStore';
+import type { RosterExpiryEntry, Operator, CountryFee, Client, VendorAssignment } from '@/lib/dataStore';
 import type { Aircraft, Provider, Airport, Country, Person, PersonRole, ServiceType, ContactChannel } from '@/data/types';
 import { useAuth } from '@/lib/authContext';
 import { ExpiryBadge } from '@/components/ExpiryBadge';
@@ -658,6 +658,14 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
   const [postalCode, setPostalCode] = useState(client?.BillingPostalCode || '');
   const [country, setCountry] = useState(client?.BillingCountry || '');
   const [notes, setNotes] = useState(client?.Notes || '');
+  const [clientVendorAssignments, setClientVendorAssignments] = useState<VendorAssignment[]>([]);
+  useEffect(() => {
+    if (client?.ClientID) {
+      getVendorAssignmentList({ clientId: client.ClientID }).then(setClientVendorAssignments);
+    } else {
+      setClientVendorAssignments([]);
+    }
+  }, [client?.ClientID]);
 
   const valid = name.trim();
 
@@ -737,6 +745,27 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
           <Label>Notes</Label>
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
+        {!isNew && client && (
+          <div className="space-y-2 rounded-md border p-3">
+            <div className="text-sm font-semibold">Vendor Preferences</div>
+            {clientVendorAssignments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No client-specific vendor overrides — this client uses the general rules.</p>
+            ) : (
+              <div className="space-y-1">
+                {clientVendorAssignments.map((v) => (
+                  <div key={v.ID} className="flex items-center justify-between text-xs">
+                    <span>{v.ProviderID} — {v.CountryISO2 || v.ICAO || 'Global'} — {v.ServiceType}</span>
+                    {v.Prohibited ? (
+                      <Badge variant="outline" className="text-[9px] text-red-600 border-red-300">DO NOT USE</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">{v.Preferred ? 'Preferred, ' : ''}Rank {v.Rank}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <PanelActions
           onCancel={onCancel}
           onSave={handleSave}
