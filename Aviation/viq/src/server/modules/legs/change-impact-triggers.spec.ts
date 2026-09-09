@@ -1,5 +1,6 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
 import { StopsService } from '../stops/stops.service';
 import { LegsService } from './legs.service';
@@ -23,7 +24,7 @@ describe('Change impact: leg-scoped triggers (schedule + route)', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
     legs = new LegsService(prisma, audit, services, stops);
     trips = new TripsService(prisma, audit, services);

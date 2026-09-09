@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { truncateAll } from '../../test/db-test-utils';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
 import { TripsService } from './trips.service';
 
@@ -46,7 +47,7 @@ describe('Trip status transitions', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit);
+    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     trips = new TripsService(prisma, audit, services);
   });
 
@@ -99,7 +100,7 @@ describe('Reopening a Complete trip (Admin-gated)', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit);
+    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     trips = new TripsService(prisma, audit, services);
   });
 
@@ -160,7 +161,7 @@ describe('Trip optimistic locking', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit);
+    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     trips = new TripsService(prisma, audit, services);
   });
 

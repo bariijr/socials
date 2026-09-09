@@ -1,5 +1,6 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from './services.service';
 import { truncateAll } from '../../test/db-test-utils';
 
@@ -23,7 +24,7 @@ describe('Service confirmation stamping (§19)', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     await prisma.trip.create({ data: { tripId: 'TEST-CONFIRM-1', client: 'Test Client' } });
   });
 

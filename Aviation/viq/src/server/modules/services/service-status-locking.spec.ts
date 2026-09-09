@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from './services.service';
 import { truncateAll } from '../../test/db-test-utils';
 
@@ -49,7 +50,7 @@ describe('Service status transitions', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     await prisma.trip.create({ data: { tripId: 'TEST-SVC-TRANS-1', client: 'Test Client' } });
   });
 
@@ -110,7 +111,7 @@ describe('Service optimistic locking', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     await prisma.trip.create({ data: { tripId: 'TEST-SVC-LOCK-1', client: 'Test Client' } });
   });
 
@@ -159,7 +160,7 @@ describe('Submission Pending / Submission Failed persistence', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     await prisma.trip.create({ data: { tripId: 'TEST-SVC-SUBMIT-1', client: 'Test Client' } });
   });
 

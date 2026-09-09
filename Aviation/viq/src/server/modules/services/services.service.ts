@@ -6,6 +6,7 @@ import { computeUrgency } from '../../common/geo.util';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { isValidServiceTransition, serviceAuthorizationLinkAllowed, withServiceTransitions } from '../../common/statusTransitions';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 
 type ServiceType = 'Permit' | 'Overflight' | 'GroundHandling';
 
@@ -14,6 +15,7 @@ export class ServicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly vendorResolver: VendorResolverService,
   ) {}
 
   findAll(tripId?: string) {
@@ -267,6 +269,20 @@ export class ServicesService {
     return { checked: open.length, updated };
   }
 
+  private async resolveVendor(serviceType: string, icao: string, iso2: string, tripId: string) {
+    const trip = await this.prisma.trip.findUnique({ where: { tripId }, select: { clientId: true } });
+    return this.vendorResolver.resolve({
+      countryIso2: iso2,
+      icao,
+      serviceType,
+      clientId: trip?.clientId ?? undefined,
+    });
+  }
+
+  // Superseded by resolveVendor/VendorResolverService at both call sites (ICAO/Country/Global
+  // fallback only, no rank/preferred/client-override support) — kept temporarily as dead code;
+  // removal is a later cleanup task, not this one.
+  // @ts-ignore TS6133 (noUnusedLocals) — intentionally-retained dead code, see comment above.
   private async resolveProvider(serviceType: string, icao: string, iso2: string): Promise<string | null> {
     const byIcao = await this.prisma.provider.findFirst({
       where: { serviceTypes: { has: serviceType }, scopeType: 'ICAO', scope: icao },
@@ -388,7 +404,8 @@ export class ServicesService {
   ): Promise<Service> {
     const leadHours = await this.leadTimeHours(iso2, 'Overflight', 48);
     const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
-    const providerId = await this.resolveProvider('Overflight', leg.depIcao, iso2);
+    const resolution = await this.resolveVendor('Overflight', leg.depIcao, iso2, leg.tripId);
+    const providerId = resolution.status === 'RESOLVED' ? resolution.selectedVendorId : null;
     const trip = await this.prisma.trip.findUnique({ where: { tripId: leg.tripId }, select: { registration: true } });
     const auth = await this.resolveAuthorization(trip?.registration ?? null, iso2, 'Overflight', leg.etdZ);
     const svc = await this.prisma.service.create({
@@ -399,6 +416,9 @@ export class ServicesService {
         scopeId: leg.legId,
         serviceType: 'Overflight',
         providerId,
+        vendorSelectionSource: resolution.status === 'RESOLVED' ? resolution.selectionSource : resolution.status,
+        vendorAssignmentId: resolution.status === 'RESOLVED' ? resolution.matchedRule!.id : null,
+        vendorSelectedAtZ: resolution.status === 'RESOLVED' ? new Date() : null,
         status: auth ? 'Confirmed' : 'Not Started',
         basedOnEtdZ: leg.etdZ,
         requiredByZ,
@@ -564,7 +584,8 @@ export class ServicesService {
       if (has(serviceType, iso2) || isDismissed(serviceType, iso2)) return;
       const leadHours = await this.leadTimeHours(iso2, serviceType, 48);
       const requiredByZ = new Date(leg.etdZ.getTime() - leadHours * 60 * 60 * 1000);
-      const providerId = await this.resolveProvider(serviceType, icao, iso2);
+      const resolution = await this.resolveVendor(serviceType, icao, iso2, leg.tripId);
+      const providerId = resolution.status === 'RESOLVED' ? resolution.selectedVendorId : null;
       const auth = serviceType === 'Permit'
         ? await this.resolveAuthorization(trip?.registration ?? null, iso2, 'Permit', leg.etdZ)
         : null;
@@ -576,6 +597,9 @@ export class ServicesService {
           scopeId: legId,
           serviceType,
           providerId,
+          vendorSelectionSource: resolution.status === 'RESOLVED' ? resolution.selectionSource : resolution.status,
+          vendorAssignmentId: resolution.status === 'RESOLVED' ? resolution.matchedRule!.id : null,
+          vendorSelectedAtZ: resolution.status === 'RESOLVED' ? new Date() : null,
           status: auth ? 'Confirmed' : 'Not Started',
           basedOnEtdZ: leg.etdZ,
           requiredByZ,

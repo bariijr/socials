@@ -1,5 +1,6 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
 import { StopsService } from '../stops/stops.service';
 import { LegsService } from './legs.service';
@@ -22,7 +23,7 @@ describe('Leg optimistic locking', () => {
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit);
+    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
     legs = new LegsService(prisma, audit, services, stops);
     trips = new TripsService(prisma, audit, services);

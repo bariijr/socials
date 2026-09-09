@@ -1,5 +1,6 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from './services.service';
 import { truncateAll } from '../../test/db-test-utils';
 
@@ -18,7 +19,7 @@ describe('Change impact: flagging Confirmed services for reconfirmation', () => 
   beforeEach(async () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     await prisma.trip.create({ data: { tripId: 'TEST-IMPACT-1', client: 'Test Client' } });
     await prisma.country.create({
       data: { iso2: 'KE', name: 'Kenya', overflightPermitRequired: true, landingPermitRequired: true, centroidLat: -1.3, centroidLng: 36.8 },

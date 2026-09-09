@@ -1,5 +1,6 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from './services.service';
 import { LegsService } from '../legs/legs.service';
 import { StopsService } from '../stops/stops.service';
@@ -25,7 +26,7 @@ describe('generateOverflightServices — dismissal-tracking (Phase 0 Conflict #2
     // no cast needed.
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
-    services = new ServicesService(prisma, audit);
+    services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
     legs = new LegsService(prisma, audit, services, stops);
     trips = new TripsService(prisma, audit, services);
