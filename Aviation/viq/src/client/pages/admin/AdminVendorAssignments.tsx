@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   getVendorAssignmentList, saveVendorAssignment,
   getProviderList, getCountryList, getClientList,
+  ApiError,
 } from '@/lib/dataStore';
 import type { VendorAssignment } from '@/lib/dataStore';
 import { useAuth } from '@/lib/authContext';
@@ -33,15 +34,31 @@ function useVASelection() {
   };
 }
 
-function contextSummary(v: VendorAssignment, clients: { ClientID: string; Name: string }[] = []): string {
+// Exported so AdminAssets.tsx's ClientPanel (Vendor Preferences section)
+// resolves the same context string instead of maintaining its own inline
+// copy with different ICAO/Country precedence (see final-review Important 3).
+// `includeClient` defaults on for this tab's own list/detail views, where a
+// row's client (or lack of one) is meaningful context; ClientPanel already
+// knows which client it's showing and passes it false to skip the redundant
+// self-reference.
+export function contextSummary(
+  v: VendorAssignment,
+  clients: { ClientID: string; Name: string }[] = [],
+  includeClient = true,
+): string {
   const parts: string[] = [];
-  if (v.ClientID) parts.push(clients.find((c) => c.ClientID === v.ClientID)?.Name || v.ClientID);
+  if (includeClient && v.ClientID) parts.push(clients.find((c) => c.ClientID === v.ClientID)?.Name || v.ClientID);
   if (v.ICAO) parts.push(v.ICAO);
   else if (v.CountryISO2) parts.push(v.CountryISO2);
   else parts.push('Global');
   parts.push(v.ServiceType);
   if (v.PermitType) parts.push(v.PermitType);
   return parts.join(' — ');
+}
+
+// Same rationale as contextSummary above -- shared with ClientPanel.
+export function providerName(id: string, providers: { ProviderID: string; Name: string }[]): string {
+  return providers.find((p) => p.ProviderID === id)?.Name || id;
 }
 
 function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }: {
@@ -99,7 +116,13 @@ function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }
       });
       onSaved(saved.ID);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save this vendor assignment. Please try again.');
+      // ApiError carries the parsed server response body; unwrap the real
+      // class-validator message (string or string[]) instead of showing the
+      // raw "PATCH /vendor-assignments/... failed: 400 {...}" wrapper text.
+      const msg = err instanceof ApiError && err.body && typeof err.body === 'object' && 'message' in err.body
+        ? (Array.isArray((err.body as any).message) ? (err.body as any).message.join('; ') : String((err.body as any).message))
+        : 'Could not save this vendor assignment. Please try again.';
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -118,7 +141,7 @@ function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }
         )}
         <div className="space-y-1">
           <Label>Provider</Label>
-          <Select value={providerId} onValueChange={setProviderId} disabled={!canEditFields}>
+          <Select value={providerId} onValueChange={setProviderId} disabled={!canEditFields || !isNew}>
             <SelectTrigger><SelectValue placeholder="Select provider…" /></SelectTrigger>
             <SelectContent>
               {providers.map((p) => <SelectItem key={p.ProviderID} value={p.ProviderID}>{p.Name}</SelectItem>)}
@@ -127,8 +150,13 @@ function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }
         </div>
         <div className="space-y-1">
           <Label>Service Type</Label>
-          <Input value={serviceType} onChange={(e) => setServiceType(e.target.value)} disabled={!canEditFields} placeholder="e.g. Overflight" />
+          <Input value={serviceType} onChange={(e) => setServiceType(e.target.value)} disabled={!canEditFields || !isNew} placeholder="e.g. Overflight" />
         </div>
+        {!isNew && (
+          <p className="text-xs text-muted-foreground">
+            Provider and Service Type are fixed after creation — create a new assignment to change them.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Country (optional)</Label>
@@ -236,7 +264,6 @@ export function VendorAssignmentsTab() {
     setClients(getClientList());
     setCountries(getCountryList());
   }, []);
-  const providerName = (id: string) => providers.find((p) => p.ProviderID === id)?.Name || id;
 
   // Filters map 1:1 onto getVendorAssignmentList's { clientId, countryIso2,
   // serviceType } params (Task 1) — the same shape as GET /vendor-assignments
@@ -246,16 +273,38 @@ export function VendorAssignmentsTab() {
   const [clientFilter, setClientFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('');
+  const [listError, setListError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
 
-  const refresh = () => {
+  // Every filter change re-fetches (Client/Country/Service Type, the latter
+  // on every keystroke), so overlapping requests can resolve out of order.
+  // A per-call generation counter ensures only the most recently issued
+  // request's response is ever applied to state (final-review Important 5/7).
+  const requestIdRef = useRef(0);
+  const refresh = async () => {
+    const myRequestId = ++requestIdRef.current;
     setLoading(true);
-    getVendorAssignmentList({
-      clientId: clientFilter || undefined,
-      countryIso2: countryFilter || undefined,
-      serviceType: serviceTypeFilter.trim() || undefined,
-    }).then((rows) => { setAssignments(rows); setLoading(false); });
+    try {
+      const rows = await getVendorAssignmentList({
+        clientId: clientFilter || undefined,
+        countryIso2: countryFilter || undefined,
+        serviceType: serviceTypeFilter.trim() || undefined,
+      });
+      if (myRequestId === requestIdRef.current) {
+        setAssignments(rows);
+        setListError(null);
+      }
+    } catch {
+      if (myRequestId === requestIdRef.current) {
+        setListError('Could not load vendor assignments. Please try again.');
+      }
+    } finally {
+      if (myRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
   };
-  useEffect(() => { refresh(); }, [clientFilter, countryFilter, serviceTypeFilter]);
+  useEffect(() => { void refresh(); }, [clientFilter, countryFilter, serviceTypeFilter]);
 
   const selected = assignments.find((a) => a.ID === sel.selectedId) || null;
 
@@ -288,7 +337,15 @@ export function VendorAssignmentsTab() {
         </div>
       </div>
 
-      {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+      {savedFlash && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+          Saved
+        </div>
+      )}
+
+      {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : listError ? (
+        <p className="text-sm text-red-600">{listError}</p>
+      ) : (
         <MasterDetailShell
           heightClassName="h-[calc(100vh-17rem)]"
           listWidthClassName="md:w-64 lg:w-96"
@@ -298,7 +355,7 @@ export function VendorAssignmentsTab() {
           list={
             <MasterDetailList
               title="Vendor Assignments" subtitle={`${assignments.length} total`} items={assignments}
-              getId={(a) => a.ID} searchText={(a) => `${a.ProviderID} ${providerName(a.ProviderID)} ${contextSummary(a, clients)}`}
+              getId={(a) => a.ID} searchText={(a) => `${a.ProviderID} ${providerName(a.ProviderID, providers)} ${contextSummary(a, clients)}`}
               viewStorageKey="viq_assets_vendor_assignments_view" selectedId={sel.selectedId || (sel.adding ? 'new' : null)}
               onSelect={sel.select} onAddNew={sel.startAdd} addLabel="Add Vendor Assignment" canAdd={isAdmin}
               emptyText="No vendor assignments yet"
@@ -306,7 +363,7 @@ export function VendorAssignmentsTab() {
                 <EntityListCard
                   viewMode={viewMode} selected={isSelected}
                   icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
-                  title={providerName(a.ProviderID)}
+                  title={providerName(a.ProviderID, providers)}
                   subtitle={contextSummary(a, clients)}
                   badges={<>
                     {a.Prohibited ? (
@@ -329,7 +386,18 @@ export function VendorAssignmentsTab() {
                 <VendorAssignmentPanel
                   key={selected?.ID ?? 'new'}
                   assignment={selected} isNew={sel.adding} isAdmin={isAdmin}
-                  onSaved={(id) => { refresh(); sel.select(id); }}
+                  onSaved={async (id) => {
+                    // refresh() is async — await it before selecting, otherwise
+                    // sel.select(id) can run before the saved row lands in
+                    // `assignments`, and if the row falls outside the active
+                    // filters it never appears at all. The "Saved" banner above
+                    // still confirms the write happened either way
+                    // (final-review Important 6).
+                    await refresh();
+                    sel.select(id);
+                    setSavedFlash(true);
+                    setTimeout(() => setSavedFlash(false), 2500);
+                  }}
                   onCancel={sel.clear}
                 />
               )}

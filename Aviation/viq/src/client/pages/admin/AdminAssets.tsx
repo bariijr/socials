@@ -31,7 +31,7 @@ import { MasterDetailList, EntityListCard, DetailPanel } from '@/components/ui/m
 import { MasterDetailShell } from '@/components/ui/master-detail-shell';
 import { Plane, Building2, MapPin, Globe, Users, AlertTriangle, Receipt, Briefcase, ArrowRight, FileCheck } from 'lucide-react';
 import { AuthorizationsTab } from './AdminAuthorizations';
-import { VendorAssignmentsTab } from './AdminVendorAssignments';
+import { VendorAssignmentsTab, contextSummary, providerName } from './AdminVendorAssignments';
 
 const SERVICE_TYPES: ServiceType[] = [
   'Permit', 'Overflight', 'GroundHandling', 'Fuel', 'Catering',
@@ -659,12 +659,17 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
   const [country, setCountry] = useState(client?.BillingCountry || '');
   const [notes, setNotes] = useState(client?.Notes || '');
   const [clientVendorAssignments, setClientVendorAssignments] = useState<VendorAssignment[]>([]);
+  const [vendorAssignmentsLoadError, setVendorAssignmentsLoadError] = useState(false);
   const providers = getProviderList();
   useEffect(() => {
     if (client?.ClientID) {
-      getVendorAssignmentList({ clientId: client.ClientID }).then(setClientVendorAssignments);
+      setVendorAssignmentsLoadError(false);
+      getVendorAssignmentList({ clientId: client.ClientID })
+        .then(setClientVendorAssignments)
+        .catch(() => setVendorAssignmentsLoadError(true));
     } else {
       setClientVendorAssignments([]);
+      setVendorAssignmentsLoadError(false);
     }
   }, [client?.ClientID]);
 
@@ -749,18 +754,23 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
         {!isNew && client && (
           <div className="space-y-2 rounded-md border p-3">
             <div className="text-sm font-semibold">Vendor Preferences</div>
-            {clientVendorAssignments.length === 0 ? (
+            {vendorAssignmentsLoadError ? (
+              <p className="text-xs text-red-600">Couldn't load vendor preferences — try again.</p>
+            ) : clientVendorAssignments.length === 0 ? (
               <p className="text-xs text-muted-foreground">No client-specific vendor overrides — this client uses the general rules.</p>
             ) : (
               <div className="space-y-1">
                 {clientVendorAssignments.map((v) => (
                   <div key={v.ID} className="flex items-center justify-between text-xs">
-                    <span>{providers.find(p => p.ProviderID === v.ProviderID)?.Name || v.ProviderID} — {v.CountryISO2 || v.ICAO || 'Global'} — {v.ServiceType}</span>
-                    {v.Prohibited ? (
-                      <Badge variant="outline" className="text-[9px] text-red-600 border-red-300">DO NOT USE</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">{v.Preferred ? 'Preferred, ' : ''}Rank {v.Rank}</span>
-                    )}
+                    <span>{providerName(v.ProviderID, providers)} — {contextSummary(v, [], false)}</span>
+                    <div className="flex items-center gap-1">
+                      {v.Prohibited ? (
+                        <Badge variant="outline" className="text-[9px] text-red-600 border-red-300">DO NOT USE</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">{v.Preferred ? 'Preferred, ' : ''}Rank {v.Rank}</span>
+                      )}
+                      {!v.Active && <Badge variant="outline" className="text-[9px] text-muted-foreground">Inactive</Badge>}
+                    </div>
                   </div>
                 ))}
               </div>

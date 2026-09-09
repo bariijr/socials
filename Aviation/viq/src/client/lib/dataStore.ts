@@ -1871,20 +1871,30 @@ export async function getVendorAssignmentList(filters: { clientId?: string; coun
 }
 
 export async function saveVendorAssignment(a: Omit<VendorAssignment, 'ID'> & { ID?: string }, user = currentUser()): Promise<VendorAssignment> {
+  // UpdateVendorAssignmentDto omits providerId/serviceType (they're fixed
+  // after creation) -- the global ValidationPipe's `whitelist: true` silently
+  // strips any body field the DTO doesn't declare, so sending them on a PATCH
+  // would look like it worked while doing nothing. Only include them on
+  // create (final-review Critical 1).
+  //
+  // On update, an omitted key leaves the existing column untouched (the
+  // server's update() just spreads the DTO), so clearing an optional field
+  // to blank must send an explicit `null` rather than dropping the key the
+  // way `undefined` does under JSON.stringify (final-review Critical 2).
+  const isUpdate = !!a.ID;
   const body = JSON.stringify({
-    providerId: a.ProviderID,
-    countryIso2: a.CountryISO2 || undefined,
-    icao: a.ICAO || undefined,
-    serviceType: a.ServiceType,
-    permitType: a.PermitType || undefined,
-    clientId: a.ClientID || undefined,
+    ...(isUpdate ? {} : { providerId: a.ProviderID, serviceType: a.ServiceType }),
+    countryIso2: isUpdate ? (a.CountryISO2 ?? null) : (a.CountryISO2 || undefined),
+    icao: isUpdate ? (a.ICAO ?? null) : (a.ICAO || undefined),
+    permitType: isUpdate ? (a.PermitType ?? null) : (a.PermitType || undefined),
+    clientId: isUpdate ? (a.ClientID ?? null) : (a.ClientID || undefined),
     preferred: a.Preferred,
     rank: a.Prohibited ? undefined : a.Rank,
     prohibited: a.Prohibited,
     active: a.Active,
-    effectiveFrom: a.EffectiveFrom || undefined,
-    effectiveUntil: a.EffectiveUntil || undefined,
-    notes: a.Notes || undefined,
+    effectiveFrom: isUpdate ? (a.EffectiveFrom ?? null) : (a.EffectiveFrom || undefined),
+    effectiveUntil: isUpdate ? (a.EffectiveUntil ?? null) : (a.EffectiveUntil || undefined),
+    notes: isUpdate ? (a.Notes ?? null) : (a.Notes || undefined),
     user,
   });
   const row = a.ID
