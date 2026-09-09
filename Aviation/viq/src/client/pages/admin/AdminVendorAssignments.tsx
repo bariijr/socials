@@ -33,9 +33,9 @@ function useVASelection() {
   };
 }
 
-function contextSummary(v: VendorAssignment): string {
+function contextSummary(v: VendorAssignment, clients: { ClientID: string; Name: string }[] = []): string {
   const parts: string[] = [];
-  if (v.ClientID) parts.push(v.ClientID);
+  if (v.ClientID) parts.push(clients.find((c) => c.ClientID === v.ClientID)?.Name || v.ClientID);
   if (v.ICAO) parts.push(v.ICAO);
   else if (v.CountryISO2) parts.push(v.CountryISO2);
   else parts.push('Global');
@@ -109,7 +109,7 @@ function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }
     <Card>
       <CardHeader>
         <CardTitle className="text-base font-semibold">
-          {isNew ? 'Add Vendor Assignment' : `Edit — ${assignment ? contextSummary(assignment) : ''}`}
+          {isNew ? 'Add Vendor Assignment' : `Edit — ${assignment ? contextSummary(assignment, clients) : ''}`}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -165,8 +165,8 @@ function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }
           <div className="flex items-center gap-2">
             <Checkbox
               checked={preferred}
-              onCheckedChange={(v) => { setPreferred(!!v); if (v) setProhibited(false); }}
-              disabled={!canEditFields}
+              onCheckedChange={(v) => setPreferred(!!v)}
+              disabled={!canEditFields || prohibited}
               id="va-preferred"
             />
             <Label htmlFor="va-preferred">Preferred</Label>
@@ -174,8 +174,8 @@ function VendorAssignmentPanel({ assignment, isNew, isAdmin, onSaved, onCancel }
           <div className="flex items-center gap-2">
             <Checkbox
               checked={prohibited}
-              onCheckedChange={(v) => { setProhibited(!!v); if (v) setPreferred(false); }}
-              disabled={!canEditFields}
+              onCheckedChange={(v) => setProhibited(!!v)}
+              disabled={!canEditFields || preferred}
               id="va-prohibited"
             />
             <Label htmlFor="va-prohibited">Prohibited (DO NOT USE)</Label>
@@ -228,63 +228,115 @@ export function VendorAssignmentsTab() {
   const [loading, setLoading] = useState(true);
   const sel = useVASelection();
 
+  const [providers, setProviders] = useState(getProviderList());
+  const [clients, setClients] = useState(getClientList());
+  const [countries, setCountries] = useState(getCountryList());
+  useEffect(() => {
+    setProviders(getProviderList());
+    setClients(getClientList());
+    setCountries(getCountryList());
+  }, []);
+  const providerName = (id: string) => providers.find((p) => p.ProviderID === id)?.Name || id;
+
+  // Filters map 1:1 onto getVendorAssignmentList's { clientId, countryIso2,
+  // serviceType } params (Task 1) — the same shape as GET /vendor-assignments
+  // — so every filter change simply re-fetches the list, matching the
+  // filter-state -> useEffect -> reload convention AdminTrips.tsx already
+  // uses for its own search/showEnquiriesOnly filters.
+  const [clientFilter, setClientFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState('');
+
   const refresh = () => {
     setLoading(true);
-    getVendorAssignmentList().then((rows) => { setAssignments(rows); setLoading(false); });
+    getVendorAssignmentList({
+      clientId: clientFilter || undefined,
+      countryIso2: countryFilter || undefined,
+      serviceType: serviceTypeFilter.trim() || undefined,
+    }).then((rows) => { setAssignments(rows); setLoading(false); });
   };
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { refresh(); }, [clientFilter, countryFilter, serviceTypeFilter]);
 
   const selected = assignments.find((a) => a.ID === sel.selectedId) || null;
 
-  if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-
   return (
-    <MasterDetailShell
-      heightClassName="h-[calc(100vh-14rem)]"
-      listWidthClassName="md:w-64 lg:w-96"
-      detailOpen={!!(sel.selectedId || sel.adding)}
-      onDetailOpenChange={(open) => { if (!open) sel.clear(); }}
-      detailTitle={selected ? contextSummary(selected) : (sel.adding ? 'Add Vendor Assignment' : undefined)}
-      list={
-        <MasterDetailList
-          title="Vendor Assignments" subtitle={`${assignments.length} total`} items={assignments}
-          getId={(a) => a.ID} searchText={(a) => `${a.ProviderID} ${contextSummary(a)}`}
-          viewStorageKey="viq_assets_vendor_assignments_view" selectedId={sel.selectedId || (sel.adding ? 'new' : null)}
-          onSelect={sel.select} onAddNew={sel.startAdd} addLabel="Add Vendor Assignment" canAdd={isAdmin}
-          emptyText="No vendor assignments yet"
-          renderItem={(a, { viewMode, selected: isSelected }) => (
-            <EntityListCard
-              viewMode={viewMode} selected={isSelected}
-              icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
-              title={a.ProviderID}
-              subtitle={contextSummary(a)}
-              badges={<>
-                {a.Prohibited ? (
-                  <Badge variant="outline" className="text-[10px] text-red-600 border-red-300">DO NOT USE</Badge>
-                ) : (
-                  <>
-                    {a.Preferred && <Badge variant="default" className="text-[10px]">Preferred</Badge>}
-                    <Badge variant="outline" className="text-[10px]">Rank {a.Rank}</Badge>
-                  </>
-                )}
-                {!a.Active && <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>}
-              </>}
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Client</Label>
+          <Select value={clientFilter || 'all'} onValueChange={(v) => setClientFilter(v === 'all' ? '' : v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Clients</SelectItem>
+              {clients.map((c) => <SelectItem key={c.ClientID} value={c.ClientID}>{c.Name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Country</Label>
+          <Select value={countryFilter || 'all'} onValueChange={(v) => setCountryFilter(v === 'all' ? '' : v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Countries</SelectItem>
+              {countries.map((c) => <SelectItem key={c.ISO2} value={c.ISO2}>{c.Name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Service Type</Label>
+          <Input value={serviceTypeFilter} onChange={(e) => setServiceTypeFilter(e.target.value)} placeholder="e.g. Overflight" />
+        </div>
+      </div>
+
+      {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+        <MasterDetailShell
+          heightClassName="h-[calc(100vh-17rem)]"
+          listWidthClassName="md:w-64 lg:w-96"
+          detailOpen={!!(sel.selectedId || sel.adding)}
+          onDetailOpenChange={(open) => { if (!open) sel.clear(); }}
+          detailTitle={selected ? contextSummary(selected, clients) : (sel.adding ? 'Add Vendor Assignment' : undefined)}
+          list={
+            <MasterDetailList
+              title="Vendor Assignments" subtitle={`${assignments.length} total`} items={assignments}
+              getId={(a) => a.ID} searchText={(a) => `${a.ProviderID} ${providerName(a.ProviderID)} ${contextSummary(a, clients)}`}
+              viewStorageKey="viq_assets_vendor_assignments_view" selectedId={sel.selectedId || (sel.adding ? 'new' : null)}
+              onSelect={sel.select} onAddNew={sel.startAdd} addLabel="Add Vendor Assignment" canAdd={isAdmin}
+              emptyText="No vendor assignments yet"
+              renderItem={(a, { viewMode, selected: isSelected }) => (
+                <EntityListCard
+                  viewMode={viewMode} selected={isSelected}
+                  icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
+                  title={providerName(a.ProviderID)}
+                  subtitle={contextSummary(a, clients)}
+                  badges={<>
+                    {a.Prohibited ? (
+                      <Badge variant="outline" className="text-[10px] text-red-600 border-red-300">DO NOT USE</Badge>
+                    ) : (
+                      <>
+                        {a.Preferred && <Badge variant="default" className="text-[10px]">Preferred</Badge>}
+                        <Badge variant="outline" className="text-[10px]">Rank {a.Rank}</Badge>
+                      </>
+                    )}
+                    {!a.Active && <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>}
+                  </>}
+                />
+              )}
             />
-          )}
+          }
+          detail={
+            <DetailPanel empty={!selected && !sel.adding}>
+              {!selected && !sel.adding ? 'Select a vendor assignment from the left, or add a new one' : (
+                <VendorAssignmentPanel
+                  key={selected?.ID ?? 'new'}
+                  assignment={selected} isNew={sel.adding} isAdmin={isAdmin}
+                  onSaved={(id) => { refresh(); sel.select(id); }}
+                  onCancel={sel.clear}
+                />
+              )}
+            </DetailPanel>
+          }
         />
-      }
-      detail={
-        <DetailPanel empty={!selected && !sel.adding}>
-          {!selected && !sel.adding ? 'Select a vendor assignment from the left, or add a new one' : (
-            <VendorAssignmentPanel
-              key={selected?.ID ?? 'new'}
-              assignment={selected} isNew={sel.adding} isAdmin={isAdmin}
-              onSaved={(id) => { refresh(); sel.select(id); }}
-              onCancel={sel.clear}
-            />
-          )}
-        </DetailPanel>
-      }
-    />
+      )}
+    </div>
   );
 }
