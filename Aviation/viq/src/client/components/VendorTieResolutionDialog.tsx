@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getVendorCandidates, saveService } from '@/lib/dataStore';
+import { ApiError, getVendorCandidates, saveService } from '@/lib/dataStore';
 import type { Service } from '@/data/types';
 
 interface RowState {
@@ -19,6 +19,7 @@ interface RowState {
   selected?: string;
   loading: boolean;
   saved: boolean;
+  error?: string;
 }
 
 export function VendorTieResolutionDialog({
@@ -55,12 +56,28 @@ export function VendorTieResolutionDialog({
   async function handleResolve(idx: number) {
     const row = rows[idx];
     if (!row.selected) return;
-    await saveService({ ...row.service, ProviderID: row.selected });
     setRows((prev) => {
       const next = [...prev];
-      next[idx] = { ...next[idx], saved: true };
+      next[idx] = { ...next[idx], error: undefined };
       return next;
     });
+    try {
+      await saveService({ ...row.service, ProviderID: row.selected });
+      setRows((prev) => {
+        const next = [...prev];
+        next[idx] = { ...next[idx], saved: true };
+        return next;
+      });
+    } catch (err) {
+      const message = err instanceof ApiError && err.status === 409
+        ? 'This service was modified elsewhere — close and reopen to retry.'
+        : 'Could not save this vendor choice. Please try again.';
+      setRows((prev) => {
+        const next = [...prev];
+        next[idx] = { ...next[idx], error: message };
+        return next;
+      });
+    }
   }
 
   const unresolvedCount = rows.filter((r) => !r.saved).length;
@@ -99,6 +116,7 @@ export function VendorTieResolutionDialog({
                   <Button size="sm" disabled={!row.selected} onClick={() => handleResolve(idx)}>Use</Button>
                 </div>
               )}
+              {row.error && <div className="text-xs text-red-600 mt-1">{row.error}</div>}
             </div>
           ))}
         </div>

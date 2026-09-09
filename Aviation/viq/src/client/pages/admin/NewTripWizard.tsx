@@ -588,7 +588,14 @@ export default function NewTripWizard() {
       const arrival = await generateArrivalServices((l as Leg).LegID, { departureGroundHandling: depGHRequested[idx] });
       allTies.push(...filterVendorTies([...overflight, ...arrival]));
     }
-    if (allTies.length > 0) { setVendorTies(allTies); setVendorTiesOpen(true); }
+    // If any ties were generated, show the tie-resolution dialog first --
+    // the "Trip saved successfully" confirm dialog is deferred until that
+    // dialog is closed (see the VendorTieResolutionDialog onClose handler
+    // below), since the confirm dialog's actions navigate away and would
+    // otherwise unmount this wizard (and the tie dialog with it) before the
+    // coordinator can interact with it.
+    const hasVendorTies = allTies.length > 0;
+    if (hasVendorTies) { setVendorTies(allTies); setVendorTiesOpen(true); }
 
     // Save stops
     for (const s of stops) {
@@ -604,7 +611,7 @@ export default function NewTripWizard() {
     await Promise.all(persons.map((p) => savePerson({ ...p, DefaultRole: p.Role } as Person)));
     await Promise.all(persons.map((p) => assignPersonToAllLegs(p.PersonID!, { tripId, role: p.Role || 'Pax' })));
 
-    setConfirmOpen(true);
+    if (!hasVendorTies) setConfirmOpen(true);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to save trip. Please try again.');
     } finally {
@@ -941,7 +948,11 @@ export default function NewTripWizard() {
         </DialogContent>
       </Dialog>
 
-      <VendorTieResolutionDialog open={vendorTiesOpen} onClose={() => setVendorTiesOpen(false)} services={vendorTies} />
+      <VendorTieResolutionDialog
+        open={vendorTiesOpen}
+        onClose={() => { setVendorTiesOpen(false); setConfirmOpen(true); }}
+        services={vendorTies}
+      />
     </div>
   );
 }
