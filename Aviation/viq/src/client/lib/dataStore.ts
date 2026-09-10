@@ -1824,6 +1824,14 @@ export async function getVendorAssignment(id: string): Promise<{ id: string; ran
   }
 }
 
+// Client-side copy of the server-only `changeVendorAllowed` in
+// src/server/common/statusTransitions.ts (Task 3) — the client can't import
+// that module, so this one-line check is intentionally duplicated here.
+// Keep it in sync with the server version if those statuses ever change.
+export function changeVendorAllowedClient(status: string): boolean {
+  return ['Requested', 'Chasing', 'Confirmed', 'Re-confirm Required'].includes(status);
+}
+
 export interface VendorChangeLog {
   ID: string;
   SVCID: string;

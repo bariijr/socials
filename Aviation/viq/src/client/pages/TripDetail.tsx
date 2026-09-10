@@ -9,12 +9,14 @@ import {
   getClientList, saveClient, getUserDirectory, getPreferredContact,
   mapTripFromApi, mapLegFromApi, mapServiceFromApi,
   ApiError, saveComm, sendComm, getPreviousLegItinerary,
+  changeVendorAllowedClient,
 } from '@/lib/dataStore';
 import { generateEmail, defaultTemplateFor } from '@/lib/emailTemplates';
 import { haversineNM } from '@/lib/geo';
 import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel, ServiceResponsibility } from '@/data/types';
 import type { Invoice, TripSheet, Client, UserDirectoryEntry, AuthorizationCandidate } from '@/lib/dataStore';
 import { getServiceAuthorizationCandidates, linkServiceAuthorization, getPermitAuthorizationList } from '@/lib/dataStore';
+import { ChangeVendorDialog } from '@/components/ChangeVendorDialog';
 import { Typeahead } from '@/components/ui/typeahead';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -931,6 +933,7 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
   const [candidates, setCandidates] = useState<AuthorizationCandidate[] | null>(null);
   const [linking, setLinking] = useState(false);
+  const [changeVendorOpen, setChangeVendorOpen] = useState(false);
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const save = async () => {
     try {
@@ -1047,7 +1050,7 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
             <div className="grid grid-cols-2 gap-2">
               <select
                 className="h-8 min-w-0 rounded border bg-background px-1 text-xs"
-                disabled={!editing}
+                disabled={!editing || changeVendorAllowedClient(service.Status)}
                 value={draft.ProviderID || ''}
                 onChange={(event) => setDraft({ ...draft, ProviderID: event.target.value || null })}
                 title="Provider"
@@ -1055,6 +1058,11 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
                 <option value="">NO PROVIDER</option>
                 {providerOptions.map((p) => <option key={p.ProviderID} value={p.ProviderID}>{p.Name}</option>)}
               </select>
+              {editing && changeVendorAllowedClient(service.Status) && (
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setChangeVendorOpen(true)}>
+                  CHANGE VENDOR
+                </Button>
+              )}
               <TransitionMenu
                 status={draft.Status}
                 allowedTransitions={service.AllowedTransitions ?? []}
@@ -1164,6 +1172,20 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
         open={composeOpen}
         onClose={() => setComposeOpen(false)}
         onSent={onSaved}
+      />
+
+      <ChangeVendorDialog
+        open={changeVendorOpen}
+        onClose={() => setChangeVendorOpen(false)}
+        svc={service}
+        leg={leg}
+        trip={trip}
+        legs={legs}
+        persons={persons}
+        onChanged={async () => {
+          setChangeVendorOpen(false);
+          await onSaved();
+        }}
       />
 
       {conflict && (
