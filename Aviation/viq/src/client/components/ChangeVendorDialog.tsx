@@ -24,7 +24,12 @@ const VENDOR_CHANGE_REASONS = [
   'Operational Requirement', 'Capability Issue', 'Schedule Issue', 'Quality Issue', 'Other',
 ];
 
-type Step = 'pick' | 'cancelling' | 'cancel-failed' | 'requesting' | 'done' | 'request-failed';
+// 'cancel-failed' vs 'swap-failed' are deliberately distinct: the former
+// means the cancellation email itself never went out (retrying resends it,
+// safely), the latter means the cancellation WAS confirmed sent and only the
+// subsequent changeVendor() save failed (retrying must NOT resend it -- see
+// handleRetrySwap).
+type Step = 'pick' | 'cancelling' | 'cancel-failed' | 'swap-failed' | 'requesting' | 'done' | 'request-failed';
 
 export function ChangeVendorDialog({
   open, onClose, svc, leg, trip, legs, persons, onChanged,
@@ -41,6 +46,10 @@ export function ChangeVendorDialog({
   const { isAdmin } = useAuth();
   const [candidates, setCandidates] = useState<{ vendorId: string; providerName: string }[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(true);
+  // Distinct from "no candidates" (an empty, successful result) -- a fetch
+  // failure must surface visibly rather than being indistinguishable from a
+  // genuinely empty eligible pool (see JSX below).
+  const [candidatesError, setCandidatesError] = useState(false);
   const [overrideMode, setOverrideMode] = useState(false);
   const [allProviders, setAllProviders] = useState<{ ProviderID: string; Name: string }[]>([]);
   const [toProviderId, setToProviderId] = useState('');
@@ -48,6 +57,23 @@ export function ChangeVendorDialog({
   const [notes, setNotes] = useState('');
   const [step, setStep] = useState<Step>('pick');
   const [error, setError] = useState('');
+  // Remembered once the cancellation email is confirmed Sent, so a
+  // swap-failed retry can reuse it instead of building + sending a brand
+  // new cancellation Comm (which would notify the old vendor twice).
+  const [sentCancellationCommId, setSentCancellationCommId] = useState<string | null>(null);
+  const [retryingSwap, setRetryingSwap] = useState(false);
+
+  function loadCandidates() {
+    setLoadingCandidates(true);
+    setCandidatesError(false);
+    getChangeVendorCandidates(svc.SVCID)
+      .then((result) => setCandidates(result))
+      .catch(() => {
+        setCandidates([]);
+        setCandidatesError(true);
+      })
+      .finally(() => setLoadingCandidates(false));
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -57,12 +83,10 @@ export function ChangeVendorDialog({
     setNotes('');
     setOverrideMode(false);
     setError('');
-    setLoadingCandidates(true);
-    getChangeVendorCandidates(svc.SVCID)
-      .then((result) => setCandidates(result))
-      .catch(() => setCandidates([]))
-      .finally(() => setLoadingCandidates(false));
+    setSentCancellationCommId(null);
+    loadCandidates();
     setAllProviders(getProviderList());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, svc.SVCID]);
 
   const currentProvider = allProviders.find((p) => p.ProviderID === svc.ProviderID);
@@ -116,18 +140,32 @@ export function ChangeVendorDialog({
       return;
     }
 
+    // The cancellation is now confirmed Sent -- remember its Comm id so a
+    // swap-failed retry (below) can reuse it instead of sending a second
+    // cancellation notice to the old vendor.
+    setSentCancellationCommId(cancelComm.CommID);
+    await attemptSwapAndRequest(cancelComm.CommID);
+  }
+
+  // Everything from "save the vendor swap" onward, factored out so a
+  // swap-failed retry can re-run it with the ALREADY-SENT cancellation
+  // Comm id, without ever touching saveComm/sendComm for the cancellation
+  // again. Only reached once a cancellation email has been confirmed Sent
+  // (either just now, in handleConfirm, or on a prior attempt, via
+  // handleRetrySwap).
+  async function attemptSwapAndRequest(cancellationCommId: string) {
     let pending: Service;
     try {
       pending = await changeVendor(svc.SVCID, {
         toProviderId, reason, notes: notes || undefined,
-        cancellationCommId: cancelComm.CommID, version: svc.Version,
+        cancellationCommId, version: svc.Version,
       });
     } catch (err) {
       const message = err instanceof ApiError && err.status === 409
         ? 'This service was modified elsewhere — close and reopen to retry.'
-        : 'The cancellation to the previous vendor was sent, but the vendor swap failed to save. Please retry — do not resend the cancellation.';
+        : 'The cancellation was already sent, but saving the vendor swap failed. Retrying will NOT resend the cancellation.';
       setError(message);
-      setStep('cancel-failed');
+      setStep('swap-failed');
       return;
     }
 
@@ -135,7 +173,10 @@ export function ChangeVendorDialog({
     const toProvider = getProviderList().find((p) => p.ProviderID === toProviderId) ?? null;
     const newRecipients = toProvider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
     if (newRecipients.length === 0) {
-      await saveService({ ...pending, Notes: `${pending.Notes} Change Vendor: new provider has no email on file.`.trim() });
+      // Structurally identical to the "send failed" branch below -- both
+      // are "needs manual attention" outcomes, so both must consistently
+      // flag the service as Submission Failed, not just one of them.
+      await saveService({ ...pending, Status: 'Submission Failed', Notes: `${pending.Notes} Change Vendor: new provider has no email on file.`.trim() });
       setError('Vendor cancelled and swapped, but the new provider has no email address on file. This service now needs a manual submission.');
       setStep('request-failed');
       await onChanged();
@@ -177,7 +218,7 @@ export function ChangeVendorDialog({
         // the whole flow over it.
         try {
           const logs = await getVendorChangeLogsForService(pending.SVCID);
-          const log = logs.find((l) => l.CancellationCommID === cancelComm.CommID) ?? logs[logs.length - 1];
+          const log = logs.find((l) => l.CancellationCommID === cancellationCommId) ?? logs[logs.length - 1];
           if (log) await patchVendorChangeLogNewRequestComm(log.ID, requestComm.CommID);
         } catch {
           // Non-critical -- see comment above.
@@ -193,6 +234,21 @@ export function ChangeVendorDialog({
     }
 
     await onChanged();
+  }
+
+  // Retries ONLY the swap-and-request step, reusing the cancellation Comm
+  // id remembered when the cancellation was confirmed Sent -- it never
+  // calls saveComm/sendComm for a cancellation again, so the old vendor
+  // cannot receive a second cancellation notice from this retry.
+  async function handleRetrySwap() {
+    if (!sentCancellationCommId) return;
+    setError('');
+    setRetryingSwap(true);
+    try {
+      await attemptSwapAndRequest(sentCancellationCommId);
+    } finally {
+      setRetryingSwap(false);
+    }
   }
 
   return (
@@ -223,7 +279,13 @@ export function ChangeVendorDialog({
                     </SelectContent>
                   </Select>
                 )}
-                {!loadingCandidates && candidates.length === 0 && !overrideMode && (
+                {!loadingCandidates && candidatesError && (
+                  <div className="mt-1 text-xs text-red-600">
+                    Couldn't load eligible vendors — try again.{' '}
+                    <button type="button" className="underline" onClick={loadCandidates}>Retry</button>
+                  </div>
+                )}
+                {!loadingCandidates && !candidatesError && candidates.length === 0 && !overrideMode && (
                   <div className="mt-1 text-xs text-muted-foreground">No eligible vendors found for this context.</div>
                 )}
                 {isAdmin && (
@@ -252,7 +314,7 @@ export function ChangeVendorDialog({
           {step === 'requesting' && <div className="text-sm">Sending new request to the replacement vendor…</div>}
           {step === 'done' && <div className="text-sm text-emerald-600">Done — previous request cancelled, replacement request sent.</div>}
 
-          {(step === 'cancel-failed' || step === 'request-failed') && (
+          {(step === 'cancel-failed' || step === 'swap-failed' || step === 'request-failed') && (
             <div className="text-sm text-red-600">{error}</div>
           )}
         </div>
@@ -264,6 +326,9 @@ export function ChangeVendorDialog({
           )}
           {step === 'cancel-failed' && (
             <Button onClick={handleConfirm}>Retry Cancellation</Button>
+          )}
+          {step === 'swap-failed' && (
+            <Button disabled={retryingSwap} onClick={handleRetrySwap}>{retryingSwap ? 'Retrying…' : 'Retry Swap'}</Button>
           )}
         </DialogFooter>
       </DialogContent>
