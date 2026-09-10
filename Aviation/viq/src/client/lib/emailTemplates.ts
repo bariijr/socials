@@ -391,7 +391,7 @@ export function generateEmail(
 
   if (COUNTRY_AWARE_TEMPLATE_TYPES.includes(template)) {
     const isRevision = template === 'VIQ_OverflyRevision' || template === 'VIQ_LandingRevision' || template === 'VIQ_GroundHandlingRevision';
-    const isOverfly = template === 'VIQ_OverflyRequest' || template === 'VIQ_OverflyRevision';
+    const isOverfly = template === 'VIQ_OverflyRequest' || template === 'VIQ_OverflyRevision' || template === 'VIQ_OverflyCancellation';
     const lookupCountry = isOverfly ? countryISO2 : arrCountryISO2;
     // Real previous values come from the leg's audit trail (see
     // getPreviousLegItinerary in dataStore.ts) -- callers fetch them

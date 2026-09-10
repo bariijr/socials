@@ -254,6 +254,9 @@ export class ServicesService {
     if (!svc.providerId) {
       throw new BadRequestException('Service has no current provider to change from');
     }
+    if (dto.toProviderId === svc.providerId) {
+      throw new BadRequestException('Replacement vendor must be different from the current vendor');
+    }
 
     if (callerRole !== 'Admin') {
       const pool = svc.countryIso2
@@ -265,18 +268,45 @@ export class ServicesService {
       }
     }
 
-    const result = await this.prisma.service.updateMany({
-      where: { svcId, version: dto.version },
-      data: {
-        providerId: dto.toProviderId,
-        vendorSelectionSource: 'USER_SELECTED',
-        vendorAssignmentId: null,
-        vendorSelectedAtZ: new Date(),
-        status: 'Submission Pending',
-        statusChangedAt: new Date(),
-        statusChangedBy: currentUsername,
-        version: { increment: 1 },
-      },
+    // Design spec §6: the Service update and the VendorChangeLog row are
+    // written atomically -- if the log write fails after the service has
+    // already flipped provider, we'd be left with a permanently swapped
+    // service and no structured record of why, and the audit.logDiff below
+    // (which reads the post-write row) would never run either. The
+    // conflict-handling path below stays outside the transaction: it only
+    // re-fetches read-only data (current record + audit history) when
+    // updateMany's count is 0, at which point nothing was written and
+    // there's nothing to roll back.
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updateResult = await tx.service.updateMany({
+        where: { svcId, version: dto.version },
+        data: {
+          providerId: dto.toProviderId,
+          vendorSelectionSource: 'USER_SELECTED',
+          vendorAssignmentId: null,
+          vendorSelectedAtZ: new Date(),
+          status: 'Submission Pending',
+          statusChangedAt: new Date(),
+          statusChangedBy: currentUsername,
+          version: { increment: 1 },
+        },
+      });
+
+      if (updateResult.count > 0) {
+        await tx.vendorChangeLog.create({
+          data: {
+            svcId,
+            fromProviderId: svc.providerId!,
+            toProviderId: dto.toProviderId,
+            reason: dto.reason,
+            notes: dto.notes,
+            cancellationCommId: dto.cancellationCommId,
+            changedBy: currentUsername,
+          },
+        });
+      }
+
+      return updateResult;
     });
 
     if (result.count === 0) {
@@ -290,18 +320,6 @@ export class ServicesService {
         changedAt: latest?.timestampZ,
       });
     }
-
-    await this.prisma.vendorChangeLog.create({
-      data: {
-        svcId,
-        fromProviderId: svc.providerId,
-        toProviderId: dto.toProviderId,
-        reason: dto.reason,
-        notes: dto.notes,
-        cancellationCommId: dto.cancellationCommId,
-        changedBy: currentUsername,
-      },
-    });
 
     const updated = await this.prisma.service.findUnique({ where: { svcId } });
     await this.audit.logDiff(currentUsername, 'Service', svcId, svc as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>);
@@ -371,10 +389,15 @@ export class ServicesService {
       serviceType: svc.serviceType,
       clientId: trip?.clientId ?? undefined,
     });
-    if (pool.length === 0) return { candidates: [] };
-    const providers = await this.prisma.provider.findMany({ where: { providerId: { in: pool.map((p) => p.vendorId) } } });
+    // Exclude the service's current provider -- it isn't a "replacement",
+    // and offering it would let a coordinator produce a real cancellation
+    // + new-request email pair to the SAME vendor and a VendorChangeLog row
+    // reading X -> X (see Important 4).
+    const replacementPool = pool.filter((p) => p.vendorId !== svc.providerId);
+    if (replacementPool.length === 0) return { candidates: [] };
+    const providers = await this.prisma.provider.findMany({ where: { providerId: { in: replacementPool.map((p) => p.vendorId) } } });
     const nameById = new Map(providers.map((p) => [p.providerId, p.name]));
-    return { candidates: pool.map((p) => ({ vendorId: p.vendorId, providerName: nameById.get(p.vendorId) ?? p.vendorId })) };
+    return { candidates: replacementPool.map((p) => ({ vendorId: p.vendorId, providerName: nameById.get(p.vendorId) ?? p.vendorId })) };
   }
 
   // Recomputes Urgency for every non-final service against "now" — call this

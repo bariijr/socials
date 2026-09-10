@@ -17,6 +17,13 @@ import {
 } from '@/lib/dataStore';
 import { generateEmail, defaultTemplateFor, defaultTemplateForCancellation } from '@/lib/emailTemplates';
 import { useAuth } from '@/lib/authContext';
+// Shared with the Submission Engine's own "append a status note" call sites
+// (structurally identical pattern -- keep the DTO's @MaxLength(2000) note
+// budget in one place). Safe despite the import cycle this creates
+// (TripDetail.tsx imports ChangeVendorDialog): appendBoundedNote is a
+// hoisted function declaration used only inside event handlers here, never
+// at module-evaluation time.
+import { appendBoundedNote } from '@/pages/TripDetail';
 import type { Service, Leg, Trip, TripPersonView, Comm } from '@/data/types';
 
 const VENDOR_CHANGE_REASONS = [
@@ -30,6 +37,27 @@ const VENDOR_CHANGE_REASONS = [
 // subsequent changeVendor() save failed (retrying must NOT resend it -- see
 // handleRetrySwap).
 type Step = 'pick' | 'cancelling' | 'cancel-failed' | 'swap-failed' | 'requesting' | 'done' | 'request-failed';
+
+// Critical 3 (final-review fix wave): the in-memory sentCancellationCommId
+// state only survives for as long as THIS dialog instance stays mounted --
+// closing and reopening it (e.g. after landing on 'swap-failed') used to
+// reset that to null, so the user could fall through handleConfirm again
+// and send a genuinely SECOND cancellation email to the old vendor. This
+// module-level map is the fix: it survives a close/reopen (indeed any
+// remount) within the same browser session/tab, keyed by the service whose
+// change is in flight, so the dialog can always tell "a cancellation was
+// already sent for this service's in-progress change" regardless of its own
+// mount history. Entries are written the instant a cancellation is
+// confirmed Sent and are deleted ONLY once the entire change completes
+// (the 'done' step) -- see attemptSwapAndRequest's success path. A
+// service's own changeVendorAllowed status gating (server) /
+// changeVendorAllowedClient (client) additionally makes the dialog
+// unreachable again once a change has fully resolved (successfully or via
+// 'request-failed', which already flips status away from the allowed set),
+// so this map only ever needs to answer for the narrow "cancellation sent,
+// swap not yet saved" window.
+type PendingCancellation = { cancellationCommId: string; toProviderId: string; reason: string; notes?: string };
+const pendingCancellations = new Map<string, PendingCancellation>();
 
 export function ChangeVendorDialog({
   open, onClose, svc, leg, trip, legs, persons, onChanged,
@@ -77,6 +105,27 @@ export function ChangeVendorDialog({
 
   useEffect(() => {
     if (!open) return;
+    setAllProviders(getProviderList());
+
+    const resume = pendingCancellations.get(svc.SVCID);
+    if (resume) {
+      // A cancellation was already confirmed Sent for this exact service in
+      // a previous dialog session that never reached 'done' -- resuming at
+      // 'pick' would let the coordinator build and send a second, real
+      // cancellation email to the same vendor. Skip 'pick' entirely and land
+      // on the safe resumed state, pre-populated with exactly what was in
+      // effect when the cancellation went out, so a retry can only ever
+      // reattempt the (not-yet-saved) swap -- never resend the cancellation.
+      setToProviderId(resume.toProviderId);
+      setReason(resume.reason);
+      setNotes(resume.notes || '');
+      setOverrideMode(false);
+      setSentCancellationCommId(resume.cancellationCommId);
+      setError("The vendor swap couldn't be saved. The previous vendor has already been sent a cancellation — do not restart this Change Vendor from scratch. Retry the swap below.");
+      setStep('swap-failed');
+      return;
+    }
+
     setStep('pick');
     setToProviderId('');
     setReason('');
@@ -85,7 +134,6 @@ export function ChangeVendorDialog({
     setError('');
     setSentCancellationCommId(null);
     loadCandidates();
-    setAllProviders(getProviderList());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, svc.SVCID]);
 
@@ -140,11 +188,52 @@ export function ChangeVendorDialog({
       return;
     }
 
-    // The cancellation is now confirmed Sent -- remember its Comm id so a
-    // swap-failed retry (below) can reuse it instead of sending a second
-    // cancellation notice to the old vendor.
+    // The cancellation is now confirmed Sent -- remember its Comm id (both in
+    // this component's own state, for a same-session swap-failed retry, AND
+    // in the module-level map, so the "already sent" fact survives a
+    // close/reopen of this dialog -- see Critical 3, Part B).
     setSentCancellationCommId(cancelComm.CommID);
+    pendingCancellations.set(svc.SVCID, {
+      cancellationCommId: cancelComm.CommID,
+      toProviderId,
+      reason,
+      notes: notes || undefined,
+    });
     await attemptSwapAndRequest(cancelComm.CommID);
+  }
+
+  // Part A of Critical 3: a 409 from changeVendor() carries the fresh
+  // record in its ConflictException body (`current.version`) -- most
+  // conflicts (a merely-stale svc.Version prop, a concurrent edit, or
+  // Critical 1's own now-fixed failure mode) recover from this automatically
+  // without ever needing a manual retry. Attempted exactly once; never
+  // touches saveComm/sendComm, so it can never cause a second cancellation
+  // to be sent. Returns the swapped Service on success, or null after
+  // putting the dialog in the 'swap-failed' terminal state.
+  async function trySwapWithVersionRecovery(cancellationCommId: string): Promise<Service | null> {
+    try {
+      return await changeVendor(svc.SVCID, {
+        toProviderId, reason, notes: notes || undefined,
+        cancellationCommId, version: svc.Version,
+      });
+    } catch (err) {
+      const freshVersion = err instanceof ApiError && err.status === 409
+        ? (err.body as { current?: { version?: number } } | undefined)?.current?.version
+        : undefined;
+      if (typeof freshVersion === 'number') {
+        try {
+          return await changeVendor(svc.SVCID, {
+            toProviderId, reason, notes: notes || undefined,
+            cancellationCommId, version: freshVersion,
+          });
+        } catch {
+          // Auto-retry also failed -- fall through to swap-failed below.
+        }
+      }
+      setError("The vendor swap couldn't be saved. The previous vendor has already been sent a cancellation — do not restart this Change Vendor from scratch. Retry the swap below.");
+      setStep('swap-failed');
+      return null;
+    }
   }
 
   // Everything from "save the vendor swap" onward, factored out so a
@@ -154,58 +243,53 @@ export function ChangeVendorDialog({
   // (either just now, in handleConfirm, or on a prior attempt, via
   // handleRetrySwap).
   async function attemptSwapAndRequest(cancellationCommId: string) {
-    let pending: Service;
+    const pending = await trySwapWithVersionRecovery(cancellationCommId);
+    if (!pending) return; // trySwapWithVersionRecovery already set swap-failed.
+
+    // The swap itself is now durably saved server-side -- the specific risk
+    // Critical 3 guards against (resending THIS cancellation) is over, since
+    // any future Change Vendor on this service would target its new current
+    // provider. Everything from here on is Important 1's territory: no
+    // matter what throws below (including a recovery saveService() call
+    // itself throwing), the dialog must land on a terminal, user-visible
+    // state rather than hanging on "Sending new request..." forever.
     try {
-      pending = await changeVendor(svc.SVCID, {
-        toProviderId, reason, notes: notes || undefined,
-        cancellationCommId, version: svc.Version,
-      });
-    } catch (err) {
-      const message = err instanceof ApiError && err.status === 409
-        ? 'This service was modified elsewhere — close and reopen to retry.'
-        : 'The cancellation was already sent, but saving the vendor swap failed. Retrying will NOT resend the cancellation.';
-      setError(message);
-      setStep('swap-failed');
-      return;
-    }
+      setStep('requesting');
+      const toProvider = getProviderList().find((p) => p.ProviderID === toProviderId) ?? null;
+      const newRecipients = toProvider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
+      if (newRecipients.length === 0) {
+        // Structurally identical to the "send failed" branch below -- both
+        // are "needs manual attention" outcomes, so both must consistently
+        // flag the service as Submission Failed, not just one of them.
+        await saveService({ ...pending, Status: 'Submission Failed', Notes: appendBoundedNote(pending.Notes, 'Change Vendor: new provider has no email on file.') });
+        setError('Vendor cancelled and swapped, but the new provider has no email address on file. This service now needs a manual submission.');
+        setStep('request-failed');
+        await onChanged();
+        return;
+      }
 
-    setStep('requesting');
-    const toProvider = getProviderList().find((p) => p.ProviderID === toProviderId) ?? null;
-    const newRecipients = toProvider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
-    if (newRecipients.length === 0) {
-      // Structurally identical to the "send failed" branch below -- both
-      // are "needs manual attention" outcomes, so both must consistently
-      // flag the service as Submission Failed, not just one of them.
-      await saveService({ ...pending, Status: 'Submission Failed', Notes: `${pending.Notes} Change Vendor: new provider has no email on file.`.trim() });
-      setError('Vendor cancelled and swapped, but the new provider has no email address on file. This service now needs a manual submission.');
-      setStep('request-failed');
-      await onChanged();
-      return;
-    }
+      const requestTemplate = defaultTemplateFor(svc.ServiceType, 'Request');
+      const newRef = `REQ-${svc.SVCID}-${Date.now()}`;
+      const generatedRequest = generateEmail(
+        requestTemplate, trip.TripID, leg.LegID, pending.SVCID, legs, persons, '',
+        trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
+        trip.Client, trip.Operator, trip.SupportRef || '', pending.CountryISO2 ?? null, newRecipients,
+        null, newRef,
+      );
+      const requestComm: Comm = {
+        CommID: `COMM-${pending.SVCID}-${Date.now()}`,
+        Direction: 'OUTBOUND',
+        TripID: pending.TripID,
+        SVCID: pending.SVCID,
+        Token: pending.SVCID,
+        From: 'operations@viq.local',
+        To: newRecipients.join(', '),
+        Subject: generatedRequest.subject,
+        Body: generatedRequest.body,
+        TimestampZ: new Date().toISOString(),
+        Status: 'Draft',
+      };
 
-    const requestTemplate = defaultTemplateFor(svc.ServiceType, 'Request');
-    const newRef = `REQ-${svc.SVCID}-${Date.now()}`;
-    const generatedRequest = generateEmail(
-      requestTemplate, trip.TripID, leg.LegID, pending.SVCID, legs, persons, '',
-      trip.Registration, trip.AircraftICAOType || '', trip.AircraftMTOWKg || 0,
-      trip.Client, trip.Operator, trip.SupportRef || '', pending.CountryISO2 ?? null, newRecipients,
-      null, newRef,
-    );
-    const requestComm: Comm = {
-      CommID: `COMM-${pending.SVCID}-${Date.now()}`,
-      Direction: 'OUTBOUND',
-      TripID: pending.TripID,
-      SVCID: pending.SVCID,
-      Token: pending.SVCID,
-      From: 'operations@viq.local',
-      To: newRecipients.join(', '),
-      Subject: generatedRequest.subject,
-      Body: generatedRequest.body,
-      TimestampZ: new Date().toISOString(),
-      Status: 'Draft',
-    };
-
-    try {
       await saveComm(requestComm);
       const sentRequest = await sendComm(requestComm.CommID);
       if (sentRequest.Status === 'Sent') {
@@ -223,13 +307,24 @@ export function ChangeVendorDialog({
         } catch {
           // Non-critical -- see comment above.
         }
+        // Part B of Critical 3: the entire change has now fully completed
+        // (old vendor cancelled, swap saved, new vendor requested) -- only
+        // now is it safe to forget that a cancellation was ever sent for
+        // this service, so a genuinely NEW Change Vendor attempt later
+        // isn't mistaken for a resumable in-progress one.
+        pendingCancellations.delete(svc.SVCID);
         setStep('done');
       } else {
-        await saveService({ ...pending, Status: 'Submission Failed', Notes: `${pending.Notes} Send failed: ${sentRequest.ErrorMessage || 'unknown error'}.`.trim() });
+        await saveService({ ...pending, Status: 'Submission Failed', Notes: appendBoundedNote(pending.Notes, `Send failed: ${sentRequest.ErrorMessage || 'unknown error'}.`) });
         setStep('request-failed');
       }
     } catch (err) {
-      await saveService({ ...pending, Status: 'Submission Failed', Notes: `${pending.Notes} Send failed: unexpected error.`.trim() });
+      // Important 1: catches anything unexpected from the block above,
+      // including a recovery saveService() call itself throwing (e.g. an
+      // unrelated 409) -- without this, that rejection would escape the
+      // function entirely and leave the dialog stuck on "Sending new
+      // request..." with no way out except closing it.
+      setError('Something went wrong while sending the replacement request. The vendor swap has already been saved and the previous vendor has been sent a cancellation — this service needs manual follow-up.');
       setStep('request-failed');
     }
 

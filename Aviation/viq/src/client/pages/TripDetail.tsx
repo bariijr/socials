@@ -935,10 +935,29 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const [linking, setLinking] = useState(false);
   const [changeVendorOpen, setChangeVendorOpen] = useState(false);
   const [vendorChangeLogs, setVendorChangeLogs] = useState<VendorChangeLog[]>([]);
-  useEffect(() => {
-    getVendorChangeLogsForService(service.SVCID).then(setVendorChangeLogs).catch(() => setVendorChangeLogs([]));
-  }, [service.SVCID, service.Version]);
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
+  // ServiceInlineEditor is keyed by service.SVCID (stable across a Change
+  // Vendor action), so draft/savedDraft — seeded once from the initial
+  // `service` prop — would otherwise never notice an external mutation
+  // (Important 5). Re-sync from the prop whenever it changes, but only when
+  // there's no genuine unsaved local edit pending, so a coordinator's
+  // in-progress edit is never clobbered out from under them.
+  useEffect(() => {
+    if (!hasChanges) {
+      setDraft(service);
+      setSavedDraft(service);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [service.SVCID, service.Version]);
+  // Vendor-change-log lookups are only ever displayed inside the drawer's
+  // StatusTimeline, but this component renders once per service CARD in the
+  // leg grids (often many per trip) — guard on drawerOpen so a trip with
+  // many services doesn't fire one request per card on every mount/version
+  // bump when the drawer is closed (Important 6).
+  useEffect(() => {
+    if (!drawerOpen) return;
+    getVendorChangeLogsForService(service.SVCID).then(setVendorChangeLogs).catch(() => setVendorChangeLogs([]));
+  }, [drawerOpen, service.SVCID, service.Version]);
   const save = async () => {
     try {
       const saved = await saveService(draft);
@@ -1202,7 +1221,11 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
         legs={legs}
         persons={persons}
         onChanged={async () => {
-          setChangeVendorOpen(false);
+          // Deliberately does NOT close the dialog itself: on a
+          // 'request-failed' terminal step, the coordinator needs to
+          // actually read that message (the new vendor was never emailed)
+          // before the dialog disappears out from under them. The dialog
+          // has its own Close/Cancel button in every terminal state.
           await onSaved();
         }}
       />
@@ -1236,7 +1259,7 @@ function submissionGroupKey(countryIso2: string, serviceType: string): string {
 // combined length would exceed ~1900 chars, the existing text is trimmed
 // down to its most recent ~500 chars before the new sentence is appended,
 // rather than growing without bound and eventually 400-ing the save.
-function appendBoundedNote(existing: string | undefined, sentence: string): string {
+export function appendBoundedNote(existing: string | undefined, sentence: string): string {
   const trimmedExisting = (existing || '').trim();
   const combined = `${trimmedExisting} ${sentence}`.trim();
   if (combined.length <= 1900) return combined;
