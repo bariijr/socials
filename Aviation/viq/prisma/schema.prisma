@@ -565,11 +565,38 @@ model Service {
   authorization PermitAuthorization? @relation(fields: [authorizationId], references: [id])
   vendorAssignment VendorAssignment? @relation(fields: [vendorAssignmentId], references: [id], onDelete: SetNull)
   tasks         Task[]
+  vendorChangeLogs VendorChangeLog[]
 
   @@index([tripId])
   @@index([scopeType, scopeId])
   @@index([urgency])
   @@map("services")
+}
+
+// Sub-project 3b of the Vendor Assignment Engine: structured record of
+// every "Change Vendor" action (source doc §29/§31/§55/§57). One row per
+// change -- a service changed twice has two rows, giving a full
+// chronological history for free. This is deliberately NOT a "Service
+// Order" child hierarchy (the source doc's §30 imagines one that doesn't
+// exist in this codebase's flat Service model) -- everything else the
+// workflow needs (field-level history, message bodies) already rides on
+// the existing AuditEntry/Comm tables, both already scoped per-service.
+model VendorChangeLog {
+  id                 String   @id @default(cuid())
+  svcId              String   @map("svc_id")
+  fromProviderId     String   @map("from_provider_id")
+  toProviderId       String   @map("to_provider_id")
+  reason             String
+  notes              String?
+  cancellationCommId String?  @map("cancellation_comm_id")
+  newRequestCommId   String?  @map("new_request_comm_id")
+  changedBy          String   @map("changed_by")
+  changedAtZ         DateTime @default(now()) @map("changed_at_z")
+
+  service Service @relation(fields: [svcId], references: [svcId], onDelete: Cascade)
+
+  @@index([svcId])
+  @@map("vendor_change_logs")
 }
 
 // Records a coordinator's explicit deletion of a service that
