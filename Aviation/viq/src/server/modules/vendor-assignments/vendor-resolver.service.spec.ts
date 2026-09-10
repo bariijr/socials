@@ -210,10 +210,15 @@ describe('VendorResolverService', () => {
   });
 
   it('eligiblePool returns every eligible vendor across all tiers, not just the winning tier', async () => {
-    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', rank: 1 });
+    // PROV-A is a pure global-tier row (no countryIso2/icao) -- resolve()'s
+    // selectTopTier would exclude this entirely once the more-specific
+    // country-tier PROV-B row is present (it wouldn't even appear as an
+    // alternative). eligiblePool must surface both, proving it doesn't
+    // stop at the winning tier the way resolve() does.
+    await makeAssignment({ providerId: 'PROV-A', rank: 1 });
     await makeAssignment({ providerId: 'PROV-B', countryIso2: 'TZ', rank: 2 });
     const pool = await resolver.eligiblePool({ countryIso2: 'TZ', icao: '', serviceType: 'Overflight' });
-    expect(pool.map((p) => p.vendorId).sort()).toEqual(['PROV-A', 'PROV-B']);
+    expect(pool.map((p) => p.vendorId)).toEqual(['PROV-B', 'PROV-A']);
   });
 
   it('eligiblePool excludes a vendor covered by a prohibited row for the same context', async () => {
@@ -222,5 +227,15 @@ describe('VendorResolverService', () => {
     await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', clientId: 'CLI-1', prohibited: true, rank: undefined as any });
     const pool = await resolver.eligiblePool({ countryIso2: 'TZ', icao: '', serviceType: 'Overflight', clientId: 'CLI-1' });
     expect(pool.map((p) => p.vendorId)).toEqual(['PROV-B']);
+  });
+
+  it('eligiblePool de-duplicates a vendor that has matching rows at multiple tiers', async () => {
+    // Same provider, two rows: a global-tier default and a more-specific
+    // country-tier override. Both match the context, so without dedup the
+    // provider would appear twice in the pool.
+    await makeAssignment({ providerId: 'PROV-A', rank: 1 });
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', rank: 2 });
+    const pool = await resolver.eligiblePool({ countryIso2: 'TZ', icao: '', serviceType: 'Overflight' });
+    expect(pool.map((p) => p.vendorId)).toEqual(['PROV-A']);
   });
 });

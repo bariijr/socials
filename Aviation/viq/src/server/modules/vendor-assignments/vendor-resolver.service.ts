@@ -121,6 +121,10 @@ export class VendorResolverService {
   // active/contractActive/serviceTypes + prohibition exclusion) but skips
   // the specificity-tiering/winner-selection step -- returns every
   // surviving candidate, sorted most- to least-specific then by rank.
+  // A single provider can have multiple matching VendorAssignment rows at
+  // different tiers (e.g. a global default AND a country override) -- the
+  // pool is de-duplicated by vendorId, keeping each vendor's most-specific
+  // (i.e. first, since the list is already sorted) surviving row.
   async eligiblePool(ctx: VendorResolutionContext): Promise<{ vendorId: string; rank: number | null }[]> {
     const asOfZ = ctx.asOfZ ?? new Date();
     const conditions = [...this.buildContextFilter(ctx), ...this.validityConditions(asOfZ)];
@@ -140,9 +144,19 @@ export class VendorResolverService {
       (c) => !bannedProviderIds.has(c.providerId) && c.provider.contractActive && c.provider.serviceTypes.includes(ctx.serviceType),
     );
 
-    return eligible
-      .sort((a, b) => this.compareTuple(this.specificity(b), this.specificity(a)) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
-      .map((row) => ({ vendorId: row.providerId, rank: row.rank }));
+    const sorted = eligible.sort(
+      (a, b) => this.compareTuple(this.specificity(b), this.specificity(a)) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER),
+    );
+
+    const seenProviderIds = new Set<string>();
+    const deduped: AssignmentWithProvider[] = [];
+    for (const row of sorted) {
+      if (seenProviderIds.has(row.providerId)) continue;
+      seenProviderIds.add(row.providerId);
+      deduped.push(row);
+    }
+
+    return deduped.map((row) => ({ vendorId: row.providerId, rank: row.rank }));
   }
 
   private buildContextFilter(ctx: VendorResolutionContext): Prisma.VendorAssignmentWhereInput[] {
