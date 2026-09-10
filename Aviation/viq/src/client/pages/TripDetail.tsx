@@ -937,7 +937,7 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const [vendorChangeLogs, setVendorChangeLogs] = useState<VendorChangeLog[]>([]);
   useEffect(() => {
     getVendorChangeLogsForService(service.SVCID).then(setVendorChangeLogs).catch(() => setVendorChangeLogs([]));
-  }, [service.SVCID]);
+  }, [service.SVCID, service.Version]);
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const save = async () => {
     try {
