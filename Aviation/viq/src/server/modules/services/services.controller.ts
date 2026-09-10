@@ -87,4 +87,9 @@ export class ServicesController {
   vendorCandidates(@Param('svcId') svcId: string) {
     return this.services.vendorCandidates(svcId);
   }
+
+  @Get(':svcId/change-vendor-candidates')
+  changeVendorCandidates(@Param('svcId') svcId: string) {
+    return this.services.changeVendorCandidates(svcId);
+  }
 }

@@ -284,6 +284,22 @@ export class ServicesService {
     };
   }
 
+  async changeVendorCandidates(svcId: string) {
+    const svc = await this.findOne(svcId);
+    if (!svc.countryIso2) return { candidates: [] };
+    const trip = await this.prisma.trip.findUnique({ where: { tripId: svc.tripId }, select: { clientId: true } });
+    const pool = await this.vendorResolver.eligiblePool({
+      countryIso2: svc.countryIso2,
+      icao: svc.icao ?? '',
+      serviceType: svc.serviceType,
+      clientId: trip?.clientId ?? undefined,
+    });
+    if (pool.length === 0) return { candidates: [] };
+    const providers = await this.prisma.provider.findMany({ where: { providerId: { in: pool.map((p) => p.vendorId) } } });
+    const nameById = new Map(providers.map((p) => [p.providerId, p.name]));
+    return { candidates: pool.map((p) => ({ vendorId: p.vendorId, providerName: nameById.get(p.vendorId) ?? p.vendorId })) };
+  }
+
   // Recomputes Urgency for every non-final service against "now" — call this
   // periodically (cron) or on-demand from an admin action to keep the
   // BREACH/URGENT/DUE/OK badges accurate as time passes without user edits.

@@ -208,4 +208,19 @@ describe('VendorResolverService', () => {
     expect(result.selectionSource).toMatch(/_OVERRIDE$/);
     expect(result.selectionSource).toBe('CLIENT_COUNTRY_OVERRIDE');
   });
+
+  it('eligiblePool returns every eligible vendor across all tiers, not just the winning tier', async () => {
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', rank: 1 });
+    await makeAssignment({ providerId: 'PROV-B', countryIso2: 'TZ', rank: 2 });
+    const pool = await resolver.eligiblePool({ countryIso2: 'TZ', icao: '', serviceType: 'Overflight' });
+    expect(pool.map((p) => p.vendorId).sort()).toEqual(['PROV-A', 'PROV-B']);
+  });
+
+  it('eligiblePool excludes a vendor covered by a prohibited row for the same context', async () => {
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', rank: 1 });
+    await makeAssignment({ providerId: 'PROV-B', countryIso2: 'TZ', rank: 2 });
+    await makeAssignment({ providerId: 'PROV-A', countryIso2: 'TZ', clientId: 'CLI-1', prohibited: true, rank: undefined as any });
+    const pool = await resolver.eligiblePool({ countryIso2: 'TZ', icao: '', serviceType: 'Overflight', clientId: 'CLI-1' });
+    expect(pool.map((p) => p.vendorId)).toEqual(['PROV-B']);
+  });
 });

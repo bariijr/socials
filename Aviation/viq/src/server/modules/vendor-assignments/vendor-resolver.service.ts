@@ -113,6 +113,38 @@ export class VendorResolverService {
     };
   }
 
+  // Sub-project 3b: Change Vendor's replacement picker needs "every
+  // eligible vendor at any tier", not resolve()'s "the winning tier only"
+  // -- a service with a single top-tier winner and no ties would otherwise
+  // show an empty picker even when legitimate lower-tier vendors exist.
+  // Reuses resolve()'s exact candidate-filtering (context + validity +
+  // active/contractActive/serviceTypes + prohibition exclusion) but skips
+  // the specificity-tiering/winner-selection step -- returns every
+  // surviving candidate, sorted most- to least-specific then by rank.
+  async eligiblePool(ctx: VendorResolutionContext): Promise<{ vendorId: string; rank: number | null }[]> {
+    const asOfZ = ctx.asOfZ ?? new Date();
+    const conditions = [...this.buildContextFilter(ctx), ...this.validityConditions(asOfZ)];
+
+    const [candidates, prohibitions] = await Promise.all([
+      this.prisma.vendorAssignment.findMany({
+        where: { serviceType: ctx.serviceType, prohibited: false, active: true, AND: conditions },
+        include: { provider: true },
+      }),
+      this.prisma.vendorAssignment.findMany({
+        where: { serviceType: ctx.serviceType, prohibited: true, active: true, AND: conditions },
+      }),
+    ]);
+
+    const bannedProviderIds = new Set(prohibitions.map((p) => p.providerId));
+    const eligible = candidates.filter(
+      (c) => !bannedProviderIds.has(c.providerId) && c.provider.contractActive && c.provider.serviceTypes.includes(ctx.serviceType),
+    );
+
+    return eligible
+      .sort((a, b) => this.compareTuple(this.specificity(b), this.specificity(a)) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
+      .map((row) => ({ vendorId: row.providerId, rank: row.rank }));
+  }
+
   private buildContextFilter(ctx: VendorResolutionContext): Prisma.VendorAssignmentWhereInput[] {
     const optionalMatch = (value: string | undefined, field: 'icao' | 'countryIso2' | 'clientId' | 'permitType'): Prisma.VendorAssignmentWhereInput =>
       value ? { OR: [{ [field]: value }, { [field]: null }] } : { [field]: null };
