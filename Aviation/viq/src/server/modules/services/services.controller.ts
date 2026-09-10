@@ -3,6 +3,8 @@ import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { LinkAuthorizationDto } from './dto/link-authorization.dto';
+import { ChangeVendorDto } from './dto/change-vendor.dto';
+import { UpdateVendorChangeLogDto } from './dto/update-vendor-change-log.dto';
 import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
 
 @Controller('services')
@@ -91,5 +93,15 @@ export class ServicesController {
   @Get(':svcId/change-vendor-candidates')
   changeVendorCandidates(@Param('svcId') svcId: string) {
     return this.services.changeVendorCandidates(svcId);
+  }
+
+  @Post(':svcId/change-vendor')
+  changeVendor(@Param('svcId') svcId: string, @Body() dto: ChangeVendorDto, @CurrentUser() user: CurrentUserPayload) {
+    return this.services.changeVendor(svcId, dto, user.username, user.role);
+  }
+
+  @Patch('vendor-change-logs/:id')
+  patchVendorChangeLog(@Param('id') id: string, @Body() dto: UpdateVendorChangeLogDto) {
+    return this.services.patchVendorChangeLogNewRequestComm(id, dto.newRequestCommId);
   }
 }

@@ -1,11 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Service, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { computeUrgency } from '../../common/geo.util';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { isValidServiceTransition, serviceAuthorizationLinkAllowed, withServiceTransitions } from '../../common/statusTransitions';
+import { ChangeVendorDto } from './dto/change-vendor.dto';
+import { changeVendorAllowed, isValidServiceTransition, serviceAuthorizationLinkAllowed, withServiceTransitions } from '../../common/statusTransitions';
 import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 
 type ServiceType = 'Permit' | 'Overflight' | 'GroundHandling';
@@ -237,6 +238,78 @@ export class ServicesService {
     const updated = await this.prisma.service.findUnique({ where: { svcId } });
     await this.audit.logDiff(user, 'Service', svcId, svc as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>);
     return withServiceTransitions(updated!);
+  }
+
+  // Sub-project 3b: atomically writes a VendorChangeLog row and flips the
+  // Service's provider + status together. Non-Admin callers are restricted
+  // to the same eligible pool changeVendorCandidates() surfaces to the
+  // client; an Admin may override into any provider. Like linkAuthorization
+  // and update(), enforces optimistic locking via `version`.
+  async changeVendor(svcId: string, dto: ChangeVendorDto, currentUsername: string, callerRole?: string) {
+    const svc = await this.prisma.service.findUnique({ where: { svcId } });
+    if (!svc) throw new NotFoundException(`Service ${svcId} not found`);
+    if (!changeVendorAllowed(svc.status)) {
+      throw new BadRequestException(`Cannot change vendor on a service with status "${svc.status}"`);
+    }
+    if (!svc.providerId) {
+      throw new BadRequestException('Service has no current provider to change from');
+    }
+
+    if (callerRole !== 'Admin') {
+      const pool = svc.countryIso2
+        ? await this.changeVendorCandidates(svcId)
+        : { candidates: [] };
+      const eligible = pool.candidates.some((c) => c.vendorId === dto.toProviderId);
+      if (!eligible) {
+        throw new ForbiddenException('Replacement vendor is not in the eligible list — requires Admin to override');
+      }
+    }
+
+    const result = await this.prisma.service.updateMany({
+      where: { svcId, version: dto.version },
+      data: {
+        providerId: dto.toProviderId,
+        vendorSelectionSource: 'USER_SELECTED',
+        vendorAssignmentId: null,
+        vendorSelectedAtZ: new Date(),
+        status: 'Submission Pending',
+        statusChangedAt: new Date(),
+        statusChangedBy: currentUsername,
+        version: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      const current = await this.prisma.service.findUnique({ where: { svcId } });
+      const history = await this.audit.forRecord('Service', svcId);
+      const latest = history[0];
+      throw new ConflictException({
+        message: `Service ${svcId} was modified by someone else`,
+        current: withServiceTransitions(current!),
+        changedBy: latest?.user,
+        changedAt: latest?.timestampZ,
+      });
+    }
+
+    await this.prisma.vendorChangeLog.create({
+      data: {
+        svcId,
+        fromProviderId: svc.providerId,
+        toProviderId: dto.toProviderId,
+        reason: dto.reason,
+        notes: dto.notes,
+        cancellationCommId: dto.cancellationCommId,
+        changedBy: currentUsername,
+      },
+    });
+
+    const updated = await this.prisma.service.findUnique({ where: { svcId } });
+    await this.audit.logDiff(currentUsername, 'Service', svcId, svc as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>);
+    return withServiceTransitions(updated!);
+  }
+
+  async patchVendorChangeLogNewRequestComm(id: string, newRequestCommId: string) {
+    return this.prisma.vendorChangeLog.update({ where: { id }, data: { newRequestCommId } });
   }
 
   // Resolves operator/country/serviceType server-side from the service and

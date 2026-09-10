@@ -79,6 +79,15 @@ export function serviceAuthorizationLinkAllowed(status: string): boolean {
   return ['Not Started', 'Requested', 'Chasing', 'Re-confirm Required'].includes(status);
 }
 
+// Sub-project 3b: Change Vendor is only meaningful once a real request has
+// actually been sent to a vendor (Submission Pending/Submission Failed mean
+// nothing was ever sent, per the Submission Engine's own "never show
+// Requested without a confirmed send" invariant) -- for those two statuses
+// the generic Service editor's provider field remains the right tool.
+export function changeVendorAllowed(status: string): boolean {
+  return ['Requested', 'Chasing', 'Confirmed', 'Re-confirm Required'].includes(status);
+}
+
 export function withServiceTransitions<T extends { status: string }>(
   svc: T,
 ): T & { allowedTransitions: string[] } {
