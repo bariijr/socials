@@ -1824,6 +1824,63 @@ export async function getVendorAssignment(id: string): Promise<{ id: string; ran
   }
 }
 
+export interface VendorChangeLog {
+  ID: string;
+  SVCID: string;
+  FromProviderID: string;
+  ToProviderID: string;
+  Reason: string;
+  Notes?: string;
+  CancellationCommID?: string;
+  NewRequestCommID?: string;
+  ChangedBy: string;
+  ChangedAtZ: string;
+}
+
+function mapVendorChangeLogFromApi(v: any): VendorChangeLog {
+  return {
+    ID: v.id,
+    SVCID: v.svcId,
+    FromProviderID: v.fromProviderId,
+    ToProviderID: v.toProviderId,
+    Reason: v.reason,
+    Notes: v.notes ?? undefined,
+    CancellationCommID: v.cancellationCommId ?? undefined,
+    NewRequestCommID: v.newRequestCommId ?? undefined,
+    ChangedBy: v.changedBy,
+    ChangedAtZ: v.changedAtZ,
+  };
+}
+
+export async function getChangeVendorCandidates(svcId: string): Promise<{ vendorId: string; providerName: string }[]> {
+  const result = await apiJson<{ candidates: { vendorId: string; providerName: string }[] }>(`/services/${svcId}/change-vendor-candidates`);
+  return result.candidates;
+}
+
+export async function changeVendor(
+  svcId: string,
+  body: { toProviderId: string; reason: string; notes?: string; cancellationCommId: string; version: number },
+): Promise<Service> {
+  const row = await apiJson<any>(`/services/${svcId}/change-vendor`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return mapServiceFromApi(row);
+}
+
+export async function patchVendorChangeLogNewRequestComm(id: string, newRequestCommId: string): Promise<VendorChangeLog> {
+  const row = await apiJson<any>(`/services/vendor-change-logs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ newRequestCommId }),
+  });
+  return mapVendorChangeLogFromApi(row);
+}
+
+export async function getVendorChangeLogsForService(svcId: string): Promise<VendorChangeLog[]> {
+  const rows = await apiJson<any[]>(`/services/${svcId}/vendor-change-logs`);
+  return rows.map(mapVendorChangeLogFromApi);
+}
+
 export interface VendorAssignment {
   ID: string;
   ProviderID: string;

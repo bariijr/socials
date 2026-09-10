@@ -312,6 +312,10 @@ export class ServicesService {
     return this.prisma.vendorChangeLog.update({ where: { id }, data: { newRequestCommId } });
   }
 
+  async vendorChangeLogsForService(svcId: string) {
+    return this.prisma.vendorChangeLog.findMany({ where: { svcId }, orderBy: { changedAtZ: 'asc' } });
+  }
+
   // Resolves operator/country/serviceType server-side from the service and
   // its trip (same resolution resolveAuthorization uses) rather than
   // requiring the client to look up Trip -> Aircraft -> Operator itself.

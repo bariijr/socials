@@ -104,4 +104,9 @@ export class ServicesController {
   patchVendorChangeLog(@Param('id') id: string, @Body() dto: UpdateVendorChangeLogDto) {
     return this.services.patchVendorChangeLogNewRequestComm(id, dto.newRequestCommId);
   }
+
+  @Get(':svcId/vendor-change-logs')
+  vendorChangeLogs(@Param('svcId') svcId: string) {
+    return this.services.vendorChangeLogsForService(svcId);
+  }
 }
