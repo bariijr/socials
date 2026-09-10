@@ -4,26 +4,30 @@ import type { Leg, ServiceType, TripPersonView } from '@/data/types';
 export type TemplateType =
   | 'VIQ_OverflyRequest'
   | 'VIQ_OverflyRevision'
+  | 'VIQ_OverflyCancellation'
   | 'VIQ_LandingRequest'
   | 'VIQ_LandingRevision'
+  | 'VIQ_LandingCancellation'
   | 'VIQ_GroundHandlingRequest'
   | 'VIQ_GroundHandlingRevision'
+  | 'VIQ_GroundHandlingCancellation'
   | 'Fuel'
   | 'Catering'
   | 'CrewTransport'
   | 'Customs'
   | 'Hotel'
   | 'VIQ_MultiLegPermit'
+  | 'Cancellation'
   | 'Generic';
 
-export type RequestAction = 'Request' | 'Revision';
+export type RequestAction = 'Request' | 'Revision' | 'Cancellation';
 
-// The three service types that carry an explicit REQUEST/REVISION subject
+// The three service types that carry an explicit REQUEST/REVISION/CANCELLATION subject
 // and a PREVIOUS/NEW itinerary body on revision.
 const ACTION_TEMPLATE_PAIRS: Record<'Overflight' | 'Permit' | 'GroundHandling', Record<RequestAction, TemplateType>> = {
-  Overflight: { Request: 'VIQ_OverflyRequest', Revision: 'VIQ_OverflyRevision' },
-  Permit: { Request: 'VIQ_LandingRequest', Revision: 'VIQ_LandingRevision' },
-  GroundHandling: { Request: 'VIQ_GroundHandlingRequest', Revision: 'VIQ_GroundHandlingRevision' },
+  Overflight: { Request: 'VIQ_OverflyRequest', Revision: 'VIQ_OverflyRevision', Cancellation: 'VIQ_OverflyCancellation' },
+  Permit: { Request: 'VIQ_LandingRequest', Revision: 'VIQ_LandingRevision', Cancellation: 'VIQ_LandingCancellation' },
+  GroundHandling: { Request: 'VIQ_GroundHandlingRequest', Revision: 'VIQ_GroundHandlingRevision', Cancellation: 'VIQ_GroundHandlingCancellation' },
 };
 
 export function hasRequestRevisionToggle(serviceType: ServiceType): boolean {
@@ -33,6 +37,17 @@ export function hasRequestRevisionToggle(serviceType: ServiceType): boolean {
 export function defaultTemplateFor(serviceType: ServiceType, action: RequestAction): TemplateType {
   const pair = (ACTION_TEMPLATE_PAIRS as Partial<Record<ServiceType, Record<RequestAction, TemplateType>>>)[serviceType];
   return pair ? pair[action] : (SERVICE_TYPE_TO_TEMPLATE[serviceType] ?? 'Generic');
+}
+
+// For the 3 service types with per-action templates, use the dedicated
+// Cancellation variant; every other service type never had per-action
+// templates at all (Fuel/Catering/etc. render one flat body regardless of
+// action) -- for those, fall back to the generic 'Cancellation' type
+// rather than building 7 more bespoke cancellation templates nothing else
+// in this codebase has a precedent for.
+export function defaultTemplateForCancellation(serviceType: ServiceType): TemplateType {
+  const pair = (ACTION_TEMPLATE_PAIRS as Partial<Record<ServiceType, Record<RequestAction, TemplateType>>>)[serviceType];
+  return pair ? pair.Cancellation : 'Cancellation';
 }
 
 export function toggleTemplateAction(template: TemplateType): TemplateType {
@@ -80,9 +95,9 @@ function renderTemplate(str: string, vars: Record<string, string>): string {
 }
 
 export const COUNTRY_AWARE_TEMPLATE_TYPES: TemplateType[] = [
-  'VIQ_OverflyRequest', 'VIQ_OverflyRevision',
-  'VIQ_LandingRequest', 'VIQ_LandingRevision',
-  'VIQ_GroundHandlingRequest', 'VIQ_GroundHandlingRevision',
+  'VIQ_OverflyRequest', 'VIQ_OverflyRevision', 'VIQ_OverflyCancellation',
+  'VIQ_LandingRequest', 'VIQ_LandingRevision', 'VIQ_LandingCancellation',
+  'VIQ_GroundHandlingRequest', 'VIQ_GroundHandlingRevision', 'VIQ_GroundHandlingCancellation',
 ];
 
 // The 6 CAA-facing templates' default subject/body, expressed with the
@@ -148,6 +163,16 @@ THANK YOU FOR YOUR CONSIDERATION OF THIS REQUEST.
 REQUEST SENT TO: {{RECIPIENTS}}
 {{SENDER_BLOCK}}`,
   },
+  VIQ_OverflyCancellation: {
+    subject: 'OVERFLY PERMIT REQUEST WITHDRAWN - {{TRIP_ID}} - {{REG}} - {{COUNTRY_NAME}}',
+    body: `ATTN: CAA: {{COUNTRY_NAME}}, PLEASE BE ADVISED THE FOLLOWING OVERFLY PERMIT REQUEST IS WITHDRAWN:
+A. OPERATOR: {{OPERATOR}}
+B. REGISTRY: {{REG}}  ACFT TYPE: {{ACTYPE}}
+C. PREVIOUS REQUEST REFERENCE: {{ISSUED_REF}}
+D. ITINERARY: ETD {{DEP_NAME}} / {{DEP}}   ETA {{ARR_NAME}} / {{ARR}}
+A REPLACEMENT REQUEST WILL FOLLOW SEPARATELY IF STILL REQUIRED. THANK YOU FOR YOUR UNDERSTANDING.
+{{SENDER_NAME}} / {{TRIP_ID}} / {{REG}} / END`,
+  },
   VIQ_LandingRequest: {
     subject: 'LANDING PERMIT REQUEST - {{TRIP_ID}} - {{REG}} - {{COUNTRY_NAME}}',
     body: `ATTN: CAA: {{COUNTRY_NAME}}, RESPECTFULLY REQUEST LANDING PERMISSION WITH A 72 HOUR VALIDITY IN CASE OF DELAY BASED ON:
@@ -201,6 +226,16 @@ THANK YOU FOR YOUR CONSIDERATION OF THIS REQUEST.
 
 REQUEST SENT TO: {{RECIPIENTS}}
 {{SENDER_BLOCK}}`,
+  },
+  VIQ_LandingCancellation: {
+    subject: 'LANDING PERMIT REQUEST WITHDRAWN - {{TRIP_ID}} - {{REG}} - {{COUNTRY_NAME}}',
+    body: `ATTN: CAA: {{COUNTRY_NAME}}, PLEASE BE ADVISED THE FOLLOWING LANDING PERMIT REQUEST IS WITHDRAWN:
+A. OPERATOR: {{OPERATOR}}
+B. REGISTRY: {{REG}}  ACFT TYPE: {{ACTYPE}}
+C. PREVIOUS REQUEST REFERENCE: {{ISSUED_REF}}
+D. ITINERARY: ETA {{ARR_NAME}} / {{ARR}}   {{ETA}}
+A REPLACEMENT REQUEST WILL FOLLOW SEPARATELY IF STILL REQUIRED. THANK YOU FOR YOUR UNDERSTANDING.
+{{SENDER_NAME}} / {{TRIP_ID}} / {{REG}} / END`,
   },
   VIQ_GroundHandlingRequest: {
     subject: 'GROUND HANDLING REQUEST - {{TRIP_ID}} - {{REG}} - {{COUNTRY_NAME}}',
@@ -289,6 +324,22 @@ THANK YOU AND BEST REGARDS — {{SENDER_NAME}} / {{TRIP_ID}} / END
 
 REQUEST SENT TO: {{RECIPIENTS}}
 {{SENDER_BLOCK}}`,
+  },
+  VIQ_GroundHandlingCancellation: {
+    subject: 'GROUND HANDLING REQUEST WITHDRAWN - {{TRIP_ID}} - {{REG}} - {{ARR}}',
+    body: `Dear Handler,
+
+Please be advised the ground handling request below is withdrawn:
+
+Aircraft: {{REG}} ({{ACTYPE}})
+Airport: {{ARR}}
+Previous request reference: {{ISSUED_REF}}
+Arrival: {{ETA}}
+
+A replacement request will follow separately if still required.
+
+Regards,
+{{SENDER_NAME}}`,
   },
 };
 
@@ -406,6 +457,10 @@ export function generateEmail(
         body = `ATTN: CIVIL AVIATION AUTHORITY\nRESPECTFULLY REQUEST OVERFLY PERMISSION WITH A 72 HOUR VALIDITY IN CASE OF DELAY BASED ON:\nA. OPERATOR: ${operator.toUpperCase()}\nB. REGISTRY: ${reg}  ACFT TYPE: ${acType}   MTOW: ${mtow.toLocaleString()} LB\nC. AIRCRAFT CLASSIFICATION: Private - Non Revenue\nD. ${itinerarySection}\nE. ROUTE: VIA APPROVED ATS ROUTES\nF. PURPOSE OF FLIGHT: BUSINESS\nG. CREW: CAPTAIN ${pic?.Name?.toUpperCase() || 'TBD'} PLUS ${Math.max(0, crew.length - 1)} CREW AND ${pax.length} PAX.\nTHANK YOU FOR YOUR CONSIDERATION OF THIS REQUEST.\n${senderName} / ${tripId} / ${reg} / END\n\nREQUEST SENT TO: ${recipients.join(' ')}\n${senderBlock}\nATTACHMENTS:\n1. REGISTRATION CERTIFICATE\n2. AIRWORTHINESS CERTIFICATE\n3. INSURANCE CERTIFICATE\n4. PERMIT APPLICATION FORM`;
         break;
       }
+      case 'Cancellation':
+        subject = `Request Withdrawn — ${arr} — ${tripId}/${token.split('/').pop()}`;
+        body = `Dear Team,\n\nPlease be advised the following request is withdrawn:\n\nAircraft: ${reg} (${acType})\nAirport: ${arr}\nPrevious request reference: ${issuedRef || 'N/A'}\n\nA replacement request will follow separately if still required.\n\nToken: ${token}\n\nRegards,\nOperations`;
+        break;
       default:
         subject = `Trip Request — ${tripId}/${token.split('/').pop()}`;
         body = `Dear Team,\n\nRegarding trip ${tripId}:\n\nAircraft: ${reg} (${acType})\n\nToken: ${token}\n\nNotes: ${notes || 'None'}\n\nRegards,\nOperations`;
