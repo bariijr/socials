@@ -9,12 +9,12 @@ import {
   getClientList, saveClient, getUserDirectory, getPreferredContact,
   mapTripFromApi, mapLegFromApi, mapServiceFromApi,
   ApiError, saveComm, sendComm, getPreviousLegItinerary,
-  changeVendorAllowedClient,
+  changeVendorAllowedClient, getVendorChangeLogsForService,
 } from '@/lib/dataStore';
 import { generateEmail, defaultTemplateFor } from '@/lib/emailTemplates';
 import { haversineNM } from '@/lib/geo';
 import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, ServiceTypeDef, LegPurposeDef, TripPersonView, TripStatus, Person, PersonRole, Provider, ContactChannel, ServiceResponsibility } from '@/data/types';
-import type { Invoice, TripSheet, Client, UserDirectoryEntry, AuthorizationCandidate } from '@/lib/dataStore';
+import type { Invoice, TripSheet, Client, UserDirectoryEntry, AuthorizationCandidate, VendorChangeLog } from '@/lib/dataStore';
 import { getServiceAuthorizationCandidates, linkServiceAuthorization, getPermitAuthorizationList } from '@/lib/dataStore';
 import { ChangeVendorDialog } from '@/components/ChangeVendorDialog';
 import { Typeahead } from '@/components/ui/typeahead';
@@ -934,6 +934,10 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
   const [candidates, setCandidates] = useState<AuthorizationCandidate[] | null>(null);
   const [linking, setLinking] = useState(false);
   const [changeVendorOpen, setChangeVendorOpen] = useState(false);
+  const [vendorChangeLogs, setVendorChangeLogs] = useState<VendorChangeLog[]>([]);
+  useEffect(() => {
+    getVendorChangeLogsForService(service.SVCID).then(setVendorChangeLogs).catch(() => setVendorChangeLogs([]));
+  }, [service.SVCID]);
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const save = async () => {
     try {
@@ -1149,7 +1153,22 @@ function ServiceInlineEditor({ service, editing, selected, onSelect, onDelete, o
               </div>
             )}
             <div className="mt-1">
-              <StatusTimeline table="Service" recordId={service.SVCID} />
+              <StatusTimeline
+                table="Service"
+                recordId={service.SVCID}
+                extraEntries={vendorChangeLogs.map((log) => {
+                  const fromName = providers.find((p) => p.ProviderID === log.FromProviderID)?.Name ?? log.FromProviderID;
+                  const toName = providers.find((p) => p.ProviderID === log.ToProviderID)?.Name ?? log.ToProviderID;
+                  return {
+                    timestampZ: log.ChangedAtZ,
+                    node: (
+                      <span>
+                        VENDOR CHANGED: {fromName} → {toName} — Reason: {log.Reason}. Previous request cancelled, replacement request created.
+                      </span>
+                    ),
+                  };
+                })}
+              />
             </div>
             {selectedProvider && <VendorContactCard provider={selectedProvider} />}
             <textarea className="w-full rounded border bg-background px-2 py-1 text-xs" disabled={!editing} value={draft.Notes} placeholder="Confirmatory note" rows={3} onChange={(event) => setDraft({ ...draft, Notes: event.target.value })} />
