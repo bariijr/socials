@@ -77,4 +77,20 @@ describe('VendorCapabilityService', () => {
       service.submit(created.token, { contactName: 'Jane Vendor', canService: true } as any),
     ).rejects.toThrow('expired');
   });
+
+  it('submit does not leak internal Admin-only fields to the vendor-facing response', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+
+    const submitted = await service.submit(created.token, {
+      contactName: 'Jane Vendor',
+      contactEmail: 'jane@alphahandling.example',
+      canService: true,
+      vendorNotes: 'We hold a valid TCAA ground handling permit.',
+    });
+
+    expect(submitted).not.toHaveProperty('reviewedBy');
+    expect(submitted).not.toHaveProperty('reviewedAtZ');
+    expect(submitted).not.toHaveProperty('reviewNotes');
+    expect(submitted).not.toHaveProperty('createdBy');
+  });
 });

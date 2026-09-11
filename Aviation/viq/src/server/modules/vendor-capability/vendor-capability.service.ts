@@ -33,6 +33,29 @@ const ADMIN_SAFE_SELECT = {
   provider: { select: { providerId: true, name: true } },
 } as const;
 
+// Used by the vendor-facing (public, token-gated) endpoints: findByToken and
+// submit. Excludes internal Admin-only fields (reviewedBy, reviewedAtZ,
+// reviewNotes, createdBy) that must never reach an anonymous vendor. Includes
+// `token` -- the vendor already has it (it's in the URL they used to get
+// here) -- and `status`/`tokenExpiresAtZ`, which submit() needs internally to
+// validate the request before accepting an answer.
+const VENDOR_SAFE_SELECT = {
+  id: true,
+  providerId: true,
+  countryIso2: true,
+  icao: true,
+  serviceType: true,
+  token: true,
+  tokenExpiresAtZ: true,
+  status: true,
+  contactName: true,
+  contactEmail: true,
+  canService: true,
+  vendorNotes: true,
+  submittedAtZ: true,
+  provider: { select: { providerId: true, name: true } },
+} as const;
+
 @Injectable()
 export class VendorCapabilityService {
   constructor(
@@ -74,7 +97,7 @@ export class VendorCapabilityService {
   }
 
   async findByToken(token: string) {
-    const row = await this.prisma.vendorCapabilityRequest.findUnique({ where: { token } });
+    const row = await this.prisma.vendorCapabilityRequest.findUnique({ where: { token }, select: VENDOR_SAFE_SELECT });
     if (!row) throw new NotFoundException('Capability request not found');
     return row;
   }
@@ -97,6 +120,7 @@ export class VendorCapabilityService {
         vendorNotes: dto.vendorNotes,
         submittedAtZ: new Date(),
       },
+      select: VENDOR_SAFE_SELECT,
     });
     await this.audit.log('VENDOR_PORTAL', 'VendorCapabilityRequest', updated.id, 'Submitted', 'PENDING', 'SUBMITTED');
     return updated;
