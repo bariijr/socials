@@ -200,6 +200,7 @@ model Provider {
   priceItems PriceItem[]
   channels   ContactChannel[]
   vendorAssignments VendorAssignment[]
+  vendorCapabilityRequests VendorCapabilityRequest[]
 
   @@map("providers")
 }
@@ -243,6 +244,51 @@ model VendorAssignment {
   @@index([countryIso2, icao, serviceType, permitType, clientId])
   @@index([providerId])
   @@map("vendor_assignments")
+}
+
+// Vendor Capability & Questionnaire Pipeline (spec sections 43-44). One row
+// = "Admin asked this Vendor to confirm they can perform this exact
+// serviceType at this exact country-or-airport, and here's where that
+// stands." A Provider with zero rows here is unaffected by capability
+// gating in VendorResolverService -- this is an opt-in gate, never a
+// default-deny, so every pre-existing VendorAssignment keeps resolving
+// exactly as it did before this model existed.
+model VendorCapabilityRequest {
+  id             String    @id @default(cuid())
+  providerId     String    @map("provider_id")
+  countryIso2    String?   @map("country_iso2")
+  icao           String?
+  serviceType    String    @map("service_type")
+
+  // 48 hex chars from crypto.randomBytes(24) -- the vendor's only
+  // credential, so it must never be sequential or guessable. Unique so a
+  // token lookup is a single indexed equality check.
+  token          String    @unique
+  tokenExpiresAtZ DateTime @map("token_expires_at_z")
+
+  // PENDING (sent, awaiting vendor) -> SUBMITTED (vendor answered) ->
+  // UNDER_REVIEW (optional Admin holding state) -> APPROVED | REJECTED.
+  // A capability gate in the resolver treats anything other than APPROVED
+  // as "not eligible for this context".
+  status         String    @default("PENDING")
+
+  contactName    String?   @map("contact_name")
+  contactEmail   String?   @map("contact_email")
+  canService     Boolean?  @map("can_service")
+  vendorNotes    String?   @map("vendor_notes")
+  submittedAtZ   DateTime? @map("submitted_at_z")
+
+  reviewedBy     String?   @map("reviewed_by")
+  reviewedAtZ    DateTime? @map("reviewed_at_z")
+  reviewNotes    String?   @map("review_notes")
+
+  createdBy      String?   @map("created_by")
+  createdAtZ     DateTime  @default(now()) @map("created_at_z")
+
+  provider Provider @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
+
+  @@index([providerId, serviceType, countryIso2, icao])
+  @@map("vendor_capability_requests")
 }
 
 model CountryRule {
