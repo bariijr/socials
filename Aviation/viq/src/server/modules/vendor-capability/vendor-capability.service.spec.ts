@@ -120,4 +120,13 @@ describe('VendorCapabilityService', () => {
 
     await expect(service.approve(created.id, { user: 'ops.admin' })).rejects.toThrow('has not been submitted');
   });
+
+  it('approve does not leak token to the Admin response', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+    await service.submit(created.token, { contactName: 'Jane Vendor', canService: true } as any);
+
+    const approved = await service.approve(created.id, { user: 'ops.admin' });
+
+    expect(approved).not.toHaveProperty('token');
+  });
 });

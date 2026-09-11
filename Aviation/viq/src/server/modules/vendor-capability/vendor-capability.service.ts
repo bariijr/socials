@@ -145,6 +145,7 @@ export class VendorCapabilityService {
     const updated = await this.prisma.vendorCapabilityRequest.update({
       where: { id },
       data: { status: outcome, reviewedBy: user, reviewedAtZ: new Date(), reviewNotes: dto.reviewNotes },
+      select: ADMIN_SAFE_SELECT,
     });
     await this.audit.log(user, 'VendorCapabilityRequest', id, 'Reviewed', row.status, outcome);
     return updated;
