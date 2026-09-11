@@ -199,15 +199,33 @@ export class VendorResolverService {
   // deliberately opt-in, never a default-deny.
   private async capabilityBlockedProviderIds(providerIds: string[], ctx: VendorResolutionContext): Promise<Set<string>> {
     if (providerIds.length === 0) return new Set();
+    // `||` (not `??`) deliberately: production callers (e.g.
+    // services.service.ts's overflight generation) pass icao: '' rather
+    // than omitting it, and '' is never a legitimate ISO2/ICAO code, so
+    // treating it the same as unset here matches how the row was actually
+    // stored (NULL) by VendorCapabilityService.create().
+    const countryIso2 = ctx.countryIso2 || null;
+    const icao = ctx.icao || null;
     const rows = await this.prisma.vendorCapabilityRequest.findMany({
       where: {
         providerId: { in: providerIds },
         serviceType: ctx.serviceType,
-        countryIso2: ctx.countryIso2 ?? null,
-        icao: ctx.icao ?? null,
+        countryIso2,
+        icao,
       },
+      orderBy: { createdAtZ: 'desc' },
     });
-    return new Set(rows.filter((r) => r.status !== 'APPROVED').map((r) => r.providerId));
+    // Multiple rows can exist for the same (providerId, serviceType,
+    // countryIso2, icao) tuple over time (e.g. a routine re-verification
+    // resend) -- only the newest row per provider should determine block
+    // status, not "any row ever". Iterating desc-ordered rows and only
+    // setting a providerId's entry the first time it's seen naturally
+    // keeps just the newest row per provider.
+    const latestStatusByProvider = new Map<string, string>();
+    for (const row of rows) {
+      if (!latestStatusByProvider.has(row.providerId)) latestStatusByProvider.set(row.providerId, row.status);
+    }
+    return new Set([...latestStatusByProvider.entries()].filter(([, status]) => status !== 'APPROVED').map(([providerId]) => providerId));
   }
 
   // Specificity tuple order verified against the source doc's own 11-tier

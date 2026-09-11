@@ -82,4 +82,79 @@ describe('VendorResolverService capability gate', () => {
 
     expect(pool.map((p) => p.vendorId)).toEqual(['VEN-B']);
   });
+
+  it('excludes a provider when called with the actual production call shape (icao: "" rather than omitted)', async () => {
+    await prisma.provider.create({ data: { providerId: 'VEN-A', name: 'Alpha', serviceTypes: ['Overflight'], scopeType: 'Global', scope: 'GLOBAL' } });
+    await prisma.vendorAssignment.create({ data: { providerId: 'VEN-A', serviceType: 'Overflight', preferred: true, rank: 1 } });
+    await prisma.vendorCapabilityRequest.create({
+      data: { providerId: 'VEN-A', serviceType: 'Overflight', countryIso2: 'TZ', token: 'e'.repeat(48), tokenExpiresAtZ: new Date(Date.now() + 86400000), status: 'PENDING' },
+    });
+
+    const result = await resolver.resolve({ serviceType: 'Overflight', countryIso2: 'TZ', icao: '' });
+
+    expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
+  });
+
+  it('a stale REJECTED row followed by a newer APPROVED row for the same tuple resolves successfully (newest row wins)', async () => {
+    await prisma.provider.create({ data: { providerId: 'VEN-A', name: 'Alpha', serviceTypes: ['Overflight'], scopeType: 'Global', scope: 'GLOBAL' } });
+    await prisma.vendorAssignment.create({ data: { providerId: 'VEN-A', serviceType: 'Overflight', preferred: true, rank: 1 } });
+    await prisma.vendorCapabilityRequest.create({
+      data: {
+        providerId: 'VEN-A',
+        serviceType: 'Overflight',
+        countryIso2: 'TZ',
+        token: 'f'.repeat(48),
+        tokenExpiresAtZ: new Date(Date.now() + 86400000),
+        status: 'REJECTED',
+        createdAtZ: new Date(Date.now() - 86400000),
+      },
+    });
+    await prisma.vendorCapabilityRequest.create({
+      data: {
+        providerId: 'VEN-A',
+        serviceType: 'Overflight',
+        countryIso2: 'TZ',
+        token: 'g'.repeat(48),
+        tokenExpiresAtZ: new Date(Date.now() + 86400000),
+        status: 'APPROVED',
+        createdAtZ: new Date(),
+      },
+    });
+
+    const result = await resolver.resolve({ serviceType: 'Overflight', countryIso2: 'TZ' });
+
+    expect(result.status).toBe('RESOLVED');
+    expect(result.selectedVendorId).toBe('VEN-A');
+  });
+
+  it('a stale APPROVED row followed by a newer PENDING row for the same tuple blocks the provider (newest row wins, other direction)', async () => {
+    await prisma.provider.create({ data: { providerId: 'VEN-A', name: 'Alpha', serviceTypes: ['Overflight'], scopeType: 'Global', scope: 'GLOBAL' } });
+    await prisma.vendorAssignment.create({ data: { providerId: 'VEN-A', serviceType: 'Overflight', preferred: true, rank: 1 } });
+    await prisma.vendorCapabilityRequest.create({
+      data: {
+        providerId: 'VEN-A',
+        serviceType: 'Overflight',
+        countryIso2: 'TZ',
+        token: 'h'.repeat(48),
+        tokenExpiresAtZ: new Date(Date.now() + 86400000),
+        status: 'APPROVED',
+        createdAtZ: new Date(Date.now() - 86400000),
+      },
+    });
+    await prisma.vendorCapabilityRequest.create({
+      data: {
+        providerId: 'VEN-A',
+        serviceType: 'Overflight',
+        countryIso2: 'TZ',
+        token: 'i'.repeat(48),
+        tokenExpiresAtZ: new Date(Date.now() + 86400000),
+        status: 'PENDING',
+        createdAtZ: new Date(),
+      },
+    });
+
+    const result = await resolver.resolve({ serviceType: 'Overflight', countryIso2: 'TZ' });
+
+    expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
+  });
 });
