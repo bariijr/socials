@@ -2111,6 +2111,49 @@ export async function rejectVendorCapabilityRequest(id: string, reviewNotes?: st
   return apiJson<VendorCapabilityRequest>(`/vendor-capability/${id}/reject`, { method: 'POST', body: JSON.stringify({ reviewNotes, user }) });
 }
 
+// ─── Vendor Capability — public, token-gated endpoints (Task 8) ───────────
+// Backs the anonymous vendor-facing page (VendorCapabilityForm) that a vendor
+// reaches via the emailed/copied link, with no VIQ login. These call
+// `@Public()` routes (GET /vendor-capability/token/:token and POST
+// /vendor-capability/token/:token/submit) that ThrottlerGuard rate-limits
+// instead of authenticating. apiJson is safe to use unauthenticated here:
+// jwt-auth.guard.ts returns true for `@Public()` handlers before it ever
+// looks at the request's Authorization header, so a vendor with no stored
+// token (the normal case) never triggers a 401/AUTH_EXPIRED_EVENT from these
+// calls, and this page's route sits outside <RequireAuth> in App.tsx anyway,
+// so even that event (which only clears any stale local auth state) can't
+// redirect the vendor away from the form.
+export interface VendorCapabilityPublicView {
+  id: string;
+  providerId: string;
+  countryIso2: string | null;
+  icao: string | null;
+  serviceType: string;
+  token: string;
+  tokenExpiresAtZ: string;
+  status: 'PENDING' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  contactName: string | null;
+  contactEmail: string | null;
+  canService: boolean | null;
+  vendorNotes: string | null;
+  submittedAtZ: string | null;
+  provider: { providerId: string; name: string };
+}
+
+export async function getVendorCapabilityByToken(token: string): Promise<VendorCapabilityPublicView> {
+  return apiJson<VendorCapabilityPublicView>(`/vendor-capability/token/${encodeURIComponent(token)}`);
+}
+
+export async function submitVendorCapabilityResponse(
+  token: string,
+  input: { contactName: string; contactEmail?: string; canService: boolean; vendorNotes?: string },
+): Promise<VendorCapabilityPublicView> {
+  return apiJson<VendorCapabilityPublicView>(`/vendor-capability/token/${encodeURIComponent(token)}/submit`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 // Users directory — minimal display-name fields, reachable by any
 // authenticated role (unlike getUsers(), which is Admin-only). Powers the
 // Trip Owner typeahead (Item 14). Always a fresh fetch, no cache.

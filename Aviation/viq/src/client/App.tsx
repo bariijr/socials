@@ -11,6 +11,7 @@ import ReferencePage from './pages/ReferencePage'
 import ComposerPage from './pages/ComposerPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
+import VendorCapabilityForm from './pages/VendorCapabilityForm'
 import RequireAuth from './components/RequireAuth'
 import RequireRole from './components/RequireRole'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/vendor-capability/:token" element={<VendorCapabilityForm />} />
 
       {/* Internal app — with sidebar layout, requires auth */}
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
