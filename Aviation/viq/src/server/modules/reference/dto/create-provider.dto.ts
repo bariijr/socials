@@ -5,9 +5,10 @@ import { ContactChannelDto } from '../../contacts/dto/contact-channel.dto';
 const SCOPE_TYPES = ['ICAO', 'Country', 'Global'] as const;
 
 export class CreateProviderDto {
-  @IsString()
-  @MaxLength(200)
-  providerId!: string;
+  // providerId is deliberately NOT accepted here -- it's server-assigned
+  // (ReferenceService.nextProviderId()), the same fix already applied to
+  // Trip and Client IDs. A manually-typed Provider ID was VIQ's last
+  // fully-manual business ID (spec section 40 explicitly calls this out).
 
   @IsString()
   @MaxLength(200)

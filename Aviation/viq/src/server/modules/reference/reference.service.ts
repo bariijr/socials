@@ -234,10 +234,24 @@ export class ReferenceService {
     return this.prisma.provider.findMany({ orderBy: { name: 'asc' }, include: CONTACT_CHANNELS_INCLUDE });
   }
 
+  // VEN-000041 style, atomically incremented -- mirrors ClientsService.nextClientId()
+  // and TripsService.nextTripId(). Reuses trip_id_counters under a distinct
+  // 'VEN' prefix key, so no schema migration is needed for this counter.
+  async nextProviderId(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<{ count: number }[]>`
+      INSERT INTO trip_id_counters (prefix, count)
+      VALUES ('VEN', 1)
+      ON CONFLICT (prefix) DO UPDATE SET count = trip_id_counters.count + 1
+      RETURNING count
+    `;
+    return `VEN-${String(rows[0].count).padStart(6, '0')}`;
+  }
+
   async createProvider(dto: CreateProviderDto) {
     const user = dto.user || 'SYSTEM';
     const { user: _user, channels, ...rest } = dto;
-    const provider = await this.prisma.provider.create({ data: rest });
+    const providerId = await this.nextProviderId();
+    const provider = await this.prisma.provider.create({ data: { ...rest, providerId } });
     await this.contactChannels.replace({ providerId: provider.providerId }, channels ?? []);
     await this.audit.log(user, 'Provider', provider.providerId, 'Created', '', provider.providerId);
     return this.prisma.provider.findUnique({ where: { providerId: provider.providerId }, include: CONTACT_CHANNELS_INCLUDE });

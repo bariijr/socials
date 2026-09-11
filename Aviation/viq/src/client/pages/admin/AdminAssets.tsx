@@ -200,7 +200,6 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
   provider: Provider | null; isNew: boolean; isAdmin: boolean;
   onSaved: (id: string) => void; onDeleted: () => void; onCancel: () => void;
 }) {
-  const [providerId, setProviderId] = useState(provider?.ProviderID || '');
   const [name, setName] = useState(provider?.Name || '');
   const [scopeType, setScopeType] = useState<Provider['ScopeType']>(provider?.ScopeType || 'ICAO');
   const [scope, setScope] = useState(provider?.Scope || '');
@@ -212,12 +211,18 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
     setServiceTypes((prev) => prev.includes(st) ? prev.filter((x) => x !== st) : [...prev, st]);
   };
 
-  const valid = providerId.trim() && name.trim();
+  const valid = name.trim();
 
   const handleSave = async () => {
     if (!isAdmin || !valid) return;
-    await saveProvider({
-      ProviderID: providerId.trim(),
+    // Empty, not a user-typed value, for a new provider: the server
+    // assigns the real ID atomically (ReferenceService.nextProviderId())
+    // and this placeholder only needs to miss every real ProviderID so
+    // saveProvider's exists-check routes to POST, not PATCH. The saved
+    // result (not this placeholder) carries the real ID onward.
+    const id = provider?.ProviderID || '';
+    const saved = await saveProvider({
+      ProviderID: id,
       Name: name.trim(),
       ServiceTypes: serviceTypes,
       ScopeType: scopeType,
@@ -225,7 +230,7 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
       WorkingHoursZ: workingHours.trim(),
       Channels: channels,
     });
-    onSaved(providerId.trim());
+    onSaved(saved.ProviderID);
   };
 
   return (
@@ -237,7 +242,9 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Provider ID</Label>
-            <Input value={providerId} onChange={(e) => setProviderId(e.target.value.toUpperCase())} disabled={!isNew} />
+            <div className="text-sm text-muted-foreground py-2">
+              {isNew ? 'Assigned automatically on save' : provider?.ProviderID}
+            </div>
           </div>
           <div className="space-y-1">
             <Label>Name</Label>
