@@ -86,7 +86,7 @@ export class VendorResolverService {
       } else if (allCandidatesProhibited) {
         reason = 'All otherwise-eligible vendors are prohibited for this client/context';
       } else {
-        reason = 'Vendor assignments matched this context, but no eligible provider survived filtering (inactive contract, service type mismatch, or an unapproved capability request for this exact context)';
+        reason = 'Vendor assignments matched this context, but no eligible provider survived filtering (inactive contract, service type mismatch, or an unapproved capability request covering this context)';
       }
       return { status: 'NO_ELIGIBLE_VENDOR', alternatives: [], reason };
     }
@@ -191,12 +191,24 @@ export class VendorResolverService {
     ];
   }
 
-  // Capability gate (spec §16/§44): a provider is excluded from a context
-  // only if a VendorCapabilityRequest row exists for that EXACT
-  // (providerId, serviceType, countryIso2, icao) tuple and its status is
-  // not APPROVED. No matching row at all -- the default for every
-  // pre-existing Provider -- means this gate does nothing; it is
+  // Capability gate (spec §16/§44): a provider is excluded from a context if
+  // a VendorCapabilityRequest row exists whose scope COVERS that context and
+  // whose status is not APPROVED. No matching row at all -- the default for
+  // every pre-existing Provider -- means this gate does nothing; it is
   // deliberately opt-in, never a default-deny.
+  //
+  // Scope matching mirrors buildContextFilter/optionalMatch above exactly: a
+  // NULL field on the stored row is "unscoped at that level" and matches ANY
+  // context value there; a non-NULL field must equal the context's value.
+  // This is load-bearing, not a nicety -- an Admin-created capability request
+  // is scoped to EITHER a country OR an airport (never both), while the real
+  // GroundHandling/Permit resolution contexts built by services.service.ts
+  // ALWAYS carry BOTH (those services are airport-scoped, and the airport is
+  // in a country). Exact-tuple matching therefore made the gate completely
+  // inert for its two primary service types (final-review finding C1).
+  // A country-scoped row {TZ, null} covers every airport in TZ; an
+  // airport-scoped row {null, HTDA} covers HTDA only and never leaks into a
+  // sibling airport such as FALA.
   private async capabilityBlockedProviderIds(providerIds: string[], ctx: VendorResolutionContext): Promise<Set<string>> {
     if (providerIds.length === 0) return new Set();
     // `||` (not `??`) deliberately: production callers (e.g.
@@ -206,19 +218,25 @@ export class VendorResolverService {
     // stored (NULL) by VendorCapabilityService.create().
     const countryIso2 = ctx.countryIso2 || null;
     const icao = ctx.icao || null;
+    const countryCondition: Prisma.VendorCapabilityRequestWhereInput = countryIso2
+      ? { OR: [{ countryIso2 }, { countryIso2: null }] }
+      : { countryIso2: null };
+    const icaoCondition: Prisma.VendorCapabilityRequestWhereInput = icao ? { OR: [{ icao }, { icao: null }] } : { icao: null };
     const rows = await this.prisma.vendorCapabilityRequest.findMany({
       where: {
         providerId: { in: providerIds },
         serviceType: ctx.serviceType,
-        countryIso2,
-        icao,
+        // Both conditions flattened into one AND array for the same reason
+        // resolve() does it -- two objects each carrying `OR` would collide.
+        AND: [countryCondition, icaoCondition],
       },
       orderBy: { createdAtZ: 'desc' },
     });
-    // Multiple rows can exist for the same (providerId, serviceType,
-    // countryIso2, icao) tuple over time (e.g. a routine re-verification
-    // resend) -- only the newest row per provider should determine block
-    // status, not "any row ever". Iterating desc-ordered rows and only
+    // Multiple rows can cover the same (providerId, serviceType, context)
+    // over time (a routine re-verification resend, or a country-scoped row
+    // alongside an airport-scoped one) -- only the newest COVERING row per
+    // provider determines block status, not "any row ever". Iterating
+    // desc-ordered rows and only
     // setting a providerId's entry the first time it's seen naturally
     // keeps just the newest row per provider.
     const latestStatusByProvider = new Map<string, string>();

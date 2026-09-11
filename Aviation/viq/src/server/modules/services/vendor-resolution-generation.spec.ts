@@ -91,6 +91,48 @@ describe('Vendor resolution wired into live generation', () => {
     expect(created[0].vendorSelectionSource).toBe('NO_ELIGIBLE_VENDOR');
   });
 
+  // Final-review finding I4: every other capability-gate test calls
+  // VendorResolverService.resolve() directly with a hand-built context. The
+  // ONLY place a real GroundHandling context is built in production is
+  // generateArrivalServices -> resolveVendor, and it always supplies BOTH
+  // countryIso2 AND icao -- which is precisely the shape the old exact-tuple
+  // capability matching could never match against a country-scoped (or
+  // airport-scoped) capability row. Verified to fail against the pre-fix
+  // resolver (PROV-BLOCKED was selected) and pass after it.
+  it('a country-scoped REJECTED capability request excludes the top-ranked vendor during live GroundHandling generation', async () => {
+    await prisma.airport.create({
+      data: { icao: 'HTDA', name: 'Dodoma Airport', countryIso2: 'TZ', latitude: -6.17, longitude: 35.75 },
+    });
+    await prisma.provider.create({ data: { providerId: 'PROV-BLOCKED', name: 'Blocked Handler', serviceTypes: ['GroundHandling'], scopeType: 'Country', scope: 'TZ' } });
+    await prisma.provider.create({ data: { providerId: 'PROV-OK', name: 'Backup Handler', serviceTypes: ['GroundHandling'], scopeType: 'Country', scope: 'TZ' } });
+    await prisma.vendorAssignment.create({
+      data: { providerId: 'PROV-BLOCKED', countryIso2: 'TZ', serviceType: 'GroundHandling', rank: 1 },
+    });
+    await prisma.vendorAssignment.create({
+      data: { providerId: 'PROV-OK', countryIso2: 'TZ', serviceType: 'GroundHandling', rank: 2 },
+    });
+    await prisma.vendorCapabilityRequest.create({
+      data: {
+        providerId: 'PROV-BLOCKED',
+        serviceType: 'GroundHandling',
+        countryIso2: 'TZ',
+        icao: null,
+        token: 'z'.repeat(48),
+        tokenExpiresAtZ: new Date(Date.now() + 86400000),
+        status: 'REJECTED',
+      },
+    });
+
+    await makeLeg('TEST-VENDOR-GEN-1-LEG-6', 'FALA', 'HTDA');
+    const created = await services.generateArrivalServices('TEST-VENDOR-GEN-1-LEG-6');
+
+    const handling = created.find((s) => s.serviceType === 'GroundHandling');
+    expect(handling).toBeDefined();
+    expect(handling!.providerId).not.toBe('PROV-BLOCKED');
+    expect(handling!.providerId).toBe('PROV-OK');
+    expect(handling!.vendorSelectionSource).toBe('COUNTRY_DEFAULT');
+  });
+
   it('a country-scoped VendorAssignment is still matched during Overflight generation', async () => {
     await prisma.provider.create({ data: { providerId: 'PROV-COUNTRY', name: 'Country Vendor', serviceTypes: ['Overflight'], scopeType: 'Country', scope: 'TZ' } });
     await prisma.vendorAssignment.create({

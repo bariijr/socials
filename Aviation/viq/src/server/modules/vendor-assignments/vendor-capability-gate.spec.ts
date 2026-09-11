@@ -157,4 +157,42 @@ describe('VendorResolverService capability gate', () => {
 
     expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
   });
+
+  // Final-review finding C1: GroundHandling/Permit contexts ALWAYS carry BOTH
+  // countryIso2 and icao (they're airport-scoped services at an airport that
+  // lives in a country), while an Admin-created capability request is scoped
+  // to EITHER a country OR an airport, never both. Exact-tuple matching made
+  // the gate inert for exactly those two service types. The two tests below
+  // lock in scope-compatible matching: a NULL field on the stored row matches
+  // any context value at that level; a non-NULL field must match exactly.
+  it('a COUNTRY-scoped PENDING row blocks a context that supplies both a country and a specific airport', async () => {
+    await prisma.country.create({ data: { iso2: 'TZ', name: 'Tanzania', centroidLat: -6.37, centroidLng: 34.89 } });
+    await prisma.provider.create({ data: { providerId: 'VEN-A', name: 'Alpha', serviceTypes: ['GroundHandling'], scopeType: 'Global', scope: 'GLOBAL' } });
+    await prisma.vendorAssignment.create({ data: { providerId: 'VEN-A', serviceType: 'GroundHandling', countryIso2: 'TZ', preferred: true, rank: 1 } });
+    await prisma.vendorCapabilityRequest.create({
+      data: { providerId: 'VEN-A', serviceType: 'GroundHandling', countryIso2: 'TZ', icao: null, token: 'j'.repeat(48), tokenExpiresAtZ: new Date(Date.now() + 86400000), status: 'PENDING' },
+    });
+
+    const result = await resolver.resolve({ serviceType: 'GroundHandling', countryIso2: 'TZ', icao: 'HTDA' });
+
+    expect(result.status).toBe('NO_ELIGIBLE_VENDOR');
+  });
+
+  it('an AIRPORT-scoped PENDING row does not block a different airport in the same country', async () => {
+    await prisma.country.create({ data: { iso2: 'TZ', name: 'Tanzania', centroidLat: -6.37, centroidLng: 34.89 } });
+    await prisma.provider.create({ data: { providerId: 'VEN-A', name: 'Alpha', serviceTypes: ['GroundHandling'], scopeType: 'Global', scope: 'GLOBAL' } });
+    await prisma.vendorAssignment.create({ data: { providerId: 'VEN-A', serviceType: 'GroundHandling', countryIso2: 'TZ', preferred: true, rank: 1 } });
+    await prisma.vendorCapabilityRequest.create({
+      data: { providerId: 'VEN-A', serviceType: 'GroundHandling', countryIso2: null, icao: 'HTDA', token: 'k'.repeat(48), tokenExpiresAtZ: new Date(Date.now() + 86400000), status: 'PENDING' },
+    });
+
+    // The blocked airport is still blocked...
+    const blocked = await resolver.resolve({ serviceType: 'GroundHandling', countryIso2: 'TZ', icao: 'HTDA' });
+    expect(blocked.status).toBe('NO_ELIGIBLE_VENDOR');
+
+    // ...but a sibling airport in the same country resolves normally.
+    const sibling = await resolver.resolve({ serviceType: 'GroundHandling', countryIso2: 'TZ', icao: 'FALA' });
+    expect(sibling.status).toBe('RESOLVED');
+    expect(sibling.selectedVendorId).toBe('VEN-A');
+  });
 });
