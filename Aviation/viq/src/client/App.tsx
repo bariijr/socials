@@ -17,6 +17,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminTrips from './pages/admin/AdminTrips'
 import AdminAssets from './pages/admin/AdminAssets'
 import MessageTemplatesPage from './pages/admin/MessageTemplatesPage'
+import VendorCapabilityQueue from './pages/admin/VendorCapabilityQueue'
 import PersonDetail from './pages/admin/PersonDetail'
 import AdminSettings from './pages/admin/AdminSettings'
 import NewTripWizard from './pages/admin/NewTripWizard'
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/admin/billing" element={<RequireRole role="Admin"><BillingPage /></RequireRole>} />
         <Route path="/admin/assets" element={<AdminAssets />} />
         <Route path="/admin/message-templates" element={<RequireRole role="Admin"><MessageTemplatesPage /></RequireRole>} />
+        <Route path="/admin/vendor-capability" element={<RequireRole role="Admin"><VendorCapabilityQueue /></RequireRole>} />
         <Route path="/admin/persons/:personId" element={<PersonDetail />} />
         <Route path="/admin/settings" element={<RequireRole role="Admin"><AdminSettings /></RequireRole>} />
         <Route path="/admin/users" element={<RequireRole role="Admin"><UsersPage /></RequireRole>} />

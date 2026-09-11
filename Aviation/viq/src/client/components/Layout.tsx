@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Plane, MessageSquare, ClipboardList,
   BookOpen, Send, AlertTriangle, Menu, X,
   Shield, Briefcase, Users, Settings, DollarSign, LogOut,
-  Sun, Moon
+  Sun, Moon, FileCheck
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/authContext';
@@ -24,6 +24,7 @@ const adminItems = [
   { path: '/admin/trips', label: 'Manage Trips', icon: Briefcase },
   { path: '/admin/assets', label: 'Assets', icon: Users },
   { path: '/admin/message-templates', label: 'Message Templates', icon: MessageSquare },
+  { path: '/admin/vendor-capability', label: 'Vendor Capability', icon: FileCheck },
   { path: '/admin/billing', label: 'Billing', icon: DollarSign },
   { path: '/admin/settings', label: 'Settings', icon: Settings },
   { path: '/admin/users', label: 'Users', icon: Users },
@@ -149,7 +150,7 @@ export default function Layout() {
           <NavSection items={navItems} urgentCount={urgentCount} onNavigate={() => setSidebarOpen(false)} />
           <div className="border-t pt-2" />
           <NavSection
-            items={isAdmin ? adminItems : adminItems.filter((item) => !['/admin/billing', '/admin/message-templates', '/admin/settings', '/admin/users'].includes(item.path))}
+            items={isAdmin ? adminItems : adminItems.filter((item) => !['/admin/billing', '/admin/message-templates', '/admin/vendor-capability', '/admin/settings', '/admin/users'].includes(item.path))}
             title="Admin"
             enquiryCount={enquiryCount}
             onNavigate={() => setSidebarOpen(false)}

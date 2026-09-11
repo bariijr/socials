@@ -2061,6 +2061,56 @@ export async function searchClients(query: string): Promise<Client[]> {
   return rows.map(mapClientFromApi);
 }
 
+// ─── Vendor Capability Requests ─────────────────────────────────────────────
+// Admin-facing wrappers for Task 4/5's endpoints. No boot cache here (unlike
+// most of this file) — the review queue always wants a live, uncached list.
+
+export interface VendorCapabilityRequest {
+  id: string;
+  providerId: string;
+  countryIso2: string | null;
+  icao: string | null;
+  serviceType: string;
+  tokenExpiresAtZ: string;
+  status: 'PENDING' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  contactName: string | null;
+  contactEmail: string | null;
+  canService: boolean | null;
+  vendorNotes: string | null;
+  submittedAtZ: string | null;
+  reviewedBy: string | null;
+  reviewedAtZ: string | null;
+  reviewNotes: string | null;
+  provider: { providerId: string; name: string };
+  // Only present in the create() response (the server's ADMIN_SAFE_SELECT
+  // used by list/approve/reject deliberately omits it) — it's the vendor's
+  // only credential, so it must never round-trip through a listing.
+  token?: string;
+}
+
+export async function createVendorCapabilityRequest(
+  input: { providerId: string; countryIso2?: string; icao?: string; serviceType: string },
+  user = currentUser(),
+): Promise<VendorCapabilityRequest> {
+  return apiJson<VendorCapabilityRequest>('/vendor-capability', { method: 'POST', body: JSON.stringify({ ...input, user }) });
+}
+
+export async function listVendorCapabilityRequests(filter: { providerId?: string; status?: string } = {}): Promise<VendorCapabilityRequest[]> {
+  const params = new URLSearchParams();
+  if (filter.providerId) params.set('providerId', filter.providerId);
+  if (filter.status) params.set('status', filter.status);
+  const qs = params.toString();
+  return apiJson<VendorCapabilityRequest[]>(`/vendor-capability${qs ? `?${qs}` : ''}`);
+}
+
+export async function approveVendorCapabilityRequest(id: string, reviewNotes?: string, user = currentUser()): Promise<VendorCapabilityRequest> {
+  return apiJson<VendorCapabilityRequest>(`/vendor-capability/${id}/approve`, { method: 'POST', body: JSON.stringify({ reviewNotes, user }) });
+}
+
+export async function rejectVendorCapabilityRequest(id: string, reviewNotes?: string, user = currentUser()): Promise<VendorCapabilityRequest> {
+  return apiJson<VendorCapabilityRequest>(`/vendor-capability/${id}/reject`, { method: 'POST', body: JSON.stringify({ reviewNotes, user }) });
+}
+
 // Users directory — minimal display-name fields, reachable by any
 // authenticated role (unlike getUsers(), which is Admin-only). Powers the
 // Trip Owner typeahead (Item 14). Always a fresh fetch, no cache.

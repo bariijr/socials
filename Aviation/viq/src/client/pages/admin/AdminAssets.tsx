@@ -11,6 +11,7 @@ import {
   getCountryFeeList, saveCountryFee, deleteCountryFee,
   getClientList, saveClient, deleteClient,
   getPreferredContact, getVendorAssignmentList,
+  createVendorCapabilityRequest,
 } from '@/lib/dataStore';
 import type { RosterExpiryEntry, Operator, CountryFee, Client, VendorAssignment } from '@/lib/dataStore';
 import type { Aircraft, Provider, Airport, Country, Person, PersonRole, ServiceType, ContactChannel } from '@/data/types';
@@ -29,7 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MasterDetailList, EntityListCard, DetailPanel } from '@/components/ui/master-detail-list';
 import { MasterDetailShell } from '@/components/ui/master-detail-shell';
-import { Plane, Building2, MapPin, Globe, Users, AlertTriangle, Receipt, Briefcase, ArrowRight, FileCheck } from 'lucide-react';
+import { Plane, Building2, MapPin, Globe, Users, AlertTriangle, Receipt, Briefcase, ArrowRight, FileCheck, Copy } from 'lucide-react';
 import { AuthorizationsTab } from './AdminAuthorizations';
 import { VendorAssignmentsTab, contextSummary, providerName } from './AdminVendorAssignments';
 
@@ -211,6 +212,55 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
     setServiceTypes((prev) => prev.includes(st) ? prev.filter((x) => x !== st) : [...prev, st]);
   };
 
+  // "Request Capability Confirmation" — sends the vendor a token-gated
+  // questionnaire link (Task 4/5's backend). Only meaningful for an
+  // already-saved provider (isNew has no ProviderID yet to attach it to).
+  const [showCapabilityRequest, setShowCapabilityRequest] = useState(false);
+  const [reqServiceType, setReqServiceType] = useState<ServiceType>(SERVICE_TYPES[0]);
+  const [reqScopeType, setReqScopeType] = useState<'ICAO' | 'Country'>('ICAO');
+  const [reqScopeValue, setReqScopeValue] = useState('');
+  const [reqSending, setReqSending] = useState(false);
+  const [reqError, setReqError] = useState('');
+  const [reqLink, setReqLink] = useState<string | null>(null);
+  const [reqCopied, setReqCopied] = useState(false);
+
+  const openCapabilityRequest = () => {
+    setShowCapabilityRequest(true);
+    setReqServiceType(SERVICE_TYPES[0]);
+    setReqScopeType('ICAO');
+    setReqScopeValue('');
+    setReqError('');
+    setReqLink(null);
+  };
+
+  const handleSendCapabilityRequest = async () => {
+    if (!isAdmin || !provider || !reqScopeValue.trim()) return;
+    setReqSending(true);
+    setReqError('');
+    try {
+      const created = await createVendorCapabilityRequest({
+        providerId: provider.ProviderID,
+        serviceType: reqServiceType,
+        countryIso2: reqScopeType === 'Country' ? reqScopeValue.trim().toUpperCase() : undefined,
+        icao: reqScopeType === 'ICAO' ? reqScopeValue.trim().toUpperCase() : undefined,
+      });
+      // There is no email-sending in this MVP — Admin copies the link below
+      // and sends it manually (see this plan's Global Constraints scope).
+      setReqLink(`${window.location.origin}/vendor-capability/${created.token}`);
+    } catch {
+      setReqError('Could not create the capability request — try again.');
+    } finally {
+      setReqSending(false);
+    }
+  };
+
+  const handleCopyCapabilityLink = () => {
+    if (!reqLink) return;
+    navigator.clipboard.writeText(reqLink);
+    setReqCopied(true);
+    setTimeout(() => setReqCopied(false), 2000);
+  };
+
   const valid = name.trim();
 
   const handleSave = async () => {
@@ -293,6 +343,73 @@ function ProviderPanel({ provider, isNew, isAdmin, onSaved, onDeleted, onCancel 
             ))}
           </div>
         </div>
+        {!isNew && provider && (
+          <div className="space-y-2 border-t pt-3">
+            {!showCapabilityRequest ? (
+              <Button type="button" variant="outline" size="sm" onClick={openCapabilityRequest}>
+                Request Capability Confirmation
+              </Button>
+            ) : (
+              <div className="space-y-3 rounded-md border p-3">
+                <Label className="text-sm font-medium">Request Capability Confirmation</Label>
+                {!reqLink ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label>Service Type</Label>
+                        <Select value={reqServiceType} onValueChange={(v) => setReqServiceType(v as ServiceType)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SERVICE_TYPES.map((st) => <SelectItem key={st} value={st}>{st}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Scope</Label>
+                        <Select value={reqScopeType} onValueChange={(v) => { setReqScopeType(v as 'ICAO' | 'Country'); setReqScopeValue(''); }}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ICAO">ICAO (airport)</SelectItem>
+                            <SelectItem value="Country">Country ISO2</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>{reqScopeType === 'ICAO' ? 'ICAO Code' : 'Country ISO2'}</Label>
+                      <Input
+                        value={reqScopeValue}
+                        onChange={(e) => setReqScopeValue(e.target.value.toUpperCase())}
+                        placeholder={reqScopeType === 'ICAO' ? 'e.g. OMDB' : 'e.g. SA'}
+                      />
+                    </div>
+                    {reqError && <p className="text-xs text-destructive">{reqError}</p>}
+                    <div className="flex items-center gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => setShowCapabilityRequest(false)}>Cancel</Button>
+                      <Button type="button" size="sm" disabled={!reqScopeValue.trim() || reqSending} onClick={handleSendCapabilityRequest}>
+                        {reqSending ? 'Sending…' : 'Send Request'}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Share this link with the vendor — there is no automatic email in this MVP.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={reqLink} onFocus={(e) => e.target.select()} />
+                      <Button type="button" size="sm" variant="outline" onClick={handleCopyCapabilityLink}>
+                        <Copy className="mr-1 h-3.5 w-3.5" />
+                        {reqCopied ? 'Copied!' : 'Copy'}
+                      </Button>
+                    </div>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowCapabilityRequest(false)}>Done</Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <PanelActions
           onCancel={onCancel}
           onSave={handleSave}
