@@ -66,13 +66,23 @@ export class VendorCapabilityService {
 
   async create(dto: CreateVendorCapabilityRequestDto) {
     const user = dto.user || 'SYSTEM';
+    const countryIso2 = dto.countryIso2 || null;
+    const icao = dto.icao || null;
+    // A row with BOTH scope fields null is not "unscoped, harmless" -- under
+    // the resolver's scope-compatible capability matching it would cover
+    // EVERY context for that service type, silently blocking the provider
+    // everywhere with no confirmation step. The Admin UI enforces this
+    // client-side; the endpoint must enforce it too.
+    if (!countryIso2 && !icao) {
+      throw new BadRequestException('A capability request must be scoped to either a country or an airport.');
+    }
     const token = randomBytes(24).toString('hex');
     const tokenExpiresAtZ = new Date(Date.now() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
     const created = await this.prisma.vendorCapabilityRequest.create({
       data: {
         providerId: dto.providerId,
-        countryIso2: dto.countryIso2 || null,
-        icao: dto.icao || null,
+        countryIso2,
+        icao,
         serviceType: dto.serviceType,
         token,
         tokenExpiresAtZ,

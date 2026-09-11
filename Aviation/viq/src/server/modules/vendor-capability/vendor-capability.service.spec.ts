@@ -130,15 +130,40 @@ describe('VendorCapabilityService', () => {
     expect(approved).not.toHaveProperty('token');
   });
 
-  it('normalizes empty string countryIso2 and icao to null on create', async () => {
-    const created = await service.create({
+  it('normalizes an empty string scope field to null on create (the other field carrying the scope)', async () => {
+    const countryScoped = await service.create({
+      providerId: 'VEN-000001',
+      serviceType: 'Overflight',
+      countryIso2: 'TZ',
+      icao: '',
+    } as any);
+    expect(countryScoped.countryIso2).toBe('TZ');
+    expect(countryScoped.icao).toBeNull();
+
+    const airportScoped = await service.create({
       providerId: 'VEN-000001',
       serviceType: 'Overflight',
       countryIso2: '',
-      icao: '',
+      icao: 'HTDA',
     } as any);
+    expect(airportScoped.countryIso2).toBeNull();
+    expect(airportScoped.icao).toBe('HTDA');
+  });
 
-    expect(created.countryIso2).toBeNull();
-    expect(created.icao).toBeNull();
+  // Final-review finding I3: an all-null-scope row would, under the
+  // resolver's scope-compatible capability matching, cover every context for
+  // its service type -- blocking the provider globally from a single
+  // unscoped API call. The endpoint rejects it rather than relying on the
+  // Admin UI's client-side validation.
+  it('create rejects a request scoped to neither a country nor an airport', async () => {
+    await expect(
+      service.create({ providerId: 'VEN-000001', serviceType: 'Overflight' } as any),
+    ).rejects.toThrow('must be scoped to either a country or an airport');
+
+    await expect(
+      service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: '', icao: '' } as any),
+    ).rejects.toThrow('must be scoped to either a country or an airport');
+
+    expect(await prisma.vendorCapabilityRequest.count()).toBe(0);
   });
 });
