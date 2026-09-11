@@ -59,9 +59,14 @@ export class VendorResolverService {
     // "fix" it to only apply within the matching tier without revisiting
     // that decision first.
     const bannedProviderIds = new Set(prohibitions.map((p) => p.providerId));
+    const capabilityBlockedIds = await this.capabilityBlockedProviderIds(
+      candidates.map((c) => c.providerId),
+      ctx,
+    );
     const eligible = candidates.filter(
       (c) =>
         !bannedProviderIds.has(c.providerId) &&
+        !capabilityBlockedIds.has(c.providerId) &&
         c.provider.contractActive &&
         c.provider.serviceTypes.includes(ctx.serviceType),
     );
@@ -81,7 +86,7 @@ export class VendorResolverService {
       } else if (allCandidatesProhibited) {
         reason = 'All otherwise-eligible vendors are prohibited for this client/context';
       } else {
-        reason = 'Vendor assignments matched this context, but no eligible provider survived filtering (inactive contract or service type mismatch)';
+        reason = 'Vendor assignments matched this context, but no eligible provider survived filtering (inactive contract, service type mismatch, or an unapproved capability request for this exact context)';
       }
       return { status: 'NO_ELIGIBLE_VENDOR', alternatives: [], reason };
     }
@@ -140,8 +145,16 @@ export class VendorResolverService {
     ]);
 
     const bannedProviderIds = new Set(prohibitions.map((p) => p.providerId));
+    const capabilityBlockedIds = await this.capabilityBlockedProviderIds(
+      candidates.map((c) => c.providerId),
+      ctx,
+    );
     const eligible = candidates.filter(
-      (c) => !bannedProviderIds.has(c.providerId) && c.provider.contractActive && c.provider.serviceTypes.includes(ctx.serviceType),
+      (c) =>
+        !bannedProviderIds.has(c.providerId) &&
+        !capabilityBlockedIds.has(c.providerId) &&
+        c.provider.contractActive &&
+        c.provider.serviceTypes.includes(ctx.serviceType),
     );
 
     const sorted = eligible.sort(
@@ -176,6 +189,25 @@ export class VendorResolverService {
       { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: asOfZ } }] },
       { OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: asOfZ } }] },
     ];
+  }
+
+  // Capability gate (spec §16/§44): a provider is excluded from a context
+  // only if a VendorCapabilityRequest row exists for that EXACT
+  // (providerId, serviceType, countryIso2, icao) tuple and its status is
+  // not APPROVED. No matching row at all -- the default for every
+  // pre-existing Provider -- means this gate does nothing; it is
+  // deliberately opt-in, never a default-deny.
+  private async capabilityBlockedProviderIds(providerIds: string[], ctx: VendorResolutionContext): Promise<Set<string>> {
+    if (providerIds.length === 0) return new Set();
+    const rows = await this.prisma.vendorCapabilityRequest.findMany({
+      where: {
+        providerId: { in: providerIds },
+        serviceType: ctx.serviceType,
+        countryIso2: ctx.countryIso2 ?? null,
+        icao: ctx.icao ?? null,
+      },
+    });
+    return new Set(rows.filter((r) => r.status !== 'APPROVED').map((r) => r.providerId));
   }
 
   // Specificity tuple order verified against the source doc's own 11-tier
