@@ -29,10 +29,25 @@ export class ClientsService {
     return client;
   }
 
+  // CLI-000027 style, atomically incremented -- mirrors TripsService.nextTripId().
+  // Reuses the existing trip_id_counters (prefix, count) table under a
+  // distinct 'CLI' prefix key rather than a Trip-specific one, so no schema
+  // migration is needed for this counter.
+  async nextClientId(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<{ count: number }[]>`
+      INSERT INTO trip_id_counters (prefix, count)
+      VALUES ('CLI', 1)
+      ON CONFLICT (prefix) DO UPDATE SET count = trip_id_counters.count + 1
+      RETURNING count
+    `;
+    return `CLI-${String(rows[0].count).padStart(6, '0')}`;
+  }
+
   async create(dto: CreateClientDto) {
     const user = dto.user || 'SYSTEM';
     const { user: _user, channels, ...rest } = dto;
-    const client = await this.prisma.client.create({ data: rest });
+    const clientId = await this.nextClientId();
+    const client = await this.prisma.client.create({ data: { ...rest, clientId } });
     await this.contactChannels.replace({ clientId: client.clientId }, channels ?? []);
     await this.audit.log(user, 'Client', client.clientId, 'Created', '', client.clientId);
     return this.findOne(client.clientId);

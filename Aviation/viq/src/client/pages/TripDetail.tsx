@@ -1686,7 +1686,11 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
           resolvedDraft = { ...resolvedDraft, ClientID: match.ClientID };
         } else {
           const created = await saveClient({
-            ClientID: `CLI-${Date.now()}`,
+            // Empty, not a fabricated CLI-... value: the server assigns the
+            // real ID atomically (ClientsService.nextClientId()) and this
+            // placeholder only needs to miss every real ClientID so
+            // saveClient's exists-check routes to POST, not PATCH.
+            ClientID: '',
             Name: resolvedDraft.Client.trim(),
             IsOperator: false,
             BillingAddressLine1: resolvedDraft.BillToAddressLine1 || undefined,

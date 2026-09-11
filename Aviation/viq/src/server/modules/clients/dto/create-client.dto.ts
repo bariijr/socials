@@ -3,9 +3,11 @@ import { IsArray, IsBoolean, IsOptional, IsString, MaxLength, ValidateNested } f
 import { ContactChannelDto } from '../../contacts/dto/contact-channel.dto';
 
 export class CreateClientDto {
-  @IsString()
-  @MaxLength(200)
-  clientId!: string;
+  // clientId is deliberately NOT accepted here -- it used to be caller-
+  // supplied (frontend generated `CLI-${Date.now()}`), which was a live
+  // race condition: two creates in the same millisecond collide on this
+  // model's primary key. ClientsService.create() now assigns it via an
+  // atomic counter, the same fix already applied to Trip IDs.
 
   @IsString()
   @MaxLength(200)

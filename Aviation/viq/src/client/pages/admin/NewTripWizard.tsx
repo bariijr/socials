@@ -526,7 +526,11 @@ export default function NewTripWizard() {
     let resolvedClientId = clientId;
     if (!resolvedClientId && client.trim()) {
       const created = await saveClient({
-        ClientID: `CLI-${Date.now()}`,
+        // Empty, not a fabricated CLI-... value: the server assigns the
+        // real ID atomically (ClientsService.nextClientId()) and this
+        // placeholder only needs to miss every real ClientID so
+        // saveClient's exists-check routes to POST, not PATCH.
+        ClientID: '',
         Name: client.trim(),
         IsOperator: false,
         BillingAddressLine1: billToLine1 || undefined,

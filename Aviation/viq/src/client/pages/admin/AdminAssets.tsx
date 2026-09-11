@@ -677,8 +677,13 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
 
   const handleSave = async () => {
     if (!canEdit || !valid) return;
-    const id = client?.ClientID || `CLI-${Date.now()}`;
-    await saveClient({
+    // Empty, not a fabricated CLI-... value, for a new client: the server
+    // assigns the real ID atomically (ClientsService.nextClientId()) and
+    // this placeholder only needs to miss every real ClientID so
+    // saveClient's exists-check routes to POST, not PATCH. The saved
+    // result (not this placeholder) carries the real ID onward.
+    const id = client?.ClientID || '';
+    const saved = await saveClient({
       ClientID: id,
       Name: name.trim(),
       IsOperator: isOperator,
@@ -692,7 +697,7 @@ function ClientPanel({ client, isNew, canEdit, operators, onSaved, onDeleted, on
       Channels: channels,
       Notes: notes.trim() || undefined,
     });
-    onSaved(id);
+    onSaved(saved.ClientID);
   };
 
   return (
