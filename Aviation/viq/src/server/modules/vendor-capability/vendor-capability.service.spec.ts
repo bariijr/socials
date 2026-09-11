@@ -129,4 +129,16 @@ describe('VendorCapabilityService', () => {
 
     expect(approved).not.toHaveProperty('token');
   });
+
+  it('normalizes empty string countryIso2 and icao to null on create', async () => {
+    const created = await service.create({
+      providerId: 'VEN-000001',
+      serviceType: 'Overflight',
+      countryIso2: '',
+      icao: '',
+    } as any);
+
+    expect(created.countryIso2).toBeNull();
+    expect(created.icao).toBeNull();
+  });
 });

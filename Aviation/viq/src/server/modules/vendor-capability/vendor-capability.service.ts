@@ -71,8 +71,8 @@ export class VendorCapabilityService {
     const created = await this.prisma.vendorCapabilityRequest.create({
       data: {
         providerId: dto.providerId,
-        countryIso2: dto.countryIso2,
-        icao: dto.icao,
+        countryIso2: dto.countryIso2 || null,
+        icao: dto.icao || null,
         serviceType: dto.serviceType,
         token,
         tokenExpiresAtZ,
