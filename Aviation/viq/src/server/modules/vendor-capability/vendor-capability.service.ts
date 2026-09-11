@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateVendorCapabilityRequestDto } from './dto/create-vendor-capability-request.dto';
 import { SubmitVendorCapabilityResponseDto } from './dto/submit-vendor-capability-response.dto';
+import { ReviewVendorCapabilityRequestDto } from './dto/review-vendor-capability-request.dto';
 
 const TOKEN_TTL_DAYS = 30;
 
@@ -123,6 +124,29 @@ export class VendorCapabilityService {
       select: VENDOR_SAFE_SELECT,
     });
     await this.audit.log('VENDOR_PORTAL', 'VendorCapabilityRequest', updated.id, 'Submitted', 'PENDING', 'SUBMITTED');
+    return updated;
+  }
+
+  async approve(id: string, dto: ReviewVendorCapabilityRequestDto) {
+    return this.review(id, 'APPROVED', dto);
+  }
+
+  async reject(id: string, dto: ReviewVendorCapabilityRequestDto) {
+    return this.review(id, 'REJECTED', dto);
+  }
+
+  private async review(id: string, outcome: 'APPROVED' | 'REJECTED', dto: ReviewVendorCapabilityRequestDto) {
+    const user = dto.user || 'SYSTEM';
+    const row = await this.prisma.vendorCapabilityRequest.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException(`VendorCapabilityRequest ${id} not found`);
+    if (row.status === 'PENDING') {
+      throw new BadRequestException('This capability request has not been submitted by the vendor yet.');
+    }
+    const updated = await this.prisma.vendorCapabilityRequest.update({
+      where: { id },
+      data: { status: outcome, reviewedBy: user, reviewedAtZ: new Date(), reviewNotes: dto.reviewNotes },
+    });
+    await this.audit.log(user, 'VendorCapabilityRequest', id, 'Reviewed', row.status, outcome);
     return updated;
   }
 }

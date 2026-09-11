@@ -3,6 +3,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { VendorCapabilityService } from './vendor-capability.service';
 import { CreateVendorCapabilityRequestDto } from './dto/create-vendor-capability-request.dto';
 import { SubmitVendorCapabilityResponseDto } from './dto/submit-vendor-capability-response.dto';
+import { ReviewVendorCapabilityRequestDto } from './dto/review-vendor-capability-request.dto';
 import { Public } from '../auth/public.decorator';
 import { Roles } from '../auth/roles.decorator';
 
@@ -42,5 +43,17 @@ export class VendorCapabilityController {
   @Post('token/:token/submit')
   submit(@Param('token') token: string, @Body() dto: SubmitVendorCapabilityResponseDto) {
     return this.capability.submit(token, dto);
+  }
+
+  @Roles('Admin')
+  @Post(':id/approve')
+  approve(@Param('id') id: string, @Body() dto: ReviewVendorCapabilityRequestDto) {
+    return this.capability.approve(id, dto);
+  }
+
+  @Roles('Admin')
+  @Post(':id/reject')
+  reject(@Param('id') id: string, @Body() dto: ReviewVendorCapabilityRequestDto) {
+    return this.capability.reject(id, dto);
   }
 }

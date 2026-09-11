@@ -93,4 +93,31 @@ describe('VendorCapabilityService', () => {
     expect(submitted).not.toHaveProperty('reviewNotes');
     expect(submitted).not.toHaveProperty('createdBy');
   });
+
+  it('approve moves a SUBMITTED request to APPROVED and records the reviewer', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+    await service.submit(created.token, { contactName: 'Jane Vendor', canService: true } as any);
+
+    const approved = await service.approve(created.id, { user: 'ops.admin' });
+
+    expect(approved.status).toBe('APPROVED');
+    expect(approved.reviewedBy).toBe('ops.admin');
+    expect(approved.reviewedAtZ).not.toBeNull();
+  });
+
+  it('reject moves a SUBMITTED request to REJECTED with review notes', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+    await service.submit(created.token, { contactName: 'Jane Vendor', canService: false } as any);
+
+    const rejected = await service.reject(created.id, { user: 'ops.admin', reviewNotes: 'Vendor confirmed they do not cover this station.' });
+
+    expect(rejected.status).toBe('REJECTED');
+    expect(rejected.reviewNotes).toContain('do not cover');
+  });
+
+  it('approve rejects a request that has not been submitted yet', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+
+    await expect(service.approve(created.id, { user: 'ops.admin' })).rejects.toThrow('has not been submitted');
+  });
 });
