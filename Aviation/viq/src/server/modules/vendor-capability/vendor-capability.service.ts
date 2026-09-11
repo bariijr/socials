@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateVendorCapabilityRequestDto } from './dto/create-vendor-capability-request.dto';
+import { SubmitVendorCapabilityResponseDto } from './dto/submit-vendor-capability-response.dto';
 
 const TOKEN_TTL_DAYS = 30;
 
@@ -76,5 +77,28 @@ export class VendorCapabilityService {
     const row = await this.prisma.vendorCapabilityRequest.findUnique({ where: { token } });
     if (!row) throw new NotFoundException('Capability request not found');
     return row;
+  }
+
+  async submit(token: string, dto: SubmitVendorCapabilityResponseDto) {
+    const row = await this.findByToken(token);
+    if (row.status !== 'PENDING') {
+      throw new BadRequestException('This capability request has already been submitted.');
+    }
+    if (row.tokenExpiresAtZ.getTime() < Date.now()) {
+      throw new BadRequestException('This capability request link has expired.');
+    }
+    const updated = await this.prisma.vendorCapabilityRequest.update({
+      where: { id: row.id },
+      data: {
+        status: 'SUBMITTED',
+        contactName: dto.contactName,
+        contactEmail: dto.contactEmail,
+        canService: dto.canService,
+        vendorNotes: dto.vendorNotes,
+        submittedAtZ: new Date(),
+      },
+    });
+    await this.audit.log('VENDOR_PORTAL', 'VendorCapabilityRequest', updated.id, 'Submitted', 'PENDING', 'SUBMITTED');
+    return updated;
   }
 }

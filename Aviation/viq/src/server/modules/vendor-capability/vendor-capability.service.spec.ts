@@ -50,4 +50,31 @@ describe('VendorCapabilityService', () => {
   it('findByToken throws NotFoundException for an unknown token', async () => {
     await expect(service.findByToken('does-not-exist')).rejects.toThrow('not found');
   });
+
+  it('submit records the vendor answer and moves status to SUBMITTED, and rejects a second submit', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+
+    const submitted = await service.submit(created.token, {
+      contactName: 'Jane Vendor',
+      contactEmail: 'jane@alphahandling.example',
+      canService: true,
+      vendorNotes: 'We hold a valid TCAA ground handling permit.',
+    });
+
+    expect(submitted.status).toBe('SUBMITTED');
+    expect(submitted.submittedAtZ).not.toBeNull();
+
+    await expect(
+      service.submit(created.token, { contactName: 'Jane Vendor', canService: true } as any),
+    ).rejects.toThrow('already been submitted');
+  });
+
+  it('submit rejects an expired token', async () => {
+    const created = await service.create({ providerId: 'VEN-000001', serviceType: 'Overflight', countryIso2: 'TZ' } as any);
+    await prisma.vendorCapabilityRequest.update({ where: { id: created.id }, data: { tokenExpiresAtZ: new Date(Date.now() - 1000) } });
+
+    await expect(
+      service.submit(created.token, { contactName: 'Jane Vendor', canService: true } as any),
+    ).rejects.toThrow('expired');
+  });
 });

@@ -26,6 +26,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { VendorAssignmentsModule } from './modules/vendor-assignments/vendor-assignments.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
+import { VendorCapabilityModule } from './modules/vendor-capability/vendor-capability.module';
 import { UsersModule } from './modules/users/users.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { SettingsModule } from './modules/settings/settings.module';
@@ -69,6 +70,7 @@ import { HealthModule } from './modules/health/health.module';
     TasksModule,
     VendorAssignmentsModule,
     QuotesModule,
+    VendorCapabilityModule,
     HealthModule,
   ],
 })
