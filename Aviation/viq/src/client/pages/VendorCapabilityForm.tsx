@@ -15,7 +15,12 @@ import type { VendorCapabilityPublicView } from '@/lib/dataStore';
 export default function VendorCapabilityForm() {
   const { token } = useParams<{ token: string }>();
   const [request, setRequest] = useState<VendorCapabilityPublicView | null>(null);
+  // `error` is FATAL ONLY (bad/expired token — there is no form to show, so
+  // it replaces the page). A submit failure must never use it: this is the
+  // app's only external-facing page, and blowing the form away would destroy
+  // everything the vendor typed with no way back except the original link.
   const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [contactName, setContactName] = useState('');
@@ -42,6 +47,7 @@ export default function VendorCapabilityForm() {
   const submit = async () => {
     if (!token || canService === null || !contactName.trim()) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await submitVendorCapabilityResponse(token, {
         contactName: contactName.trim(),
@@ -51,8 +57,9 @@ export default function VendorCapabilityForm() {
       });
       setSubmitted(true);
     } catch (e: unknown) {
-      const body = e instanceof ApiError ? (e.body as { message?: string } | undefined) : undefined;
-      setError(body?.message || 'Could not submit your response.');
+      const body = e instanceof ApiError ? (e.body as { message?: string | string[] } | undefined) : undefined;
+      const message = Array.isArray(body?.message) ? body?.message.join(' ') : body?.message;
+      setSubmitError(message || 'Could not submit your response. Please check your details and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -82,6 +89,7 @@ export default function VendorCapabilityForm() {
             <Button variant={canService === false ? 'default' : 'outline'} onClick={() => setCanService(false)}>No, we cannot</Button>
           </div>
           <Textarea placeholder="Notes (optional)" value={vendorNotes} onChange={(e) => setVendorNotes(e.target.value)} />
+          {submitError && <p className="text-sm text-destructive">{submitError}</p>}
           <Button className="w-full" disabled={submitting || canService === null || !contactName.trim()} onClick={submit}>
             Submit
           </Button>

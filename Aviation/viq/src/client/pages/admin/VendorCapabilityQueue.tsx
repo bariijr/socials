@@ -14,11 +14,23 @@ export default function VendorCapabilityQueue() {
   const [requests, setRequests] = useState<VendorCapabilityRequest[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  // Both of these exist because a silent failure here is actively dangerous:
+  // a stuck "Loading…" hides the queue entirely, and a silently-failed
+  // Approve invites the Admin to click again and re-review a decided request.
+  const [loadError, setLoadError] = useState('');
+  const [actError, setActError] = useState('');
+  const [actingId, setActingId] = useState<string | null>(null);
 
   const reload = async () => {
     setLoading(true);
-    setRequests(await listVendorCapabilityRequests());
-    setLoading(false);
+    setLoadError('');
+    try {
+      setRequests(await listVendorCapabilityRequests());
+    } catch {
+      setLoadError('Could not load capability requests — try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -30,16 +42,35 @@ export default function VendorCapabilityQueue() {
   const awaitingVendor = requests.filter((r) => r.status === 'PENDING');
 
   const act = async (id: string, action: 'approve' | 'reject') => {
+    if (actingId) return;
     const fn = action === 'approve' ? approveVendorCapabilityRequest : rejectVendorCapabilityRequest;
-    await fn(id, notes[id]);
-    await reload();
+    setActingId(id);
+    setActError('');
+    try {
+      await fn(id, notes[id]);
+      await reload();
+    } catch {
+      setActError(`Could not ${action} that request — it may have already been decided. Reload and check before retrying.`);
+    } finally {
+      setActingId(null);
+    }
   };
 
   if (loading) return <div className="p-6">Loading…</div>;
+  if (loadError) {
+    return (
+      <div className="p-6 space-y-3">
+        <p className="text-sm text-destructive">{loadError}</p>
+        <Button size="sm" variant="outline" onClick={reload}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-xl font-semibold">Vendor Capability Requests</h1>
+
+      {actError && <p className="text-sm text-destructive">{actError}</p>}
 
       <Card>
         <CardHeader><CardTitle>Awaiting Review ({pending.length})</CardTitle></CardHeader>
@@ -55,8 +86,10 @@ export default function VendorCapabilityQueue() {
               {r.vendorNotes && <div className="text-sm">{r.vendorNotes}</div>}
               <Textarea placeholder="Review notes (optional)" value={notes[r.id] || ''} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => act(r.id, 'approve')}>Approve</Button>
-                <Button size="sm" variant="destructive" onClick={() => act(r.id, 'reject')}>Reject</Button>
+                <Button size="sm" disabled={actingId !== null} onClick={() => act(r.id, 'approve')}>
+                  {actingId === r.id ? 'Working…' : 'Approve'}
+                </Button>
+                <Button size="sm" variant="destructive" disabled={actingId !== null} onClick={() => act(r.id, 'reject')}>Reject</Button>
               </div>
             </div>
           ))}
