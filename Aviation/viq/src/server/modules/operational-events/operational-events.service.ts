@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { OperationalEvent } from './event-types';
 
@@ -13,18 +13,34 @@ import type { OperationalEvent } from './event-types';
 // EventEmitter2's own `.emit()` stops calling further listeners the
 // moment one throws, which would let a broken listener silently starve
 // its siblings. `.emit()` here instead walks the registered listeners
-// itself, invoking every one even if an earlier one threw, and
-// re-raises the first error afterward so the caller still learns
-// something went wrong.
+// itself, invoking every one even if an earlier one threw.
+//
+// The "caller learns about a listener failure" guarantee below only
+// holds for a SYNCHRONOUS listener: its throw is caught in-loop and
+// re-raised to this call's own caller once every listener has run. An
+// `async` @OnEvent listener (every handler in AuditEventListener is
+// one) only runs synchronously up to its first `await` -- by the time
+// it rejects, `emit()` has already returned, so that rejection cannot
+// be re-thrown here without crashing the process as an unhandled
+// rejection. Instead it's caught via `.catch()` and logged; the caller
+// of `emit()` never sees it.
 @Injectable()
 export class OperationalEventsService {
+  private readonly logger = new Logger(OperationalEventsService.name);
+
   constructor(private readonly emitter: EventEmitter2) {}
 
   emit(event: OperationalEvent): void {
     let firstError: unknown;
     for (const listener of this.emitter.listeners(event.type)) {
       try {
-        listener(event);
+        const result = (listener as (e: OperationalEvent) => unknown)(event);
+        if (result instanceof Promise) {
+          result.catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            this.logger.error(`Async listener for ${event.type} failed: ${message}`);
+          });
+        }
       } catch (err) {
         if (firstError === undefined) firstError = err;
       }

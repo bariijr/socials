@@ -41,4 +41,44 @@ describe('OperationalEventsService', () => {
     expect(() => service.emit(event)).toThrow('boom');
     expect(received).toEqual([event]);
   });
+
+  it('does not produce an unhandled rejection when an async listener rejects', async () => {
+    // AuditEventListener's real handlers are all `async` and `await`
+    // AuditService.log(...) -- an `async` function only runs
+    // synchronously up to its first `await`, so a rejection surfaces
+    // after emit() has already returned and cannot be caught by a plain
+    // synchronous try/catch around the call. This proves that case is
+    // swallowed (and logged) rather than escaping as an unhandled
+    // rejection, which would otherwise crash the process (Node 15+
+    // default behavior) once a real cancellation flow hits a transient
+    // DB error inside a listener.
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason);
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    try {
+      emitter.on('SERVICE_CANCELLED', async () => {
+        throw new Error('async boom');
+      });
+
+      const event = {
+        type: 'SERVICE_CANCELLED' as const,
+        svcId: 'S1',
+        tripId: 'T1',
+        providerId: null,
+        reason: 'Weather',
+        user: 'coordinator',
+      };
+
+      expect(() => service.emit(event)).not.toThrow();
+
+      // Give the rejected promise's microtask -- and this service's own
+      // .catch() on it -- a turn to run before asserting nothing escaped.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+  });
 });
