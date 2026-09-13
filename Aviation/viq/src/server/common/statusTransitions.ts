@@ -93,3 +93,39 @@ export function withServiceTransitions<T extends { status: string }>(
 ): T & { allowedTransitions: string[] } {
   return { ...svc, allowedTransitions: serviceAllowedTransitions(svc.status) };
 }
+
+// Leg Lifecycle & Status Foundation sub-project. Shape mirrors
+// TRIP_TRANSITIONS exactly -- Leg didn't have a status at all before this;
+// this formalizes the mega-spec's PLANNED/ACTIVE/COMPLETED/CANCELLED
+// vocabulary (Title Case, matching the rest of this file) into the same
+// bidirectional graph shape Trip already uses, including its own
+// Cancelled -> Planned edge (the eventual reinstatement transition -- see
+// the design spec for why this edge ships now but its business logic
+// (revision increment, Change Impact triggering) does not).
+export const LEG_TRANSITIONS: Record<string, string[]> = {
+  'Planned': ['Active', 'Cancelled'],
+  'Active': ['Completed', 'Cancelled', 'Planned'],
+  'Completed': ['Active'],
+  'Cancelled': ['Planned'],
+};
+
+// Reopening a Completed leg is deliberately restricted to Admins, mirroring
+// tripReopenAllowed's rationale exactly (see that function's comment above).
+export function legReopenAllowed(from: string, role: string | undefined): boolean {
+  return from !== 'Completed' || role === 'Admin';
+}
+
+export function isValidLegTransition(from: string, to: string): boolean {
+  return (LEG_TRANSITIONS[from] ?? []).includes(to);
+}
+
+export function legAllowedTransitions(status: string, role?: string): string[] {
+  return legReopenAllowed(status, role) ? (LEG_TRANSITIONS[status] ?? []) : [];
+}
+
+export function withLegTransitions<T extends { status: string }>(
+  leg: T,
+  role?: string,
+): T & { allowedTransitions: string[] } {
+  return { ...leg, allowedTransitions: legAllowedTransitions(leg.status, role) };
+}
