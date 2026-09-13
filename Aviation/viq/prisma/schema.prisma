@@ -27,12 +27,12 @@ model Country {
   centroidLat              Float   @map("centroid_lat")
   centroidLng              Float   @map("centroid_lng")
 
-  airports         Airport[]
-  countryRules     CountryRule[]
-  messageTemplates MessageTemplate[]
-  fees             CountryFee[]
+  airports             Airport[]
+  countryRules         CountryRule[]
+  messageTemplates     MessageTemplate[]
+  fees                 CountryFee[]
   permitAuthorizations PermitAuthorization[]
-  vendorAssignments VendorAssignment[]
+  vendorAssignments    VendorAssignment[]
 
   @@map("countries")
 }
@@ -88,7 +88,7 @@ model Airport {
   category       String?
   fboCount       Int?    @map("fbo_count")
 
-  country Country @relation(fields: [countryIso2], references: [iso2])
+  country           Country            @relation(fields: [countryIso2], references: [iso2])
   vendorAssignments VendorAssignment[]
 
   @@map("airports")
@@ -175,9 +175,9 @@ model Operator {
   status         String?  @default("Active")
   notes          String?
 
-  aircraft Aircraft[]
-  clients  Client[]
-  channels ContactChannel[]
+  aircraft             Aircraft[]
+  clients              Client[]
+  channels             ContactChannel[]
   permitAuthorizations PermitAuthorization[]
 
   @@map("operators")
@@ -196,10 +196,10 @@ model Provider {
   contractActive Boolean  @default(true) @map("contract_active")
   notes          String?
 
-  services   Service[]
-  priceItems PriceItem[]
-  channels   ContactChannel[]
-  vendorAssignments VendorAssignment[]
+  services                 Service[]
+  priceItems               PriceItem[]
+  channels                 ContactChannel[]
+  vendorAssignments        VendorAssignment[]
   vendorCapabilityRequests VendorCapabilityRequest[]
 
   @@map("providers")
@@ -215,30 +215,30 @@ model Provider {
 // rank is nullable because a prohibition row (prohibited: true) has no
 // meaningful rank.
 model VendorAssignment {
-  id             String    @id @default(cuid())
-  providerId     String    @map("provider_id")
-  countryIso2    String?   @map("country_iso2")
-  icao           String?
-  serviceType    String    @map("service_type")
-  permitType     String?   @map("permit_type")
-  clientId       String?   @map("client_id")
+  id          String  @id @default(cuid())
+  providerId  String  @map("provider_id")
+  countryIso2 String? @map("country_iso2")
+  icao        String?
+  serviceType String  @map("service_type")
+  permitType  String? @map("permit_type")
+  clientId    String? @map("client_id")
 
-  preferred      Boolean   @default(false)
-  rank           Int?
-  prohibited     Boolean   @default(false)
+  preferred  Boolean @default(false)
+  rank       Int?
+  prohibited Boolean @default(false)
 
   active         Boolean   @default(true)
   effectiveFrom  DateTime? @map("effective_from")
   effectiveUntil DateTime? @map("effective_until")
 
-  notes          String?
-  createdBy      String?   @map("created_by")
-  createdAtZ     DateTime  @default(now()) @map("created_at_z")
+  notes      String?
+  createdBy  String?  @map("created_by")
+  createdAtZ DateTime @default(now()) @map("created_at_z")
 
-  provider Provider @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
-  client   Client?  @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
-  country  Country? @relation(fields: [countryIso2], references: [iso2], onDelete: Cascade)
-  airport  Airport? @relation(fields: [icao], references: [icao], onDelete: Cascade)
+  provider Provider  @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
+  client   Client?   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  country  Country?  @relation(fields: [countryIso2], references: [iso2], onDelete: Cascade)
+  airport  Airport?  @relation(fields: [icao], references: [icao], onDelete: Cascade)
   services Service[]
 
   @@index([countryIso2, icao, serviceType, permitType, clientId])
@@ -254,36 +254,36 @@ model VendorAssignment {
 // default-deny, so every pre-existing VendorAssignment keeps resolving
 // exactly as it did before this model existed.
 model VendorCapabilityRequest {
-  id             String    @id @default(cuid())
-  providerId     String    @map("provider_id")
-  countryIso2    String?   @map("country_iso2")
-  icao           String?
-  serviceType    String    @map("service_type")
+  id          String  @id @default(cuid())
+  providerId  String  @map("provider_id")
+  countryIso2 String? @map("country_iso2")
+  icao        String?
+  serviceType String  @map("service_type")
 
   // 48 hex chars from crypto.randomBytes(24) -- the vendor's only
   // credential, so it must never be sequential or guessable. Unique so a
   // token lookup is a single indexed equality check.
-  token          String    @unique
+  token           String   @unique
   tokenExpiresAtZ DateTime @map("token_expires_at_z")
 
   // PENDING (sent, awaiting vendor) -> SUBMITTED (vendor answered) ->
   // UNDER_REVIEW (optional Admin holding state) -> APPROVED | REJECTED.
   // A capability gate in the resolver treats anything other than APPROVED
   // as "not eligible for this context".
-  status         String    @default("PENDING")
+  status String @default("PENDING")
 
-  contactName    String?   @map("contact_name")
-  contactEmail   String?   @map("contact_email")
-  canService     Boolean?  @map("can_service")
-  vendorNotes    String?   @map("vendor_notes")
-  submittedAtZ   DateTime? @map("submitted_at_z")
+  contactName  String?   @map("contact_name")
+  contactEmail String?   @map("contact_email")
+  canService   Boolean?  @map("can_service")
+  vendorNotes  String?   @map("vendor_notes")
+  submittedAtZ DateTime? @map("submitted_at_z")
 
-  reviewedBy     String?   @map("reviewed_by")
-  reviewedAtZ    DateTime? @map("reviewed_at_z")
-  reviewNotes    String?   @map("review_notes")
+  reviewedBy  String?   @map("reviewed_by")
+  reviewedAtZ DateTime? @map("reviewed_at_z")
+  reviewNotes String?   @map("review_notes")
 
-  createdBy      String?   @map("created_by")
-  createdAtZ     DateTime  @default(now()) @map("created_at_z")
+  createdBy  String?  @map("created_by")
+  createdAtZ DateTime @default(now()) @map("created_at_z")
 
   provider Provider @relation(fields: [providerId], references: [providerId], onDelete: Cascade)
 
@@ -360,12 +360,12 @@ model PermitAuthorization {
   id                String    @id @default(cuid())
   operatorId        String    @map("operator_id")
   countryIso2       String    @map("country_iso2")
-  serviceType       String    @map("service_type")       // 'Permit' | 'Overflight'
+  serviceType       String    @map("service_type") // 'Permit' | 'Overflight'
   authorizationType String    @map("authorization_type") // 'Blanket' | 'Block' | 'Seasonal'
   referenceNumber   String    @map("reference_number")
   validFrom         DateTime  @map("valid_from")
   validUntil        DateTime  @map("valid_until")
-  status            String    @default("Draft")          // 'Draft' | 'Verified' | 'Revoked'
+  status            String    @default("Draft") // 'Draft' | 'Verified' | 'Revoked'
   docId             String?   @map("doc_id")
   notes             String?
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -393,34 +393,38 @@ model LegPurposeDef {
 // ─── Transactional spine ────────────────────────────────────────────────────
 
 model Trip {
-  tripId               String   @id @map("trip_id")
+  tripId               String    @id @map("trip_id")
   client               String
-  clientId             String?  @map("client_id")
+  clientId             String?   @map("client_id")
   operator             String?
   registration         String?
-  status               String   @default("Planning")
+  status               String    @default("Planning")
   owner                String?
-  ownerUserId          String?  @map("owner_user_id")
+  ownerUserId          String?   @map("owner_user_id")
   team                 String?
-  createdZ             DateTime @default(now()) @map("created_z")
-  supportRef           String?  @map("support_ref")
-  operationType        String?  @map("operation_type")
-  missionType          String?  @map("mission_type")
+  createdZ             DateTime  @default(now()) @map("created_z")
+  supportRef           String?   @map("support_ref")
+  operationType        String?   @map("operation_type")
+  missionType          String?   @map("mission_type")
   notes                String?
-  billToAddress        String?  @map("bill_to_address")
-  billToAddressLine1   String?  @map("bill_to_address_line1")
-  billToAddressLine2   String?  @map("bill_to_address_line2")
-  billToCity           String?  @map("bill_to_city")
-  billToState          String?  @map("bill_to_state")
-  billToPostalCode     String?  @map("bill_to_postal_code")
-  billToCountry        String?  @map("bill_to_country")
-  billToEmails         String[] @map("bill_to_emails")
-  aircraftIcaoType     String?  @map("aircraft_icao_type")
-  aircraftMtowKg       Float?   @map("aircraft_mtow_kg")
-  aircraftSerialNumber String?  @map("aircraft_serial_number")
-  version              Int      @default(1)
+  billToAddress        String?   @map("bill_to_address")
+  billToAddressLine1   String?   @map("bill_to_address_line1")
+  billToAddressLine2   String?   @map("bill_to_address_line2")
+  billToCity           String?   @map("bill_to_city")
+  billToState          String?   @map("bill_to_state")
+  billToPostalCode     String?   @map("bill_to_postal_code")
+  billToCountry        String?   @map("bill_to_country")
+  billToEmails         String[]  @map("bill_to_emails")
+  aircraftIcaoType     String?   @map("aircraft_icao_type")
+  aircraftMtowKg       Float?    @map("aircraft_mtow_kg")
+  aircraftSerialNumber String?   @map("aircraft_serial_number")
+  version              Int       @default(1)
   statusChangedAt      DateTime? @map("status_changed_at")
-  statusChangedBy      String?  @map("status_changed_by")
+  statusChangedBy      String?   @map("status_changed_by")
+  cancellationReason   String?   @map("cancellation_reason")
+  cancellationRemarks  String?   @map("cancellation_remarks")
+  cancelledBy          String?   @map("cancelled_by")
+  cancelledAtZ         DateTime? @map("cancelled_at_z")
 
   clientRecord Client?         @relation(fields: [clientId], references: [clientId])
   ownerUser    User?           @relation(fields: [ownerUserId], references: [id])
@@ -458,10 +462,10 @@ model Client {
 
   notes String?
 
-  linkedOperator Operator?        @relation(fields: [linkedOperatorId], references: [operatorId])
-  trips          Trip[]
-  channels       ContactChannel[]
-  tasks          Task[]
+  linkedOperator    Operator?          @relation(fields: [linkedOperatorId], references: [operatorId])
+  trips             Trip[]
+  channels          ContactChannel[]
+  tasks             Task[]
   vendorAssignments VendorAssignment[]
 
   @@map("clients")
@@ -528,27 +532,31 @@ model TripIdCounter {
 }
 
 model Leg {
-  legId              String   @id @map("leg_id")
-  tripId             String   @map("trip_id")
-  seq                Int
-  depIcao            String   @map("dep_icao")
-  arrIcao            String   @map("arr_icao")
-  etdZ               DateTime @map("etd_z")
-  etaZ               DateTime @map("eta_z")
-  blockHours         Float    @map("block_hours")
-  paxCount           Int      @default(0) @map("pax_count")
-  crewCount          Int      @default(0) @map("crew_count")
-  countriesOverflown String[] @map("countries_overflown")
-  revision           Int      @default(1)
-  callSign           String?  @map("call_sign")
-  purpose            String?
-  avoidFirs          String[] @map("avoid_firs")
-  includeFirs        String[] @map("include_firs")
-  routing            String?
-  version            Int      @default(1)
-  status             String   @default("Planned")
-  statusChangedAt    DateTime? @map("status_changed_at")
-  statusChangedBy    String?   @map("status_changed_by")
+  legId               String    @id @map("leg_id")
+  tripId              String    @map("trip_id")
+  seq                 Int
+  depIcao             String    @map("dep_icao")
+  arrIcao             String    @map("arr_icao")
+  etdZ                DateTime  @map("etd_z")
+  etaZ                DateTime  @map("eta_z")
+  blockHours          Float     @map("block_hours")
+  paxCount            Int       @default(0) @map("pax_count")
+  crewCount           Int       @default(0) @map("crew_count")
+  countriesOverflown  String[]  @map("countries_overflown")
+  revision            Int       @default(1)
+  callSign            String?   @map("call_sign")
+  purpose             String?
+  avoidFirs           String[]  @map("avoid_firs")
+  includeFirs         String[]  @map("include_firs")
+  routing             String?
+  version             Int       @default(1)
+  status              String    @default("Planned")
+  statusChangedAt     DateTime? @map("status_changed_at")
+  statusChangedBy     String?   @map("status_changed_by")
+  cancellationReason  String?   @map("cancellation_reason")
+  cancellationRemarks String?   @map("cancellation_remarks")
+  cancelledBy         String?   @map("cancelled_by")
+  cancelledAtZ        DateTime? @map("cancelled_at_z")
 
   trip           Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   assignments    LegPersonAssignment[]
@@ -578,42 +586,46 @@ model Stop {
 }
 
 model Service {
-  svcId         String    @id @map("svc_id")
-  tripId        String    @map("trip_id")
-  scopeType     String    @map("scope_type") // TRIP | LEG | STOP | SEGMENT
-  scopeId       String    @map("scope_id")
-  serviceType   String    @map("service_type")
-  providerId    String?   @map("provider_id")
-  status        String    @default("Not Started")
-  refNumber     String    @default("") @map("ref_number")
-  basedOnEtdZ   DateTime  @map("based_on_etd_z")
-  requiredByZ   DateTime  @map("required_by_z")
-  urgency       String    @default("OK")
-  assignedTo    String    @default("Unassigned") @map("assigned_to")
-  notes         String    @default("")
-  subItems      Json?     @map("sub_items")
-  confirmedBy   String?   @map("confirmed_by")
-  confirmedAtZ  DateTime? @map("confirmed_at_z")
-  validityZ     DateTime? @map("validity_z")
-  sentToCaptain Boolean?  @map("sent_to_captain")
-  attachments   String[]
-  countryIso2   String?   @map("country_iso2")
-  icao          String?
-  variant       String?
-  version       Int       @default(1)
-  statusChangedAt DateTime? @map("status_changed_at")
-  statusChangedBy String?  @map("status_changed_by")
-  responsibility  String  @default("VIQ Arrangement")
-  authorizationId String? @map("authorization_id")
+  svcId                 String    @id @map("svc_id")
+  tripId                String    @map("trip_id")
+  scopeType             String    @map("scope_type") // TRIP | LEG | STOP | SEGMENT
+  scopeId               String    @map("scope_id")
+  serviceType           String    @map("service_type")
+  providerId            String?   @map("provider_id")
+  status                String    @default("Not Started")
+  refNumber             String    @default("") @map("ref_number")
+  basedOnEtdZ           DateTime  @map("based_on_etd_z")
+  requiredByZ           DateTime  @map("required_by_z")
+  urgency               String    @default("OK")
+  assignedTo            String    @default("Unassigned") @map("assigned_to")
+  notes                 String    @default("")
+  subItems              Json?     @map("sub_items")
+  confirmedBy           String?   @map("confirmed_by")
+  confirmedAtZ          DateTime? @map("confirmed_at_z")
+  validityZ             DateTime? @map("validity_z")
+  sentToCaptain         Boolean?  @map("sent_to_captain")
+  attachments           String[]
+  countryIso2           String?   @map("country_iso2")
+  icao                  String?
+  variant               String?
+  version               Int       @default(1)
+  statusChangedAt       DateTime? @map("status_changed_at")
+  statusChangedBy       String?   @map("status_changed_by")
+  cancellationReason    String?   @map("cancellation_reason")
+  cancellationRemarks   String?   @map("cancellation_remarks")
+  cancelledBy           String?   @map("cancelled_by")
+  cancelledAtZ          DateTime? @map("cancelled_at_z")
+  responsibility        String    @default("VIQ Arrangement")
+  authorizationId       String?   @map("authorization_id")
   vendorSelectionSource String?   @map("vendor_selection_source")
   vendorAssignmentId    String?   @map("vendor_assignment_id")
   vendorSelectedAtZ     DateTime? @map("vendor_selected_at_z")
 
-  trip          Trip                 @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
-  provider      Provider?            @relation(fields: [providerId], references: [providerId])
-  authorization PermitAuthorization? @relation(fields: [authorizationId], references: [id])
-  vendorAssignment VendorAssignment? @relation(fields: [vendorAssignmentId], references: [id], onDelete: SetNull)
-  tasks         Task[]
+  trip             Trip                 @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
+  provider         Provider?            @relation(fields: [providerId], references: [providerId])
+  authorization    PermitAuthorization? @relation(fields: [authorizationId], references: [id])
+  vendorAssignment VendorAssignment?    @relation(fields: [vendorAssignmentId], references: [id], onDelete: SetNull)
+  tasks            Task[]
   vendorChangeLogs VendorChangeLog[]
 
   @@index([tripId])
@@ -683,27 +695,27 @@ model DismissedServiceCandidate {
 // relations use onDelete: SetNull so deleting a Trip/Leg/Service/
 // Client/User never blocks on an orphaned Task reference.
 model Task {
-  id               String    @id @default(cuid())
-  title            String
-  description      String?
-  tripId           String?   @map("trip_id")
-  legId            String?   @map("leg_id")
-  serviceId        String?   @map("service_id")
-  clientId         String?   @map("client_id")
-  ownerUserId      String?   @map("owner_user_id")
-  priority         String    @default("Normal")
-  noLaterThanZ     DateTime? @map("no_later_than_z")
-  status           String    @default("Open")
-  statusChangedAt  DateTime? @map("status_changed_at")
-  statusChangedBy  String?   @map("status_changed_by")
-  version          Int       @default(1)
-  source           String    @default("Manual")
-  sourceKey        String?   @unique @map("source_key")
-  escalationTier   String?   @map("escalation_tier")
-  escalatedAtZ     DateTime? @map("escalated_at_z")
-  createdBy        String?   @map("created_by")
-  createdAtZ       DateTime  @default(now()) @map("created_at_z")
-  completedAtZ     DateTime? @map("completed_at_z")
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  tripId          String?   @map("trip_id")
+  legId           String?   @map("leg_id")
+  serviceId       String?   @map("service_id")
+  clientId        String?   @map("client_id")
+  ownerUserId     String?   @map("owner_user_id")
+  priority        String    @default("Normal")
+  noLaterThanZ    DateTime? @map("no_later_than_z")
+  status          String    @default("Open")
+  statusChangedAt DateTime? @map("status_changed_at")
+  statusChangedBy String?   @map("status_changed_by")
+  version         Int       @default(1)
+  source          String    @default("Manual")
+  sourceKey       String?   @unique @map("source_key")
+  escalationTier  String?   @map("escalation_tier")
+  escalatedAtZ    DateTime? @map("escalated_at_z")
+  createdBy       String?   @map("created_by")
+  createdAtZ      DateTime  @default(now()) @map("created_at_z")
+  completedAtZ    DateTime? @map("completed_at_z")
 
   trip    Trip?    @relation(fields: [tripId], references: [tripId], onDelete: SetNull)
   leg     Leg?     @relation(fields: [legId], references: [legId], onDelete: SetNull)
