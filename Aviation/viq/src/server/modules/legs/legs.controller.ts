@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { LegsService } from './legs.service';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
+import { CancelLegDto } from './dto/cancel-leg.dto';
+import { CancelLegsDto } from './dto/cancel-legs.dto';
 import { Public } from '../auth/public.decorator';
 import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
 
@@ -30,6 +32,11 @@ export class LegsController {
     return this.legs.upcoming(limitNum, search);
   }
 
+  @Get(':legId/cancellation-preview')
+  cancellationPreview(@Param('legId') legId: string) {
+    return this.legs.previewLegCancellation(legId);
+  }
+
   @Get(':legId')
   findOne(@Param('legId') legId: string, @CurrentUser() currentUser?: CurrentUserPayload) {
     return this.legs.findOne(legId, currentUser?.role);
@@ -38,6 +45,16 @@ export class LegsController {
   @Post()
   create(@Body() dto: CreateLegDto) {
     return this.legs.create(dto);
+  }
+
+  @Post('cancel-batch')
+  cancelBatch(@Body() dto: CancelLegsDto) {
+    return this.legs.cancelLegs(dto.legIds, dto);
+  }
+
+  @Post(':legId/cancel')
+  cancel(@Param('legId') legId: string, @Body() dto: CancelLegDto, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.legs.cancelLeg(legId, dto, currentUser?.role);
   }
 
   @Patch(':legId')

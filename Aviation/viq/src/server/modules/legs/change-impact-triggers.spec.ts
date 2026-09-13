@@ -1,8 +1,10 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
 import { StopsService } from '../stops/stops.service';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { LegsService } from './legs.service';
 import { TripsService } from '../trips/trips.service';
 import { truncateAll } from '../../test/db-test-utils';
@@ -26,7 +28,7 @@ describe('Change impact: leg-scoped triggers (schedule + route)', () => {
     const audit = new AuditService(prisma);
     services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops);
+    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
     trips = new TripsService(prisma, audit, services);
     await trips.create({ tripId: 'TEST-CI-1', client: 'Test Client' });
     await prisma.country.createMany({

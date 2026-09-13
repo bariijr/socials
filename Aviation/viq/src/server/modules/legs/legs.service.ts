@@ -6,8 +6,11 @@ import { ServicesService } from '../services/services.service';
 import { StopsService } from '../stops/stops.service';
 import { computeOverflightCountries, applyFirAdjustments } from '../../common/geo.util';
 import { isValidLegTransition, legReopenAllowed, withLegTransitions } from '../../common/statusTransitions';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
+import { CancelLegDto } from './dto/cancel-leg.dto';
+import { CancelLegsDto } from './dto/cancel-legs.dto';
 
 @Injectable()
 export class LegsService {
@@ -16,6 +19,7 @@ export class LegsService {
     private readonly audit: AuditService,
     private readonly services: ServicesService,
     private readonly stops: StopsService,
+    private readonly events: OperationalEventsService,
   ) {}
 
   findAll(tripId?: string) {
@@ -349,5 +353,126 @@ export class LegsService {
     await this.prisma.leg.delete({ where: { legId } });
     await this.audit.log(user, 'Leg', legId, 'Deleted', legId, '');
     return { legId, deleted: true };
+  }
+
+  // "Requested" bucket generalizes Requested/Chasing/Re-confirm Required
+  // (all mean "a request is already in flight"); "notStarted" generalizes
+  // Not Started/Submission Pending/Submission Failed (nothing has been
+  // sent yet). Matches the mega-spec §4's three-bucket impact preview.
+  private static readonly REQUESTED_STATUSES = ['Requested', 'Chasing', 'Re-confirm Required'];
+  private static readonly NOT_STARTED_STATUSES = ['Not Started', 'Submission Pending', 'Submission Failed'];
+
+  async previewLegCancellation(legId: string) {
+    const leg = await this.prisma.leg.findUnique({ where: { legId } });
+    if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
+    const affected = await this.prisma.service.findMany({
+      where: { scopeId: legId, status: { not: 'Cancelled' } },
+      select: { status: true, providerId: true },
+    });
+    const confirmed = affected.filter((s) => s.status === 'Confirmed').length;
+    const requested = affected.filter((s) => LegsService.REQUESTED_STATUSES.includes(s.status)).length;
+    const notStarted = affected.filter((s) => LegsService.NOT_STARTED_STATUSES.includes(s.status)).length;
+    const vendorNotifications = new Set(affected.filter((s) => s.providerId).map((s) => s.providerId)).size;
+    return {
+      legId,
+      route: `${leg.depIcao} → ${leg.arrIcao}`,
+      servicesAffected: affected.length,
+      confirmed,
+      requested,
+      notStarted,
+      vendorNotifications,
+      crewCount: leg.crewCount,
+      paxCount: leg.paxCount,
+    };
+  }
+
+  async cancelLeg(legId: string, dto: CancelLegDto, role?: string) {
+    const before = await this.prisma.leg.findUnique({ where: { legId } });
+    if (!before) throw new NotFoundException(`Leg ${legId} not found`);
+    if (!isValidLegTransition(before.status, 'Cancelled')) {
+      throw new BadRequestException(`Cannot cancel a Leg with status "${before.status}"`);
+    }
+    if (!legReopenAllowed(before.status, role)) {
+      throw new ForbiddenException('Cancelling from this status requires the Admin role');
+    }
+    const user = dto.user || 'SYSTEM';
+    const cancelledAtZ = new Date();
+
+    const affectedServices = await this.cancelLegTransaction(legId, before, dto, user, cancelledAtZ);
+
+    const leg = await this.prisma.leg.findUnique({ where: { legId } });
+    await this.audit.logDiff(user, 'Leg', legId, before as unknown as Record<string, unknown>, leg as unknown as Record<string, unknown>);
+    this.events.emit({ type: 'LEG_CANCELLED', legId, tripId: leg!.tripId, reason: dto.reason, user });
+    for (const svc of affectedServices) {
+      this.events.emit({ type: 'SERVICE_CANCELLED', svcId: svc.svcId, tripId: leg!.tripId, providerId: svc.providerId, reason: dto.reason, user });
+    }
+    return withLegTransitions(leg!, role);
+  }
+
+  async cancelLegs(legIds: string[], dto: CancelLegsDto) {
+    const user = dto.user || 'SYSTEM';
+    const results = [];
+    for (const legId of legIds) {
+      const before = await this.prisma.leg.findUnique({ where: { legId } });
+      if (!before) throw new NotFoundException(`Leg ${legId} not found`);
+      if (!isValidLegTransition(before.status, 'Cancelled')) {
+        throw new BadRequestException(`Cannot cancel Leg ${legId} with status "${before.status}"`);
+      }
+      const cancelledAtZ = new Date();
+      const affectedServices = await this.cancelLegTransaction(legId, before, dto, user, cancelledAtZ);
+
+      const leg = await this.prisma.leg.findUnique({ where: { legId } });
+      await this.audit.logDiff(user, 'Leg', legId, before as unknown as Record<string, unknown>, leg as unknown as Record<string, unknown>);
+      this.events.emit({ type: 'LEG_CANCELLED', legId, tripId: leg!.tripId, reason: dto.reason, user });
+      for (const svc of affectedServices) {
+        this.events.emit({ type: 'SERVICE_CANCELLED', svcId: svc.svcId, tripId: leg!.tripId, providerId: svc.providerId, reason: dto.reason, user });
+      }
+      results.push(withLegTransitions(leg!));
+    }
+    return results;
+  }
+
+  // Shared by cancelLeg (caller-pinned version) and cancelLegs (freshly
+  // read per Leg) -- both call this with `before` already loaded and
+  // already validated, so this only ever performs the write.
+  private async cancelLegTransaction(
+    legId: string,
+    before: { version: number },
+    dto: { reason: string; remarks?: string; version?: number },
+    user: string,
+    cancelledAtZ: Date,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.leg.updateMany({
+        where: { legId, version: dto.version ?? before.version },
+        data: {
+          status: 'Cancelled',
+          statusChangedAt: cancelledAtZ,
+          statusChangedBy: user,
+          cancellationReason: dto.reason,
+          cancellationRemarks: dto.remarks,
+          cancelledBy: user,
+          cancelledAtZ,
+          version: { increment: 1 },
+        },
+      });
+      const affected = await tx.service.findMany({ where: { scopeId: legId, status: { not: 'Cancelled' } } });
+      if (affected.length > 0) {
+        await tx.service.updateMany({
+          where: { svcId: { in: affected.map((s) => s.svcId) } },
+          data: {
+            status: 'Cancelled',
+            statusChangedAt: cancelledAtZ,
+            statusChangedBy: user,
+            cancellationReason: dto.reason,
+            cancellationRemarks: dto.remarks,
+            cancelledBy: user,
+            cancelledAtZ,
+            version: { increment: 1 },
+          },
+        });
+      }
+      return affected;
+    });
   }
 }

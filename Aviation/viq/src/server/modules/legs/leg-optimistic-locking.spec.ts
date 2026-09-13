@@ -1,8 +1,10 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
 import { StopsService } from '../stops/stops.service';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { LegsService } from './legs.service';
 import { TripsService } from '../trips/trips.service';
 import { truncateAll } from '../../test/db-test-utils';
@@ -25,7 +27,7 @@ describe('Leg optimistic locking', () => {
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops);
+    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
     trips = new TripsService(prisma, audit, services);
   });
 
