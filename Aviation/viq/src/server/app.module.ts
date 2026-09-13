@@ -3,7 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { BullModule } from '@nestjs/bullmq';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
+import { OperationalEventsModule } from './modules/operational-events/operational-events.module';
 import { ThrottlingModule } from './modules/throttling/throttling.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -46,6 +48,8 @@ import { HealthModule } from './modules/health/health.module';
         connection: { url: process.env.REDIS_URL || 'redis://localhost:6389' },
       }),
     }),
+    EventEmitterModule.forRoot(),
+    OperationalEventsModule,
     AuthModule,
     AuditModule,
     ContactsModule,
