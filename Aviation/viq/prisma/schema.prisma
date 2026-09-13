@@ -546,6 +546,9 @@ model Leg {
   includeFirs        String[] @map("include_firs")
   routing            String?
   version            Int      @default(1)
+  status             String   @default("Planned")
+  statusChangedAt    DateTime? @map("status_changed_at")
+  statusChangedBy    String?   @map("status_changed_by")
 
   trip           Trip                  @relation(fields: [tripId], references: [tripId], onDelete: Cascade)
   assignments    LegPersonAssignment[]
