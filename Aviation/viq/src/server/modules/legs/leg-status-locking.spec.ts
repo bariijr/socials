@@ -116,6 +116,56 @@ describe('Leg status transitions', () => {
     expect(statusEntry!.newValue).toBe('Active');
     expect(statusEntry!.user).toBe('coordinator1');
   });
+
+  it('allows Planned -> Cancelled', async () => {
+    const created = await makeLeg('TEST-LEG-TRANS-5', 'TEST-LEG-TRANS-5-LEG-1');
+
+    const updated = await legs.update(created.legId, { status: 'Cancelled', version: created.version });
+    expect(updated.status).toBe('Cancelled');
+    expect(updated.allowedTransitions).toEqual(['Planned']);
+  });
+
+  it('allows Active -> Cancelled', async () => {
+    const created = await makeLeg('TEST-LEG-TRANS-6', 'TEST-LEG-TRANS-6-LEG-1');
+    const active = await legs.update(created.legId, { status: 'Active', version: created.version });
+
+    const updated = await legs.update(created.legId, { status: 'Cancelled', version: active.version });
+    expect(updated.status).toBe('Cancelled');
+    expect(updated.allowedTransitions).toEqual(['Planned']);
+  });
+
+  it('allows Active -> Planned', async () => {
+    const created = await makeLeg('TEST-LEG-TRANS-7', 'TEST-LEG-TRANS-7-LEG-1');
+    const active = await legs.update(created.legId, { status: 'Active', version: created.version });
+
+    const updated = await legs.update(created.legId, { status: 'Planned', version: active.version });
+    expect(updated.status).toBe('Planned');
+    expect(updated.allowedTransitions).toEqual(['Active', 'Cancelled']);
+  });
+
+  it('allows Cancelled -> Planned (reinstatement) and records it correctly, including in the audit trail', async () => {
+    const created = await makeLeg('TEST-LEG-TRANS-8', 'TEST-LEG-TRANS-8-LEG-1');
+    const cancelled = await legs.update(created.legId, {
+      status: 'Cancelled', version: created.version, user: 'coordinator1',
+    });
+    expect(cancelled.status).toBe('Cancelled');
+
+    const reinstated = await legs.update(cancelled.legId, {
+      status: 'Planned', version: cancelled.version, user: 'coordinator2',
+    });
+    expect(reinstated.status).toBe('Planned');
+    expect(reinstated.allowedTransitions).toEqual(['Active', 'Cancelled']);
+    expect(reinstated.statusChangedAt).not.toBeNull();
+    expect(reinstated.statusChangedBy).toBe('coordinator2');
+
+    const audit = new AuditService(prisma);
+    const history = await audit.forRecord('Leg', created.legId);
+    const reinstateEntry = history.find(
+      (h) => h.field === 'status' && h.oldValue === 'Cancelled' && h.newValue === 'Planned',
+    );
+    expect(reinstateEntry).toBeDefined();
+    expect(reinstateEntry!.user).toBe('coordinator2');
+  });
 });
 
 describe('Reopening a Completed leg (Admin-gated)', () => {

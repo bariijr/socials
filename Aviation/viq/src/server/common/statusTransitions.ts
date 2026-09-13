@@ -1,7 +1,7 @@
 // src/server/common/statusTransitions.ts
 //
-// The server-side source of truth for which status a Trip or Service may
-// move to next. Every Trip/Service response the client edits from
+// The server-side source of truth for which status a Trip, Service, or Leg
+// may move to next. Every Trip/Service/Leg response the client edits from
 // (sheet(), findOne, create, update) carries the current status's legal
 // next values as `allowedTransitions` -- the client renders this as-is
 // and never re-derives the graph itself.

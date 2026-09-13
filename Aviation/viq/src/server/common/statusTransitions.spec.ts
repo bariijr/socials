@@ -1,4 +1,11 @@
-import { isValidServiceTransition, serviceAllowedTransitions } from './statusTransitions';
+import {
+  isValidServiceTransition,
+  serviceAllowedTransitions,
+  isValidLegTransition,
+  legAllowedTransitions,
+  legReopenAllowed,
+  withLegTransitions,
+} from './statusTransitions';
 
 describe('Submission Pending / Submission Failed transitions', () => {
   it('allows Not Started -> Submission Pending', () => {
@@ -46,13 +53,6 @@ describe('Submission Pending / Submission Failed transitions', () => {
     expect(serviceAllowedTransitions('Not Started')).toEqual(['Requested', 'Submission Pending', 'Not Required', 'Cancelled']);
   });
 });
-
-import {
-  isValidLegTransition,
-  legAllowedTransitions,
-  legReopenAllowed,
-  withLegTransitions,
-} from './statusTransitions';
 
 describe('Leg transitions', () => {
   it('allows Planned -> Active and Planned -> Cancelled', () => {

@@ -188,6 +188,13 @@ export class LegsService {
       countriesOverflown = applyFirAdjustments(geometric, include, avoid);
     }
 
+    // dto.status is intentionally NOT included below, even though
+    // CreateLegDto validates it -- accepting it here would let a caller
+    // create a Leg directly into Active/Completed/Cancelled, bypassing
+    // LEG_TRANSITIONS entirely and leaving statusChangedAt/statusChangedBy
+    // null. A new Leg always starts Planned (the schema default); all
+    // status movement must go through update(), where the transition graph
+    // is actually enforced.
     const leg = await this.prisma.leg.create({
       data: {
         legId: dto.legId,
