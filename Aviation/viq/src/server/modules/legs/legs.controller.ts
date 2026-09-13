@@ -3,6 +3,7 @@ import { LegsService } from './legs.service';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
 import { Public } from '../auth/public.decorator';
+import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
 
 @Controller('legs')
 export class LegsController {
@@ -30,8 +31,8 @@ export class LegsController {
   }
 
   @Get(':legId')
-  findOne(@Param('legId') legId: string) {
-    return this.legs.findOne(legId);
+  findOne(@Param('legId') legId: string, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.legs.findOne(legId, currentUser?.role);
   }
 
   @Post()
@@ -40,8 +41,8 @@ export class LegsController {
   }
 
   @Patch(':legId')
-  update(@Param('legId') legId: string, @Body() dto: UpdateLegDto) {
-    return this.legs.update(legId, dto);
+  update(@Param('legId') legId: string, @Body() dto: UpdateLegDto, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.legs.update(legId, dto, currentUser?.role);
   }
 
   @Delete(':legId')

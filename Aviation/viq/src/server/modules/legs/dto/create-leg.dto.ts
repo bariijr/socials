@@ -1,4 +1,6 @@
-import { IsArray, IsDateString, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsDateString, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+
+const LEG_STATUSES = ['Planned', 'Active', 'Completed', 'Cancelled'] as const;
 
 export class CreateLegDto {
   @IsString()
@@ -72,6 +74,10 @@ export class CreateLegDto {
   @IsString()
   @MaxLength(2000)
   routing?: string;
+
+  @IsOptional()
+  @IsIn(LEG_STATUSES)
+  status?: (typeof LEG_STATUSES)[number];
 
   @IsOptional()
   @IsString()

@@ -1,10 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ServicesService } from '../services/services.service';
 import { StopsService } from '../stops/stops.service';
 import { computeOverflightCountries, applyFirAdjustments } from '../../common/geo.util';
+import { isValidLegTransition, legReopenAllowed, withLegTransitions } from '../../common/statusTransitions';
 import { CreateLegDto } from './dto/create-leg.dto';
 import { UpdateLegDto } from './dto/update-leg.dto';
 
@@ -43,10 +44,10 @@ export class LegsService {
     });
   }
 
-  async findOne(legId: string) {
+  async findOne(legId: string, role?: string) {
     const leg = await this.prisma.leg.findUnique({ where: { legId } });
     if (!leg) throw new NotFoundException(`Leg ${legId} not found`);
-    return leg;
+    return withLegTransitions(leg, role);
   }
 
   // Server-side source of truth for "which countries does this route overfly" —
@@ -219,13 +220,23 @@ export class LegsService {
       await this.services.generateArrivalServices(leg.legId, { departureGroundHandling: dto.departureGroundHandling }, user);
     }
 
-    return leg;
+    return withLegTransitions(leg);
   }
 
-  async update(legId: string, dto: UpdateLegDto) {
-    const before = await this.findOne(legId);
+  async update(legId: string, dto: UpdateLegDto, role?: string) {
+    const before = await this.prisma.leg.findUnique({ where: { legId } });
+    if (!before) throw new NotFoundException(`Leg ${legId} not found`);
     const user = dto.user || 'SYSTEM';
     const { user: _user, generateServices, departureGroundHandling, version, ...data } = dto;
+
+    if (data.status && data.status !== before.status) {
+      if (!isValidLegTransition(before.status, data.status)) {
+        throw new BadRequestException(`Cannot transition Leg from "${before.status}" to "${data.status}"`);
+      }
+      if (!legReopenAllowed(before.status, role)) {
+        throw new ForbiddenException('Reopening a Completed leg requires the Admin role');
+      }
+    }
 
     // Route or Avoid/Include FIRs changed → recompute overflown countries,
     // unless the caller passed an explicit list. Item 16: this is also what
@@ -248,9 +259,14 @@ export class LegsService {
       reconcileOverflight = true;
     }
 
+    const statusChanging = data.status !== undefined && data.status !== before.status;
     const result = await this.prisma.leg.updateMany({
       where: { legId, version },
-      data: { ...data, version: { increment: 1 } },
+      data: {
+        ...data,
+        version: { increment: 1 },
+        ...(statusChanging ? { statusChangedAt: new Date(), statusChangedBy: user } : {}),
+      },
     });
 
     if (result.count === 0) {
@@ -259,13 +275,13 @@ export class LegsService {
       const latest = history[0];
       throw new ConflictException({
         message: `Leg ${legId} was modified by someone else`,
-        current,
+        current: current ? withLegTransitions(current, role) : current,
         changedBy: latest?.user,
         changedAt: latest?.timestampZ,
       });
     }
 
-    const leg = await this.findOne(legId);
+    const leg = await this.prisma.leg.findUnique({ where: { legId } });
     await this.audit.logDiff(user, 'Leg', legId, before as unknown as Record<string, unknown>, leg as unknown as Record<string, unknown>);
 
     // Snapshot which services were ALREADY Confirmed before the
@@ -298,27 +314,27 @@ export class LegsService {
     // running first would flip a matching service away from Confirmed,
     // leaving nothing for the route check to find and silently dropping
     // the route reason whenever both changes land in the same update.
-    const icaoChanged = (dto.depIcao !== undefined && before.depIcao !== leg.depIcao)
-      || (dto.arrIcao !== undefined && before.arrIcao !== leg.arrIcao);
+    const icaoChanged = (dto.depIcao !== undefined && before.depIcao !== leg!.depIcao)
+      || (dto.arrIcao !== undefined && before.arrIcao !== leg!.arrIcao);
     const routeChanged = icaoChanged
-      || JSON.stringify(before.countriesOverflown) !== JSON.stringify(leg.countriesOverflown);
+      || JSON.stringify(before.countriesOverflown) !== JSON.stringify(leg!.countriesOverflown);
     if (routeChanged) {
       const changedSegments: string[] = [];
-      if (dto.depIcao !== undefined && before.depIcao !== leg.depIcao) changedSegments.push(`dep ${before.depIcao} → ${leg.depIcao}`);
-      if (dto.arrIcao !== undefined && before.arrIcao !== leg.arrIcao) changedSegments.push(`arr ${before.arrIcao} → ${leg.arrIcao}`);
+      if (dto.depIcao !== undefined && before.depIcao !== leg!.depIcao) changedSegments.push(`dep ${before.depIcao} → ${leg!.depIcao}`);
+      if (dto.arrIcao !== undefined && before.arrIcao !== leg!.arrIcao) changedSegments.push(`arr ${before.arrIcao} → ${leg!.arrIcao}`);
       const reason = changedSegments.length > 0
         ? `route changed: ${changedSegments.join(', ')}`
         : 'overflown countries changed';
       await this.services.flagConfirmedServices({ scopeId: legId }, reason, user, preExistingConfirmedIds);
     }
-    if (dto.etdZ !== undefined && before.etdZ.getTime() !== leg.etdZ.getTime()) {
-      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etdZ, leg.etdZ, 'ETD', user, preExistingConfirmedIds);
+    if (dto.etdZ !== undefined && before.etdZ.getTime() !== leg!.etdZ.getTime()) {
+      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etdZ, leg!.etdZ, 'ETD', user, preExistingConfirmedIds);
     }
-    if (dto.etaZ !== undefined && before.etaZ.getTime() !== leg.etaZ.getTime()) {
-      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etaZ, leg.etaZ, 'ETA', user, preExistingConfirmedIds);
+    if (dto.etaZ !== undefined && before.etaZ.getTime() !== leg!.etaZ.getTime()) {
+      await this.services.flagConfirmedServicesForScheduleChange(legId, before.etaZ, leg!.etaZ, 'ETA', user, preExistingConfirmedIds);
     }
 
-    return leg;
+    return withLegTransitions(leg!, role);
   }
 
   async remove(legId: string, user = 'SYSTEM') {
