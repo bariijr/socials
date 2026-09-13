@@ -236,3 +236,40 @@ describe('Leg optimistic locking on status change', () => {
     expect(caught.response.changedBy).toBe('first-user');
   });
 });
+
+describe('Trip sheet surfaces Leg allowedTransitions', () => {
+  let prisma: PrismaService;
+  let legs: LegsService;
+  let trips: TripsService;
+
+  beforeAll(() => {
+    prisma = new PrismaService();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(prisma);
+    const audit = new AuditService(prisma);
+    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
+    const stops = new StopsService(prisma, audit);
+    legs = new LegsService(prisma, audit, services, stops);
+    trips = new TripsService(prisma, audit, services);
+  });
+
+  it('includes allowedTransitions on each embedded leg', async () => {
+    await trips.create({ tripId: 'TEST-LEG-SHEET-1', client: 'Test Client' });
+    await legs.create({
+      legId: 'TEST-LEG-SHEET-1-LEG-1', tripId: 'TEST-LEG-SHEET-1', seq: 1,
+      depIcao: 'HTDA', arrIcao: 'FALA',
+      etdZ: '2026-10-01T06:00:00.000Z', etaZ: '2026-10-01T09:00:00.000Z',
+      countriesOverflown: [], generateServices: false,
+    });
+
+    const sheet = await trips.sheet('TEST-LEG-SHEET-1');
+    expect(sheet.legs).toHaveLength(1);
+    expect(sheet.legs[0].allowedTransitions).toEqual(['Active', 'Cancelled']);
+  });
+});

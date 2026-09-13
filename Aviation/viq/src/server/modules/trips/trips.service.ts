@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { isValidTripTransition, tripReopenAllowed, withTripTransitions, withServiceTransitions } from '../../common/statusTransitions';
+import { isValidTripTransition, tripReopenAllowed, withTripTransitions, withServiceTransitions, withLegTransitions } from '../../common/statusTransitions';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -105,7 +105,7 @@ export class TripsService {
     });
     if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
     const legs = trip.legs.map(({ assignments, ...leg }) => ({
-      ...leg,
+      ...withLegTransitions(leg, role),
       persons: assignments.map((a) => ({ ...a.person, role: a.role, commercialFlightEta: a.commercialFlightEta, hotel: a.hotel })),
     }));
     const { legs: _legs, services, ...rest } = trip;
