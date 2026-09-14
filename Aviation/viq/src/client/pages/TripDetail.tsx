@@ -17,6 +17,8 @@ import type { Service, Leg, Trip, Comm, AuditEntry, ServiceStatus, ServiceType, 
 import type { Invoice, TripSheet, Client, UserDirectoryEntry, AuthorizationCandidate, VendorChangeLog } from '@/lib/dataStore';
 import { getServiceAuthorizationCandidates, linkServiceAuthorization, getPermitAuthorizationList } from '@/lib/dataStore';
 import { ChangeVendorDialog } from '@/components/ChangeVendorDialog';
+import { CancelLegDialog } from '@/components/CancelLegDialog';
+import { CancelTripDialog } from '@/components/CancelTripDialog';
 import { Typeahead } from '@/components/ui/typeahead';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -291,6 +293,7 @@ function LegEditor({
   const [keptSuggestionIds, setKeptSuggestionIds] = useState<Set<string>>(new Set());
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const toggleIcao = (icao: string) => {
     setExpandedIcaos((current) => {
       const next = new Set(current);
@@ -484,12 +487,32 @@ function LegEditor({
   return (
     <div className="mt-4 border-t pt-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">LEG SERVICES & ROUTING</h3>
-        <Button size="sm" variant={editing ? 'default' : 'outline'} disabled={!canEdit || (editing && !legHasChanges)} onClick={() => canEdit && (editing ? save() : setEditing(true))}>
-          {editing ? <Save className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
-          {editing ? 'SAVE' : 'EDIT'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold">LEG SERVICES & ROUTING</h3>
+          <StatusBadge status={leg.Status} entityType="leg" className="text-[10px]" />
+        </div>
+        <div className="flex items-center gap-2">
+          {leg.Status !== 'Cancelled' && leg.Status !== 'Completed' && (
+            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setCancelOpen(true)}>
+              Cancel Leg
+            </Button>
+          )}
+          <Button size="sm" variant={editing ? 'default' : 'outline'} disabled={!canEdit || (editing && !legHasChanges)} onClick={() => canEdit && (editing ? save() : setEditing(true))}>
+            {editing ? <Save className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
+            {editing ? 'SAVE' : 'EDIT'}
+          </Button>
+        </div>
       </div>
+      <CancelLegDialog
+        open={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        leg={leg}
+        trip={trip}
+        legs={legs}
+        persons={persons}
+        legServices={legServices}
+        onCancelled={onSaved}
+      />
 
       {suggested.length > 0 && (
         <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3 dark:shadow-glow">
@@ -1664,6 +1687,7 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
   const [billToEmailsText, setBillToEmailsText] = useState((trip.BillToEmails || []).join(', '));
   const [userDirectory, setUserDirectory] = useState<UserDirectoryEntry[]>([]);
   const [conflict, setConflict] = useState<{ changedBy?: string; changedAt?: string; current: Record<string, unknown> } | null>(null);
+  const [cancelTripOpen, setCancelTripOpen] = useState(false);
 
   useEffect(() => { getUserDirectory().then(setUserDirectory); }, []);
   useEffect(() => { setDraft(trip); setBillToEmailsText((trip.BillToEmails || []).join(', ')); }, [trip]);
@@ -1799,11 +1823,24 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
           <CardTitle className="text-base font-semibold">TRIP INFORMATION</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">Client, operator, aircraft and mission details</p>
         </div>
-        <Button size="sm" variant={editing ? 'default' : 'outline'} disabled={!canEdit || saving} onClick={() => canEdit && (editing ? save() : setEditing(true))}>
-          {editing ? <Save className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
-          {editing ? (saving ? 'SAVING…' : 'SAVE') : 'EDIT'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {trip.Status !== 'Cancelled' && trip.Status !== 'Complete' && (
+            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setCancelTripOpen(true)}>
+              Cancel Trip
+            </Button>
+          )}
+          <Button size="sm" variant={editing ? 'default' : 'outline'} disabled={!canEdit || saving} onClick={() => canEdit && (editing ? save() : setEditing(true))}>
+            {editing ? <Save className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
+            {editing ? (saving ? 'SAVING…' : 'SAVE') : 'EDIT'}
+          </Button>
+        </div>
       </CardHeader>
+      <CancelTripDialog
+        open={cancelTripOpen}
+        onClose={() => setCancelTripOpen(false)}
+        trip={trip}
+        onCancelled={onSaved}
+      />
       <CardContent>
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
           <label className="text-xs font-medium text-muted-foreground">
