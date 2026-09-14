@@ -411,7 +411,7 @@ export class LegsService {
     return withLegTransitions(leg!, role);
   }
 
-  async cancelLegs(legIds: string[], dto: CancelLegsDto) {
+  async cancelLegs(legIds: string[], dto: CancelLegsDto, role?: string) {
     const user = dto.user || 'SYSTEM';
     const results = [];
     for (const legId of legIds) {
@@ -419,6 +419,9 @@ export class LegsService {
       if (!before) throw new NotFoundException(`Leg ${legId} not found`);
       if (!isValidLegTransition(before.status, 'Cancelled')) {
         throw new BadRequestException(`Cannot cancel Leg ${legId} with status "${before.status}"`);
+      }
+      if (!legReopenAllowed(before.status, role)) {
+        throw new ForbiddenException('Cancelling from this status requires the Admin role');
       }
       const cancelledAtZ = new Date();
       const affectedServices = await this.cancelLegTransaction(legId, before, dto, user, cancelledAtZ);
@@ -437,6 +440,15 @@ export class LegsService {
   // Shared by cancelLeg (caller-pinned version) and cancelLegs (freshly
   // read per Leg) -- both call this with `before` already loaded and
   // already validated, so this only ever performs the write.
+  //
+  // The `scopeId: legId` filter below (matching previewLegCancellation's
+  // own filter) only ever matches LEG/SEGMENT-scoped Services, since a
+  // Service's scopeId is the Leg it belongs to. No production code path
+  // creates a TRIP-scoped Service today (services.service.ts only
+  // generates LEG/SEGMENT-scoped ones), so this is latent, not a live
+  // bug -- but if a TRIP-scoped Service is ever introduced, it would
+  // survive both a Leg cancellation (here) and a whole-Trip cancellation
+  // (which cancels via this same per-Leg path) untouched.
   private async cancelLegTransaction(
     legId: string,
     before: { version: number },

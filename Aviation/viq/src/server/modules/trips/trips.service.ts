@@ -175,7 +175,7 @@ export class TripsService {
       .filter((l) => l.status !== 'Completed' && l.status !== 'Cancelled')
       .map((l) => l.legId);
     if (nonTerminalLegIds.length > 0) {
-      await this.legs.cancelLegs(nonTerminalLegIds, { legIds: nonTerminalLegIds, reason: dto.reason, remarks: dto.remarks, user });
+      await this.legs.cancelLegs(nonTerminalLegIds, { legIds: nonTerminalLegIds, reason: dto.reason, remarks: dto.remarks, user }, role);
     }
 
     const result = await this.prisma.trip.updateMany({

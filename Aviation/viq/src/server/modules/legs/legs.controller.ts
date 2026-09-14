@@ -48,8 +48,8 @@ export class LegsController {
   }
 
   @Post('cancel-batch')
-  cancelBatch(@Body() dto: CancelLegsDto) {
-    return this.legs.cancelLegs(dto.legIds, dto);
+  cancelBatch(@Body() dto: CancelLegsDto, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.legs.cancelLegs(dto.legIds, dto, currentUser?.role);
   }
 
   @Post(':legId/cancel')
