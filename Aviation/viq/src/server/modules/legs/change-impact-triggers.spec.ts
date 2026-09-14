@@ -28,8 +28,9 @@ describe('Change impact: leg-scoped triggers (schedule + route)', () => {
     const audit = new AuditService(prisma);
     services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
     await trips.create({ tripId: 'TEST-CI-1', client: 'Test Client' });
     await prisma.country.createMany({
       data: [

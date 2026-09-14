@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { TripsService } from './trips.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
+import { CancelTripDto } from './dto/cancel-trip.dto';
 import { CurrentUser, CurrentUserPayload } from '../auth/current-user.decorator';
 
 @Controller('trips')
@@ -40,6 +41,16 @@ export class TripsController {
   @Get(':tripId/sheet')
   sheet(@Param('tripId') tripId: string, @CurrentUser() currentUser?: CurrentUserPayload) {
     return this.trips.sheet(tripId, currentUser?.role);
+  }
+
+  @Get(':tripId/cancellation-preview')
+  cancellationPreview(@Param('tripId') tripId: string) {
+    return this.trips.previewTripCancellation(tripId);
+  }
+
+  @Post(':tripId/cancel')
+  cancel(@Param('tripId') tripId: string, @Body() dto: CancelTripDto, @CurrentUser() currentUser?: CurrentUserPayload) {
+    return this.trips.cancelTrip(tripId, dto, currentUser?.role);
   }
 
   @Post()

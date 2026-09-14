@@ -30,8 +30,9 @@ describe('connecting-stop generation', () => {
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
     tripCounter += 1;
   });
 

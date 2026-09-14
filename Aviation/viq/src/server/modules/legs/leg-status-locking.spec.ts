@@ -60,8 +60,9 @@ describe('Leg status transitions', () => {
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
   });
 
   async function makeLeg(tripId: string, legId: string) {
@@ -188,8 +189,9 @@ describe('Reopening a Completed leg (Admin-gated)', () => {
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
   });
 
   async function makeCompletedLeg(tripId: string, legId: string) {
@@ -257,8 +259,9 @@ describe('Leg optimistic locking on status change', () => {
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
   });
 
   it('rejects a status-changing update with a stale version, returning the current record and who/when it changed', async () => {
@@ -307,8 +310,9 @@ describe('Trip sheet surfaces Leg allowedTransitions', () => {
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops, new OperationalEventsService(new EventEmitter2()));
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
   });
 
   it('includes allowedTransitions on each embedded leg', async () => {

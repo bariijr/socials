@@ -4,8 +4,11 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ServicesService } from '../services/services.service';
+import { LegsService } from '../legs/legs.service';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
+import { CancelTripDto } from './dto/cancel-trip.dto';
 
 @Injectable()
 export class TripsService {
@@ -13,6 +16,8 @@ export class TripsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly services: ServicesService,
+    private readonly legs: LegsService,
+    private readonly events: OperationalEventsService,
   ) {}
 
   // YYMM + sequence within that month, e.g. 2608005 for the 5th trip created in Aug 2026.
@@ -110,6 +115,78 @@ export class TripsService {
     }));
     const { legs: _legs, services, ...rest } = trip;
     return { ...withTripTransitions(rest, role), legs, services: services.map(withServiceTransitions) };
+  }
+
+  // Aggregates each non-terminal Leg's own previewLegCancellation() across
+  // the Trip. previewLegCancellation returns FOUR buckets -- confirmed,
+  // requested, notStarted, and notRequired (the last added during Task 3's
+  // review for a Service sitting in status "Not Required", which none of
+  // the other three buckets cover) -- so the same four are summed here to
+  // keep confirmed+requested+notStarted+notRequired === servicesAffected
+  // holding at the Trip level too, not just per-Leg.
+  async previewTripCancellation(tripId: string) {
+    const trip = await this.prisma.trip.findUnique({ where: { tripId }, include: { legs: true } });
+    if (!trip) throw new NotFoundException(`Trip ${tripId} not found`);
+    const nonTerminal = trip.legs.filter((l) => l.status !== 'Completed' && l.status !== 'Cancelled');
+    const legPreviews = await Promise.all(nonTerminal.map((l) => this.legs.previewLegCancellation(l.legId)));
+    return {
+      tripId,
+      legsToCancel: nonTerminal.length,
+      servicesAffected: legPreviews.reduce((sum, p) => sum + p.servicesAffected, 0),
+      confirmed: legPreviews.reduce((sum, p) => sum + p.confirmed, 0),
+      requested: legPreviews.reduce((sum, p) => sum + p.requested, 0),
+      notStarted: legPreviews.reduce((sum, p) => sum + p.notStarted, 0),
+      notRequired: legPreviews.reduce((sum, p) => sum + p.notRequired, 0),
+      vendorNotifications: legPreviews.reduce((sum, p) => sum + p.vendorNotifications, 0),
+    };
+  }
+
+  // Cancels every non-terminal (not already Completed/Cancelled) Leg on the
+  // Trip via LegsService.cancelLegs() -- which reads each Leg's own version
+  // fresh right before writing, with no caller-supplied per-Leg version;
+  // see Task 3's cancelLegs for that convention -- then cancels the Trip
+  // itself under its own caller-supplied optimistic-lock version. Completed
+  // Legs are left untouched entirely (the §101 acceptance scenario). If
+  // cancelLegs throws partway through its batch, Legs it already committed
+  // stay cancelled with their events already fired -- an accepted, already-
+  // reviewed Task 3 design choice this method inherits as-is.
+  async cancelTrip(tripId: string, dto: CancelTripDto, role?: string) {
+    const before = await this.prisma.trip.findUnique({ where: { tripId }, include: { legs: true } });
+    if (!before) throw new NotFoundException(`Trip ${tripId} not found`);
+    if (!isValidTripTransition(before.status, 'Cancelled')) {
+      throw new BadRequestException(`Cannot cancel a Trip with status "${before.status}"`);
+    }
+    const user = dto.user || 'SYSTEM';
+
+    const nonTerminalLegIds = before.legs
+      .filter((l) => l.status !== 'Completed' && l.status !== 'Cancelled')
+      .map((l) => l.legId);
+    if (nonTerminalLegIds.length > 0) {
+      await this.legs.cancelLegs(nonTerminalLegIds, { legIds: nonTerminalLegIds, reason: dto.reason, remarks: dto.remarks, user });
+    }
+
+    const result = await this.prisma.trip.updateMany({
+      where: { tripId, version: dto.version },
+      data: {
+        status: 'Cancelled',
+        statusChangedAt: new Date(),
+        statusChangedBy: user,
+        cancellationReason: dto.reason,
+        cancellationRemarks: dto.remarks,
+        cancelledBy: user,
+        cancelledAtZ: new Date(),
+        version: { increment: 1 },
+      },
+    });
+    if (result.count === 0) {
+      const current = await this.prisma.trip.findUnique({ where: { tripId } });
+      throw new ConflictException({ message: `Trip ${tripId} was modified by someone else`, current: current ? withTripTransitions(current, role) : current });
+    }
+
+    const trip = await this.prisma.trip.findUnique({ where: { tripId } });
+    await this.audit.logDiff(user, 'Trip', tripId, before as unknown as Record<string, unknown>, trip as unknown as Record<string, unknown>);
+    this.events.emit({ type: 'TRIP_CANCELLED', tripId, reason: dto.reason, user });
+    return withTripTransitions(trip!, role);
   }
 
   async create(dto: CreateTripDto) {

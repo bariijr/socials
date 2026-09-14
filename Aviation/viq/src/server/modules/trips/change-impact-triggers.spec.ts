@@ -1,7 +1,11 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
+import { StopsService } from '../stops/stops.service';
+import { LegsService } from '../legs/legs.service';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { TripsService } from './trips.service';
 import { truncateAll } from '../../test/db-test-utils';
 
@@ -21,7 +25,10 @@ describe('Change impact: trip-scoped trigger (operator/registration)', () => {
     await truncateAll(prisma);
     const audit = new AuditService(prisma);
     const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
-    trips = new TripsService(prisma, audit, services);
+    const stops = new StopsService(prisma, audit);
+    const events = new OperationalEventsService(new EventEmitter2());
+    const legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
   });
 
   it('flags every Confirmed service across every leg when the trip operator changes', async () => {

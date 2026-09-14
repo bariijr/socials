@@ -1,10 +1,27 @@
 import { PrismaClient } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { truncateAll } from '../../test/db-test-utils';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from '../services/services.service';
+import { StopsService } from '../stops/stops.service';
+import { LegsService } from '../legs/legs.service';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { TripsService } from './trips.service';
+
+// Shared by every describe block below, which each just need a working
+// TripsService and don't otherwise exercise Leg cancellation or events --
+// no need to give each one its own emitter/observed-events setup like
+// trip-cancellation.spec.ts does.
+function makeTripsService(prisma: PrismaService) {
+  const audit = new AuditService(prisma);
+  const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
+  const stops = new StopsService(prisma, audit);
+  const events = new OperationalEventsService(new EventEmitter2());
+  const legs = new LegsService(prisma, audit, services, stops, events);
+  return new TripsService(prisma, audit, services, legs, events);
+}
 
 describe('Trip version/status-tracking columns', () => {
   let prisma: PrismaClient;
@@ -46,9 +63,7 @@ describe('Trip status transitions', () => {
 
   beforeEach(async () => {
     await truncateAll(prisma);
-    const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
-    trips = new TripsService(prisma, audit, services);
+    trips = makeTripsService(prisma);
   });
 
   it('allows Planning -> Active and reports it in allowedTransitions before and after', async () => {
@@ -99,9 +114,7 @@ describe('Reopening a Complete trip (Admin-gated)', () => {
 
   beforeEach(async () => {
     await truncateAll(prisma);
-    const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
-    trips = new TripsService(prisma, audit, services);
+    trips = makeTripsService(prisma);
   });
 
   async function makeCompleteTrip(tripId: string) {
@@ -160,9 +173,7 @@ describe('Trip optimistic locking', () => {
 
   beforeEach(async () => {
     await truncateAll(prisma);
-    const audit = new AuditService(prisma);
-    const services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
-    trips = new TripsService(prisma, audit, services);
+    trips = makeTripsService(prisma);
   });
 
   it('rejects an update with a stale version, returning the current record and who/when it changed', async () => {
