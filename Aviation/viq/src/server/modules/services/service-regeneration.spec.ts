@@ -1,9 +1,11 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { VendorResolverService } from '../vendor-assignments/vendor-resolver.service';
 import { ServicesService } from './services.service';
 import { LegsService } from '../legs/legs.service';
 import { StopsService } from '../stops/stops.service';
+import { OperationalEventsService } from '../operational-events/operational-events.service';
 import { TripsService } from '../trips/trips.service';
 import { truncateAll } from '../../test/db-test-utils';
 
@@ -28,8 +30,9 @@ describe('generateOverflightServices — dismissal-tracking (Phase 0 Conflict #2
     const audit = new AuditService(prisma);
     services = new ServicesService(prisma, audit, new VendorResolverService(prisma));
     const stops = new StopsService(prisma, audit);
-    legs = new LegsService(prisma, audit, services, stops);
-    trips = new TripsService(prisma, audit, services);
+    const events = new OperationalEventsService(new EventEmitter2());
+    legs = new LegsService(prisma, audit, services, stops, events);
+    trips = new TripsService(prisma, audit, services, legs, events);
 
     await prisma.country.create({
       data: {
