@@ -2,9 +2,11 @@
 // phases never need to change this file's shape -- only add a new
 // `emit()` call site in the service that owns that event's workflow.
 // An event type with no real emit() call site anywhere yet is "inert":
-// legal to reference, never fired. This plan wires four: LEG_CANCELLED,
-// TRIP_CANCELLED, SERVICE_CANCELLED, LEG_STATUS_CHANGED. Every other
-// type below is inert until its owning phase adds a real call site.
+// legal to reference, never fired. This plan wires three: LEG_CANCELLED,
+// TRIP_CANCELLED, SERVICE_CANCELLED. Every other type below is inert
+// until its owning phase adds a real call site -- including
+// LEG_STATUS_CHANGED, which was planned for this pass but never got a
+// real emit() call site anywhere.
 export type OperationalEvent =
   | { type: 'TRIP_CREATED'; tripId: string; user: string }
   | { type: 'TRIP_CHANGED'; tripId: string; user: string }

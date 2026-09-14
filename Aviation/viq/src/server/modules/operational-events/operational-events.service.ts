@@ -24,6 +24,28 @@ import type { OperationalEvent } from './event-types';
 // be re-thrown here without crashing the process as an unhandled
 // rejection. Instead it's caught via `.catch()` and logged; the caller
 // of `emit()` never sees it.
+//
+// Because `emit()` walks `this.emitter.listeners(event.type)` directly
+// instead of calling EventEmitter2's own `.emit()`, only listeners
+// registered for the exact event type string via `.on()`/`@OnEvent`
+// are ever invoked -- a wildcard/`onAny()`-style listener, or any
+// future `@OnEvent('**')` or namespaced pattern listener, is tracked
+// separately by EventEmitter2 and `.listeners(type)` never returns it,
+// so it will never run through this service (see leg-cancellation.spec.ts
+// and trip-cancellation.spec.ts, which already had to work around this
+// by registering their test collectors per exact type instead).
+//
+// In production, every real listener is a NestJS `@OnEvent`-decorated
+// method (like AuditEventListener's handlers). Nest's own event-
+// subscribers loader wraps each such handler in its own try/catch with
+// error suppression by default, so a real `@OnEvent` handler throwing
+// or rejecting is caught by Nest itself before this service's own
+// try/catch or `.catch()` above ever sees it. This service's own
+// error-catching logic is therefore only actually exercised by
+// hand-registered `emitter.on()` listeners -- such as the plain
+// listeners this file's own test suite and other specs' event-
+// observation helpers register -- not by real production `@OnEvent`
+// consequences.
 @Injectable()
 export class OperationalEventsService {
   private readonly logger = new Logger(OperationalEventsService.name);
