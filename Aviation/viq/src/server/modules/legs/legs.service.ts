@@ -372,6 +372,7 @@ export class LegsService {
     const confirmed = affected.filter((s) => s.status === 'Confirmed').length;
     const requested = affected.filter((s) => LegsService.REQUESTED_STATUSES.includes(s.status)).length;
     const notStarted = affected.filter((s) => LegsService.NOT_STARTED_STATUSES.includes(s.status)).length;
+    const notRequired = affected.filter((s) => s.status === 'Not Required').length;
     const vendorNotifications = new Set(affected.filter((s) => s.providerId).map((s) => s.providerId)).size;
     return {
       legId,
@@ -380,6 +381,7 @@ export class LegsService {
       confirmed,
       requested,
       notStarted,
+      notRequired,
       vendorNotifications,
       crewCount: leg.crewCount,
       paxCount: leg.paxCount,

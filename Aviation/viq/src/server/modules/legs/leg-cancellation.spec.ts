@@ -57,14 +57,17 @@ describe('LegsService cancellation', () => {
         { svcId: 'SVC-1', tripId: 'TEST-CANCEL-1', scopeType: 'LEG', scopeId: 'TEST-CANCEL-1-LEG-1', serviceType: 'Overflight', status: 'Confirmed', providerId: null, basedOnEtdZ: new Date(), requiredByZ: new Date() },
         { svcId: 'SVC-2', tripId: 'TEST-CANCEL-1', scopeType: 'LEG', scopeId: 'TEST-CANCEL-1-LEG-1', serviceType: 'Fuel', status: 'Requested', providerId: null, basedOnEtdZ: new Date(), requiredByZ: new Date() },
         { svcId: 'SVC-3', tripId: 'TEST-CANCEL-1', scopeType: 'LEG', scopeId: 'TEST-CANCEL-1-LEG-1', serviceType: 'GroundHandling', status: 'Not Started', providerId: null, basedOnEtdZ: new Date(), requiredByZ: new Date() },
+        { svcId: 'SVC-4', tripId: 'TEST-CANCEL-1', scopeType: 'LEG', scopeId: 'TEST-CANCEL-1-LEG-1', serviceType: 'Fuel', status: 'Not Required', providerId: null, basedOnEtdZ: new Date(), requiredByZ: new Date() },
       ],
     });
 
     const preview = await legs.previewLegCancellation('TEST-CANCEL-1-LEG-1');
-    expect(preview.servicesAffected).toBe(3);
+    expect(preview.servicesAffected).toBe(4);
     expect(preview.confirmed).toBe(1);
     expect(preview.requested).toBe(1);
     expect(preview.notStarted).toBe(1);
+    expect(preview.notRequired).toBe(1);
+    expect(preview.confirmed + preview.requested + preview.notStarted + preview.notRequired).toBe(preview.servicesAffected);
     expect(preview.crewCount).toBe(4);
     expect(preview.paxCount).toBe(7);
   });
