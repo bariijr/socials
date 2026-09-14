@@ -443,7 +443,7 @@ export class LegsService {
     cancelledAtZ: Date,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.leg.updateMany({
+      const legResult = await tx.leg.updateMany({
         where: { legId, version: dto.version ?? before.version },
         data: {
           status: 'Cancelled',
@@ -456,6 +456,9 @@ export class LegsService {
           version: { increment: 1 },
         },
       });
+      if (legResult.count === 0) {
+        throw new ConflictException(`Leg ${legId} was modified by someone else`);
+      }
       const affected = await tx.service.findMany({ where: { scopeId: legId, status: { not: 'Cancelled' } } });
       if (affected.length > 0) {
         await tx.service.updateMany({

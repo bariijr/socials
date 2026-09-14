@@ -100,6 +100,28 @@ describe('LegsService cancellation', () => {
     expect(leg!.status).toBe('Completed');
   });
 
+  it('cancelLeg with a stale version is rejected, leaving the Leg and its Services untouched', async () => {
+    await prisma.service.createMany({
+      data: [
+        { svcId: 'SVC-1', tripId: 'TEST-CANCEL-1', scopeType: 'LEG', scopeId: 'TEST-CANCEL-1-LEG-1', serviceType: 'Overflight', status: 'Confirmed', providerId: null, basedOnEtdZ: new Date(), requiredByZ: new Date() },
+      ],
+    });
+
+    await expect(
+      legs.cancelLeg('TEST-CANCEL-1-LEG-1', { reason: 'Weather', version: 999, user: 'coordinator' } as any),
+    ).rejects.toThrow();
+
+    const leg = await prisma.leg.findUnique({ where: { legId: 'TEST-CANCEL-1-LEG-1' } });
+    expect(leg!.status).not.toBe('Cancelled');
+    expect(leg!.cancellationReason).toBeNull();
+
+    const svc1 = await prisma.service.findUnique({ where: { svcId: 'SVC-1' } });
+    expect(svc1!.status).not.toBe('Cancelled');
+
+    expect(observed.filter((e) => e.type === 'LEG_CANCELLED')).toHaveLength(0);
+    expect(observed.filter((e) => e.type === 'SERVICE_CANCELLED')).toHaveLength(0);
+  });
+
   it('cancelLegs cancels each Leg independently with its own history, without a caller-supplied version', async () => {
     await prisma.leg.create({
       data: {
