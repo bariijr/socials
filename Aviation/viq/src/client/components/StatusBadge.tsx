@@ -36,13 +36,21 @@ const TASK_STATUS_COLORS: Record<string, string> = {
   'Cancelled': 'bg-gray-100 text-gray-500',
 };
 
-const COLOR_MAPS: Record<'trip' | 'service' | 'task', Record<string, string>> = {
+const LEG_STATUS_COLORS: Record<string, string> = {
+  'Planned': 'bg-blue-100 text-blue-700',
+  'Active': 'bg-emerald-100 text-emerald-700',
+  'Completed': 'bg-slate-100 text-slate-600',
+  'Cancelled': 'bg-red-100 text-red-700',
+};
+
+const COLOR_MAPS: Record<'trip' | 'service' | 'task' | 'leg', Record<string, string>> = {
   trip: TRIP_STATUS_COLORS,
   service: SERVICE_STATUS_COLORS,
   task: TASK_STATUS_COLORS,
+  leg: LEG_STATUS_COLORS,
 };
 
-export function StatusBadge({ status, entityType, className }: { status: string; entityType: 'trip' | 'service' | 'task'; className?: string }) {
+export function StatusBadge({ status, entityType, className }: { status: string; entityType: 'trip' | 'service' | 'task' | 'leg'; className?: string }) {
   const colorClassName = COLOR_MAPS[entityType][status] ?? 'bg-gray-100 text-gray-600';
   return <Badge variant="secondary" className={cn(colorClassName, className)}>{status}</Badge>;
 }

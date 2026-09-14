@@ -1995,6 +1995,7 @@ export default function TripDetail() {
       CountriesOverflown: [],
       Revision: 1,
       Version: 1,
+      Status: 'Planned',
       Purpose: '',
       Routing: '',
     };

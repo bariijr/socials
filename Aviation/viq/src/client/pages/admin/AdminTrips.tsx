@@ -512,6 +512,7 @@ function AddLegDialog({
       BlockHours: 0,
       PaxCount: paxCount,
       CrewCount: crewCount,
+      Status: 'Planned',
       CountriesOverflown: countries,
       Revision: 1,
       Version: 1,

@@ -201,6 +201,14 @@ export interface Leg {
   AvoidFIRs?: string[];
   IncludeFIRs?: string[];
   Routing?: string;
+  Status: string;
+  StatusChangedAt?: string;
+  StatusChangedBy?: string;
+  AllowedTransitions?: string[];
+  CancellationReason?: string;
+  CancellationRemarks?: string;
+  CancelledBy?: string;
+  CancelledAtZ?: string;
 }
 
 export interface Stop {
