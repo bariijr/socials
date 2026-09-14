@@ -156,6 +156,19 @@ export class TripsService {
     if (!isValidTripTransition(before.status, 'Cancelled')) {
       throw new BadRequestException(`Cannot cancel a Trip with status "${before.status}"`);
     }
+    // Checked here, before any Leg is touched -- cancelLegs() below commits
+    // and cancels each Leg irreversibly (events already fired) with no
+    // surrounding cross-Leg transaction, so a stale version caught only by
+    // the final trip.updateMany would leave every Leg Cancelled while the
+    // Trip itself stays unchanged and the caller sees a 409 that looks like
+    // nothing happened. This catches the overwhelmingly common case (a
+    // genuinely stale caller) up front.
+    if (before.version !== dto.version) {
+      throw new ConflictException({
+        message: `Trip ${tripId} was modified by someone else`,
+        current: withTripTransitions(before, role),
+      });
+    }
     const user = dto.user || 'SYSTEM';
 
     const nonTerminalLegIds = before.legs
@@ -179,12 +192,29 @@ export class TripsService {
       },
     });
     if (result.count === 0) {
+      // Narrow defense-in-depth guard against a genuine concurrent edit
+      // landing during the cancelLegs() calls above (rare -- the early
+      // version check further up catches the common stale-caller case
+      // before any Leg is touched). By the time this fires, the Legs really
+      // have already been cancelled, so the message below says so rather
+      // than implying nothing happened.
       const current = await this.prisma.trip.findUnique({ where: { tripId } });
-      throw new ConflictException({ message: `Trip ${tripId} was modified by someone else`, current: current ? withTripTransitions(current, role) : current });
+      throw new ConflictException({
+        message: `Trip ${tripId} was modified during cancellation — its Legs have already been cancelled; retry to finish cancelling the Trip itself.`,
+        current: current ? withTripTransitions(current, role) : current,
+      });
     }
 
     const trip = await this.prisma.trip.findUnique({ where: { tripId } });
-    await this.audit.logDiff(user, 'Trip', tripId, before as unknown as Record<string, unknown>, trip as unknown as Record<string, unknown>);
+    // `before` was fetched with `include: { legs: true }` (needed above for
+    // nonTerminalLegIds) -- strip that key before diffing against `trip`
+    // (a plain findUnique with no include), or logDiff's shallow top-level
+    // String(value) comparison sees before.legs stringify to
+    // "[object Object],..." against trip's missing `legs` key entirely and
+    // writes a bogus "legs changed" AuditEntry on every cancellation. Same
+    // pattern sheet() already uses to drop legs before returning.
+    const { legs: _legs, ...beforePlain } = before;
+    await this.audit.logDiff(user, 'Trip', tripId, beforePlain as unknown as Record<string, unknown>, trip as unknown as Record<string, unknown>);
     this.events.emit({ type: 'TRIP_CANCELLED', tripId, reason: dto.reason, user });
     return withTripTransitions(trip!, role);
   }

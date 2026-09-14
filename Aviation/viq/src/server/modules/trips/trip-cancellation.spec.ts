@@ -81,4 +81,24 @@ describe('TripsService cancellation', () => {
     const preview = await trips.previewTripCancellation('TEST-TRIP-CANCEL-1');
     expect(preview.legsToCancel).toBe(2);
   });
+
+  it('cancelTrip with a stale version is rejected before touching any Leg, leaving the Trip and every Leg unchanged', async () => {
+    await expect(
+      trips.cancelTrip('TEST-TRIP-CANCEL-1', { reason: 'Weather', version: 999, user: 'coordinator' } as any),
+    ).rejects.toThrow();
+
+    const trip = await prisma.trip.findUnique({ where: { tripId: 'TEST-TRIP-CANCEL-1' } });
+    expect(trip!.status).not.toBe('Cancelled');
+    expect(trip!.cancellationReason).toBeNull();
+
+    const completedLeg = await prisma.leg.findUnique({ where: { legId: 'TC1-LEG-1' } });
+    const activeLeg = await prisma.leg.findUnique({ where: { legId: 'TC1-LEG-2' } });
+    const plannedLeg = await prisma.leg.findUnique({ where: { legId: 'TC1-LEG-3' } });
+    expect(completedLeg!.status).toBe('Completed');
+    expect(activeLeg!.status).toBe('Active');
+    expect(plannedLeg!.status).toBe('Planned');
+
+    expect(observed.filter((e) => e.type === 'LEG_CANCELLED')).toHaveLength(0);
+    expect(observed.filter((e) => e.type === 'TRIP_CANCELLED')).toHaveLength(0);
+  });
 });
