@@ -9,13 +9,14 @@ import { ApiError, CANCELLATION_REASONS, cancelTrip, getTripCancellationPreview 
 import type { TripCancellationPreview } from '@/lib/dataStore';
 import type { Trip } from '@/data/types';
 
-// Trip-level counterpart to CancelLegDialog -- deliberately does not
-// re-send per-service vendor notifications itself: the server's
-// cancelTrip() already cancels every non-Completed Leg through the same
-// LegsService.cancelLegs() path CancelLegDialog's own single-Leg send
-// loop is modeled on, so sending here too would double-notify every
-// vendor. A future iteration could surface a combined per-service send
-// summary across every cancelled Leg; out of scope for this pass.
+// Unlike CancelLegDialog, this dialog does NOT send vendor cancellation
+// emails. Sending is entirely client-orchestrated in this codebase (the
+// server's cancelTrip()/cancelLegs() only write DB rows, audit, and emit
+// in-process events — no mailer runs on that path), and looping every
+// affected service across every cancelled Leg here would need its own
+// design (e.g. one combined email per vendor instead of one per service,
+// unlike CancelLegDialog's per-service loop) — deferred to the
+// notification-engine phase (Cluster G), not built in this pass.
 export function CancelTripDialog({
   open, onClose, trip, onCancelled,
 }: {
@@ -69,6 +70,10 @@ export function CancelTripDialog({
               <div>Vendor notifications: <strong>{preview.vendorNotifications}</strong></div>
             </div>
             <p className="text-xs text-muted-foreground">Already-Completed legs are left exactly as they are.</p>
+            <p className="text-xs text-amber-600">
+              Note: vendor cancellation notices are not sent automatically for a whole-Trip
+              cancellation yet. Cancel affected Legs individually if you need vendors notified.
+            </p>
             <div className="space-y-1">
               <Label>Reason</Label>
               <Select value={reason} onValueChange={(v) => setReason(v as typeof reason)}>

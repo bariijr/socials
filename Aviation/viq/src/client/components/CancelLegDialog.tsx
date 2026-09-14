@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import {
-  ApiError, CANCELLATION_REASONS, cancelLeg, getLegCancellationPreview,
+  ApiError, CANCELLATION_REASONS, cancelLeg, changeVendorAllowedClient, getLegCancellationPreview,
   getProviderList, saveComm, sendComm,
 } from '@/lib/dataStore';
 import type { LegCancellationPreview } from '@/lib/dataStore';
@@ -69,7 +69,7 @@ export function CancelLegDialog({
     }
 
     const results: { provider: string; ok: boolean; error?: string }[] = [];
-    const withProvider = legServices.filter((s) => s.ProviderID && s.Status !== 'Cancelled');
+    const withProvider = legServices.filter((s) => s.ProviderID && changeVendorAllowedClient(s.Status));
     for (const svc of withProvider) {
       const provider = providers.find((p) => p.ProviderID === svc.ProviderID);
       const recipients = provider?.Channels?.filter((c) => c.ChannelType === 'Email').map((c) => c.Value) ?? [];
