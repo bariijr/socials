@@ -493,7 +493,7 @@ function LegEditor({
         </div>
         <div className="flex items-center gap-2">
           {leg.Status !== 'Cancelled' && leg.Status !== 'Completed' && (
-            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setCancelOpen(true)}>
+            <Button size="sm" variant="outline" className="text-destructive" disabled={!canEdit} onClick={() => setCancelOpen(true)}>
               Cancel Leg
             </Button>
           )}
@@ -1825,7 +1825,7 @@ function TripInfoEditor({ trip, onSaved }: { trip: Trip; onSaved: () => Promise<
         </div>
         <div className="flex items-center gap-2">
           {trip.Status !== 'Cancelled' && trip.Status !== 'Complete' && (
-            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setCancelTripOpen(true)}>
+            <Button size="sm" variant="outline" className="text-destructive" disabled={!canEdit} onClick={() => setCancelTripOpen(true)}>
               Cancel Trip
             </Button>
           )}
